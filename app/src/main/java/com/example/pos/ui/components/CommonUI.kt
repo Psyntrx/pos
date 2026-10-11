@@ -42,14 +42,15 @@ fun PrimaryGreenButton(
             .fillMaxWidth()
             .height(52.dp)
             .shadow(
-                elevation = 8.dp,
+                elevation = if (enabled) 8.dp else 0.dp,
                 shape = RoundedCornerShape(26.dp),
                 spotColor = EmeraldPrimary.copy(alpha = 0.5f)
             ),
+        border = if (!enabled) androidx.compose.foundation.BorderStroke(1.dp, SurfaceBorder) else null,
         colors = ButtonDefaults.buttonColors(
             containerColor = EmeraldBright,
             contentColor = TextOnPrimary,
-            disabledContainerColor = SurfaceDarkVariant,
+            disabledContainerColor = EmeraldBright.copy(alpha = 0.15f),
             disabledContentColor = TextMuted
         ),
         shape = RoundedCornerShape(26.dp),
@@ -64,14 +65,14 @@ fun PrimaryGreenButton(
                     imageVector = icon,
                     contentDescription = null,
                     modifier = Modifier.size(20.dp),
-                    tint = TextOnPrimary
+                    tint = if (enabled) TextOnPrimary else TextMuted
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
             Text(
                 text = text,
                 style = MaterialTheme.typography.titleMedium.copy(
-                    color = TextOnPrimary,
+                    color = if (enabled) TextOnPrimary else TextMuted,
                     fontWeight = FontWeight.Bold
                 )
             )

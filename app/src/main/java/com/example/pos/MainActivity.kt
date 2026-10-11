@@ -8,17 +8,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.example.pos.ui.screens.ForgotPasswordScreen
 import com.example.pos.ui.screens.LoginScreen
 import com.example.pos.ui.screens.MainContainerScreen
-import com.example.pos.ui.screens.RegisterShopScreen
+import com.example.pos.ui.screens.RegisterShopStep1Screen
+import com.example.pos.ui.screens.RegisterShopStep2Screen
 import com.example.pos.ui.screens.SplashScreen
 import com.example.pos.ui.theme.BgDark
 import com.example.pos.ui.theme.POSTheme
 import com.example.pos.ui.theme.ThemeMode
+import com.example.pos.viewmodel.AuthViewModel
 import com.example.pos.viewmodel.PosViewModel
 
 class MainActivity : ComponentActivity() {
@@ -42,6 +45,7 @@ class MainActivity : ComponentActivity() {
                     color = BgDark
                 ) {
                     val posViewModel = remember { PosViewModel() }
+                    val authViewModel = remember { AuthViewModel() }
                     val currentScreen by posViewModel.currentScreen.collectAsState()
 
                     when (currentScreen) {
@@ -49,22 +53,50 @@ class MainActivity : ComponentActivity() {
                             onGetStarted = { posViewModel.navigateTo("login") }
                         )
                         "login" -> LoginScreen(
+                            authViewModel = authViewModel,
                             onLoginSuccess = { email, pass ->
                                 posViewModel.login(email, pass)
                             },
-                            onNavigateToRegister = {
-                                posViewModel.navigateTo("register_shop")
+                            onNavigateToRegisterStep1 = {
+                                posViewModel.navigateTo("register_step1")
+                            },
+                            onNavigateToForgotPassword = {
+                                posViewModel.navigateTo("forgot_password")
                             },
                             onBackToSplash = {
                                 posViewModel.navigateTo("splash")
                             }
                         )
-                        "register_shop" -> RegisterShopScreen(
-                            onRegisterSuccess = { name, owner, email, phone, addr, cat ->
-                                posViewModel.registerShop(name, owner, email, phone, addr, cat)
+                        "forgot_password" -> ForgotPasswordScreen(
+                            authViewModel = authViewModel,
+                            onBackToLogin = {
+                                posViewModel.navigateTo("login")
+                            }
+                        )
+                        "register_step1" -> RegisterShopStep1Screen(
+                            authViewModel = authViewModel,
+                            onNavigateToStep2 = {
+                                posViewModel.navigateTo("register_step2")
                             },
                             onBackToLogin = {
                                 posViewModel.navigateTo("login")
+                            }
+                        )
+                        "register_step2" -> RegisterShopStep2Screen(
+                            authViewModel = authViewModel,
+                            onRegisterSuccess = {
+                                val regState = authViewModel.registerState.value
+                                posViewModel.registerShop(
+                                    shopName = regState.shopName,
+                                    ownerName = regState.ownerName,
+                                    email = regState.email,
+                                    phone = regState.phone,
+                                    address = regState.address,
+                                    category = regState.category
+                                )
+                            },
+                            onNavigateToStep1 = {
+                                posViewModel.navigateTo("register_step1")
                             }
                         )
                         else -> MainContainerScreen(
