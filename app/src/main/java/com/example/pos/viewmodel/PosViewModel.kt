@@ -291,13 +291,22 @@ class PosViewModel : ViewModel() {
     }
 
     // Stock In / Restocking
-    fun recordStockIn(productId: String, quantityAdded: Int, buyingPrice: Double, supplier: String, employeeName: String) {
+    fun recordStockIn(
+        productId: String,
+        quantityAdded: Int,
+        buyingPrice: Double,
+        sellingPrice: Double = 0.0,
+        supplier: String,
+        employeeName: String
+    ) {
         _products.update { currentList ->
             currentList.map { p ->
                 if (p.id == productId) {
                     p.copy(
                         stockQuantity = p.stockQuantity + quantityAdded,
-                        buyingPrice = if (buyingPrice > 0) buyingPrice else p.buyingPrice
+                        buyingPrice = if (buyingPrice > 0) buyingPrice else p.buyingPrice,
+                        sellingPrice = if (sellingPrice > 0) sellingPrice else p.sellingPrice,
+                        supplier = if (supplier.isNotBlank()) supplier else p.supplier
                     )
                 } else p
             }
