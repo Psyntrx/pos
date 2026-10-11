@@ -24,7 +24,7 @@ class PosViewModel : ViewModel() {
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
     // Navigation state
-    private val _currentScreen = MutableStateFlow("main") // "splash", "login", "register_shop", "main"
+    private val _currentScreen = MutableStateFlow("splash") // "splash", "login", "forgot_password", "register_step1", "register_step2", "main"
     val currentScreen: StateFlow<String> = _currentScreen.asStateFlow()
 
     private val _selectedTab = MutableStateFlow(0) // 0: Home, 1: Sales, 2: Inventory, 3: Reports, 4: More

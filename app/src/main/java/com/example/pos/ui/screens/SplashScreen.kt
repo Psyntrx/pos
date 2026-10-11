@@ -1,5 +1,8 @@
 package com.example.pos.ui.screens
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -12,9 +15,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -23,11 +30,36 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.pos.ui.components.PrimaryGreenButton
 import com.example.pos.ui.theme.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun SplashScreen(
     onGetStarted: () -> Unit
 ) {
+    // Animation states for smooth fade-in and scale
+    val fadeAlpha = remember { Animatable(0f) }
+    val scaleAnim = remember { Animatable(0.85f) }
+
+    LaunchedEffect(Unit) {
+        // Animate fade-in and scale concurrently
+        launch {
+            fadeAlpha.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing)
+            )
+        }
+        launch {
+            scaleAnim.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing)
+            )
+        }
+        // Auto-navigate after a total 2-second delay
+        delay(2000L)
+        onGetStarted()
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -45,6 +77,8 @@ fun SplashScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .alpha(fadeAlpha.value)
+                .scale(scaleAnim.value)
                 .padding(bottom = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
