@@ -77,6 +77,7 @@ fun SplashScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .navigationBarsPadding()
                 .alpha(fadeAlpha.value)
                 .scale(scaleAnim.value)
                 .padding(bottom = 32.dp),

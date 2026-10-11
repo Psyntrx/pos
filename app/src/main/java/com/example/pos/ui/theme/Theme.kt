@@ -82,7 +82,9 @@ fun POSTheme(
             } else {
                 androidx.compose.ui.graphics.Color(0xFFF1F7F2)
             }
+            @Suppress("DEPRECATION")
             window.statusBarColor = systemBarColor.toArgb()
+            @Suppress("DEPRECATION")
             window.navigationBarColor = systemBarColor.toArgb()
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !useDarkTheme
             WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !useDarkTheme

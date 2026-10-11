@@ -35,6 +35,7 @@ val TextMuted: Color get() = palette(Color(0xFF839187), Color(0xFF64748B))
 val TextOnPrimary: Color get() = palette(Color(0xFFFFFFFF), Color(0xFF090F0D))
 
 val WarningYellow: Color get() = palette(Color(0xFF9A6100), Color(0xFFF59E0B))
+val WarningLightYellow: Color get() = WarningYellow
 val WarningContainer: Color get() = palette(Color(0xFFFFF2D8), Color(0xFF2A200B))
 val ErrorRed: Color get() = palette(Color(0xFFB93832), Color(0xFFEF4444))
 val ErrorContainer: Color get() = palette(Color(0xFFFCE9E7), Color(0xFF2E1212))
