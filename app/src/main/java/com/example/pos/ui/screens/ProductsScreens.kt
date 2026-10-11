@@ -561,20 +561,29 @@ fun LegacyAddProductScreen(
 @Composable
 fun StockInScreen(
     viewModel: PosViewModel,
+    initialProductId: String? = null,
     onClose: () -> Unit
 ) {
     val products by viewModel.products.collectAsState()
     val shop by viewModel.shop.collectAsState()
 
-    var selectedProduct by remember { mutableStateOf<Product?>(products.firstOrNull()) }
-    var productSearchQuery by remember { mutableStateOf(selectedProduct?.name ?: "") }
+    val initialProduct = remember(products, initialProductId) {
+        if (initialProductId != null) {
+            products.find { it.id == initialProductId } ?: products.firstOrNull()
+        } else {
+            products.firstOrNull()
+        }
+    }
+
+    var selectedProduct by remember { mutableStateOf<Product?>(initialProduct) }
+    var productSearchQuery by remember { mutableStateOf(initialProduct?.name ?: "") }
     var isDropdownExpanded by remember { mutableStateOf(false) }
 
     var quantity by remember { mutableIntStateOf(10) }
     var quantityText by remember { mutableStateOf("10") }
-    var buyingPrice by remember { mutableStateOf(selectedProduct?.buyingPrice?.let { if (it > 0) it.toString() else "" } ?: "") }
-    var sellingPrice by remember { mutableStateOf(selectedProduct?.sellingPrice?.let { if (it > 0) it.toString() else "" } ?: "") }
-    var supplier by remember { mutableStateOf(selectedProduct?.supplier ?: "") }
+    var buyingPrice by remember { mutableStateOf(initialProduct?.buyingPrice?.let { if (it > 0) it.toString() else "" } ?: "") }
+    var sellingPrice by remember { mutableStateOf(initialProduct?.sellingPrice?.let { if (it > 0) it.toString() else "" } ?: "") }
+    var supplier by remember { mutableStateOf(initialProduct?.supplier ?: "") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     fun onSelectProduct(prod: Product) {
@@ -585,6 +594,14 @@ fun StockInScreen(
         sellingPrice = if (prod.sellingPrice > 0) prod.sellingPrice.toString() else ""
         supplier = prod.supplier
         errorMessage = null
+    }
+
+    LaunchedEffect(products, initialProductId) {
+        if (initialProductId != null) {
+            products.find { it.id == initialProductId }?.let { prod ->
+                onSelectProduct(prod)
+            }
+        }
     }
 
     // Filter products based on search query

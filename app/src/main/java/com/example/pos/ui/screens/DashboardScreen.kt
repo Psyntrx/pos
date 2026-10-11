@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -76,7 +77,7 @@ fun DashboardScreen(
     viewModel: PosViewModel,
     profilePhotoUri: String?,
     onNavigateToTab: (Int) -> Unit,
-    onOpenStockIn: () -> Unit,
+    onOpenStockIn: (String?) -> Unit,
     onOpenCreditSales: () -> Unit,
     onOpenExpenses: () -> Unit
 ) {
@@ -401,21 +402,22 @@ fun DashboardScreen(
 
             // 3. Compact Action Pills Row
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 // Primary "+ New Sale" Button
                 Button(
                     onClick = { onNavigateToTab(1) },
-                    modifier = Modifier
-                        .weight(1.3f)
-                        .height(42.dp),
+                    modifier = Modifier.height(40.dp),
                     shape = RoundedCornerShape(20.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = EmeraldPrimary,
                         contentColor = Color.White
                     ),
-                    contentPadding = PaddingValues(horizontal = 12.dp)
+                    contentPadding = PaddingValues(horizontal = 14.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
@@ -428,7 +430,9 @@ fun DashboardScreen(
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp
-                        )
+                        ),
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
 
@@ -436,24 +440,21 @@ fun DashboardScreen(
                 SecondaryActionPill(
                     label = "Stock In",
                     icon = Icons.Default.AddBox,
-                    onClick = onOpenStockIn,
-                    modifier = Modifier.weight(1f)
+                    onClick = { onOpenStockIn(null) }
                 )
 
                 // "Expenses" Pill
                 SecondaryActionPill(
                     label = "Expenses",
                     icon = Icons.Default.Receipt,
-                    onClick = onOpenExpenses,
-                    modifier = Modifier.weight(1f)
+                    onClick = onOpenExpenses
                 )
 
                 // "Credit" Pill
                 SecondaryActionPill(
                     label = "Credit",
                     icon = Icons.Default.CreditCard,
-                    onClick = onOpenCreditSales,
-                    modifier = Modifier.weight(1f)
+                    onClick = onOpenCreditSales
                 )
             }
 
@@ -578,36 +579,46 @@ fun DashboardScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Bottom
                             ) {
-                                // Rounded Bar
+                                // Dedicated Bar Container (bar fills up to 100% of available space above label)
                                 Box(
                                     modifier = Modifier
-                                        .width(if (isSelected) 26.dp else 22.dp)
-                                        .fillMaxHeight(animatedBarHeight)
-                                        .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp))
-                                        .background(
-                                            when {
-                                                isSelected -> EmeraldBright
-                                                dayData.isToday -> EmeraldBright.copy(alpha = 0.75f)
-                                                else -> EmeraldPrimary.copy(alpha = 0.35f)
-                                            }
-                                        )
-                                        .border(
-                                            width = if (isSelected) 1.dp else 0.dp,
-                                            color = if (isSelected) Color.White.copy(alpha = 0.4f) else Color.Transparent,
-                                            shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
-                                        )
-                                )
+                                        .weight(1f)
+                                        .fillMaxWidth(),
+                                    contentAlignment = Alignment.BottomCenter
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(if (isSelected) 24.dp else 18.dp)
+                                            .fillMaxHeight(animatedBarHeight)
+                                            .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp))
+                                            .background(
+                                                when {
+                                                    isSelected -> EmeraldBright
+                                                    dayData.isToday -> EmeraldBright.copy(alpha = 0.75f)
+                                                    else -> EmeraldPrimary.copy(alpha = 0.35f)
+                                                }
+                                            )
+                                            .border(
+                                                width = if (isSelected) 1.dp else 0.dp,
+                                                color = if (isSelected) Color.White.copy(alpha = 0.4f) else Color.Transparent,
+                                                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+                                            )
+                                    )
+                                }
 
                                 Spacer(modifier = Modifier.height(8.dp))
 
-                                // Day Label
+                                // Day Label - Guaranteed baseline visibility
                                 Text(
                                     text = dayData.dayLabel,
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         color = if (isSelected) EmeraldBright else TextSecondary,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                         fontSize = 11.sp
-                                    )
+                                    ),
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    textAlign = TextAlign.Center
                                 )
                             }
                         }
@@ -685,7 +696,7 @@ fun DashboardScreen(
                     items(lowStockProducts) { product ->
                         LowStockProductCard(
                             product = product,
-                            onRestock = onOpenStockIn
+                            onRestock = { onOpenStockIn(product.id) }
                         )
                     }
                 }
@@ -983,12 +994,12 @@ private fun SecondaryActionPill(
 ) {
     Box(
         modifier = modifier
-            .height(42.dp)
+            .height(40.dp)
             .clip(RoundedCornerShape(20.dp))
             .background(SurfaceDarkVariant)
             .border(1.dp, SurfaceBorder, RoundedCornerShape(20.dp))
             .clickable { onClick() }
-            .padding(horizontal = 10.dp),
+            .padding(horizontal = 14.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
@@ -1001,14 +1012,16 @@ private fun SecondaryActionPill(
                 tint = EmeraldBright,
                 modifier = Modifier.size(15.dp)
             )
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(5.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium.copy(
                     color = TextPrimary,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 11.sp
-                )
+                    fontSize = 12.sp
+                ),
+                maxLines = 1,
+                softWrap = false
             )
         }
     }
