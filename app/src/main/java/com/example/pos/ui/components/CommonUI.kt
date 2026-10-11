@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -26,6 +27,82 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.pos.ui.theme.*
+
+@Composable
+fun posTextFieldColors(
+    focusedTextColor: Color = TextPrimary,
+    unfocusedTextColor: Color = TextPrimary,
+    focusedContainerColor: Color = SurfaceDarkVariant,
+    unfocusedContainerColor: Color = SurfaceDark,
+    disabledContainerColor: Color = SurfaceDarkVariant,
+    errorContainerColor: Color = SurfaceDark,
+    focusedBorderColor: Color = EmeraldBright,
+    unfocusedBorderColor: Color = SurfaceBorder,
+    disabledBorderColor: Color = SurfaceBorder.copy(alpha = 0.5f),
+    errorBorderColor: Color = ErrorRed,
+    cursorColor: Color = EmeraldBright,
+    errorCursorColor: Color = ErrorRed,
+    focusedLabelColor: Color = EmeraldBright,
+    unfocusedLabelColor: Color = TextSecondary,
+    disabledLabelColor: Color = TextMuted,
+    errorLabelColor: Color = ErrorRed,
+    focusedPlaceholderColor: Color = TextMuted,
+    unfocusedPlaceholderColor: Color = TextMuted,
+    disabledPlaceholderColor: Color = TextMuted,
+    errorPlaceholderColor: Color = TextMuted,
+    focusedLeadingIconColor: Color = EmeraldBright,
+    unfocusedLeadingIconColor: Color = TextSecondary,
+    disabledLeadingIconColor: Color = TextMuted,
+    errorLeadingIconColor: Color = ErrorRed,
+    focusedTrailingIconColor: Color = TextSecondary,
+    unfocusedTrailingIconColor: Color = TextSecondary,
+    disabledTrailingIconColor: Color = TextMuted,
+    errorTrailingIconColor: Color = ErrorRed,
+    focusedPrefixColor: Color = TextSecondary,
+    unfocusedPrefixColor: Color = TextSecondary,
+    disabledPrefixColor: Color = TextMuted,
+    errorPrefixColor: Color = TextSecondary,
+    selectionColors: TextSelectionColors = TextSelectionColors(
+        handleColor = EmeraldBright,
+        backgroundColor = EmeraldBright.copy(alpha = 0.35f)
+    )
+): TextFieldColors = OutlinedTextFieldDefaults.colors(
+    focusedTextColor = focusedTextColor,
+    unfocusedTextColor = unfocusedTextColor,
+    disabledTextColor = TextMuted,
+    errorTextColor = TextPrimary,
+    focusedContainerColor = focusedContainerColor,
+    unfocusedContainerColor = unfocusedContainerColor,
+    disabledContainerColor = disabledContainerColor,
+    errorContainerColor = errorContainerColor,
+    cursorColor = cursorColor,
+    errorCursorColor = errorCursorColor,
+    selectionColors = selectionColors,
+    focusedBorderColor = focusedBorderColor,
+    unfocusedBorderColor = unfocusedBorderColor,
+    disabledBorderColor = disabledBorderColor,
+    errorBorderColor = errorBorderColor,
+    focusedLabelColor = focusedLabelColor,
+    unfocusedLabelColor = unfocusedLabelColor,
+    disabledLabelColor = disabledLabelColor,
+    errorLabelColor = errorLabelColor,
+    focusedPlaceholderColor = focusedPlaceholderColor,
+    unfocusedPlaceholderColor = unfocusedPlaceholderColor,
+    disabledPlaceholderColor = disabledPlaceholderColor,
+    errorPlaceholderColor = errorPlaceholderColor,
+    focusedLeadingIconColor = focusedLeadingIconColor,
+    unfocusedLeadingIconColor = unfocusedLeadingIconColor,
+    disabledLeadingIconColor = disabledLeadingIconColor,
+    errorLeadingIconColor = errorLeadingIconColor,
+    focusedTrailingIconColor = focusedTrailingIconColor,
+    unfocusedTrailingIconColor = unfocusedTrailingIconColor,
+    disabledTrailingIconColor = disabledTrailingIconColor,
+    errorTrailingIconColor = errorTrailingIconColor,
+    focusedPrefixColor = focusedPrefixColor,
+    unfocusedPrefixColor = unfocusedPrefixColor,
+    disabledPrefixColor = disabledPrefixColor,
+    errorPrefixColor = errorPrefixColor
+)
 
 @Composable
 fun PrimaryGreenButton(

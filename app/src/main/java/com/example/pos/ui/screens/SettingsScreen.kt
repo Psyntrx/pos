@@ -572,15 +572,9 @@ private fun ShopInfoField(label: String, value: String, onValueChange: (String) 
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
         shape = RoundedCornerShape(13.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = SurfaceDarkVariant,
-            unfocusedContainerColor = SurfaceDarkVariant,
-            focusedBorderColor = EmeraldBright,
-            unfocusedBorderColor = SurfaceBorder,
-            focusedTextColor = TextPrimary,
-            unfocusedTextColor = TextPrimary,
-            focusedLabelColor = EmeraldBright,
-            unfocusedLabelColor = TextSecondary
+        textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+        colors = com.example.pos.ui.components.posTextFieldColors(
+            unfocusedContainerColor = SurfaceDarkVariant
         )
     )
 }
