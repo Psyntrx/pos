@@ -35,7 +35,7 @@ fun SplashScreen(
                 brush = Brush.verticalGradient(
                     colors = listOf(
                         BgDark,
-                        Color(0xFF0D1E18),
+                        CardGradientEnd,
                         BgDark
                     )
                 )
@@ -108,7 +108,7 @@ fun SplashScreen(
                         brush = Brush.linearGradient(
                             colors = listOf(
                                 SurfaceDark,
-                                Color(0xFF132A22),
+                                CardGradientEnd,
                                 SurfaceDark
                             )
                         )

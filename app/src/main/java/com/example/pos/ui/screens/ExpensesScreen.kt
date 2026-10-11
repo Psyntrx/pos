@@ -172,7 +172,7 @@ fun ExpensesScreen(
         FloatingActionButton(
             onClick = { showAddDialog = true },
             containerColor = EmeraldBright,
-            contentColor = BgDark,
+            contentColor = TextOnPrimary,
             shape = CircleShape,
             modifier = Modifier
                 .align(Alignment.BottomEnd)

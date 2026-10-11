@@ -48,7 +48,7 @@ fun PrimaryGreenButton(
             ),
         colors = ButtonDefaults.buttonColors(
             containerColor = EmeraldBright,
-            contentColor = BgDark,
+            contentColor = TextOnPrimary,
             disabledContainerColor = SurfaceDarkVariant,
             disabledContentColor = TextMuted
         ),
@@ -64,14 +64,14 @@ fun PrimaryGreenButton(
                     imageVector = icon,
                     contentDescription = null,
                     modifier = Modifier.size(20.dp),
-                    tint = BgDark
+                    tint = TextOnPrimary
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
             Text(
                 text = text,
                 style = MaterialTheme.typography.titleMedium.copy(
-                    color = BgDark,
+                    color = TextOnPrimary,
                     fontWeight = FontWeight.Bold
                 )
             )
@@ -242,7 +242,7 @@ fun FilterChipItem(
         Text(
             text = label,
             style = MaterialTheme.typography.labelLarge.copy(
-                color = if (isSelected) BgDark else TextSecondary,
+                color = if (isSelected) TextOnPrimary else TextSecondary,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                 fontSize = 13.sp
             )

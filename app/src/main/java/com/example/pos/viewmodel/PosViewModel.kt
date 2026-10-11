@@ -258,20 +258,32 @@ class PosViewModel : ViewModel() {
     fun addProduct(
         name: String, category: String, sku: String, unit: String,
         buyingPrice: Double, sellingPrice: Double, quantity: Int, minStock: Int, supplier: String
-    ) {
+    ): Boolean {
+        val normalizedName = name.trim()
+        val normalizedCategory = category.trim()
+        val normalizedSku = sku.trim()
+        val normalizedUnit = unit.trim()
+        if (normalizedName.isBlank() || normalizedCategory.isBlank() || normalizedSku.isBlank() ||
+            normalizedUnit.isBlank() || !buyingPrice.isFinite() || buyingPrice < 0 ||
+            !sellingPrice.isFinite() || sellingPrice <= 0 || quantity < 0 || minStock < 0 ||
+            _products.value.any { it.sku.equals(normalizedSku, ignoreCase = true) }
+        ) return false
+
         val newProduct = Product(
             id = "p_${System.currentTimeMillis()}",
-            name = name,
-            category = category,
-            sku = sku,
-            unit = unit,
+            name = normalizedName,
+            category = normalizedCategory,
+            sku = normalizedSku,
+            unit = normalizedUnit,
             buyingPrice = buyingPrice,
             sellingPrice = sellingPrice,
             stockQuantity = quantity,
             minStock = minStock,
-            supplier = supplier
+            supplier = supplier.trim(),
+            iconType = normalizedCategory.lowercase()
         )
         _products.update { listOf(newProduct) + it }
+        return true
     }
 
     // Stock In / Restocking

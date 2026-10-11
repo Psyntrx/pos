@@ -1,0 +1,4 @@
+{
+  "gradle.wrapper.enabled": true,
+  "kotlin.compiler.jvm.target": "11"
+}

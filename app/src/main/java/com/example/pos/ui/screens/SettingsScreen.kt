@@ -12,7 +12,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.filled.BrightnessAuto
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Person
@@ -37,6 +40,8 @@ import com.example.pos.viewmodel.PosViewModel
 @Composable
 fun SettingsScreen(
     viewModel: PosViewModel,
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit,
     onOpenEmployees: () -> Unit,
     onOpenCreditReminders: () -> Unit,
     onOpenExpenses: () -> Unit
@@ -118,6 +123,13 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        AppearanceSettingsCard(
+            selectedMode = themeMode,
+            onModeSelected = onThemeModeChange
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
         // Settings Menu Items
         SettingsMenuItem(
             label = "Shop Information",
@@ -150,12 +162,6 @@ fun SettingsScreen(
         )
 
         SettingsMenuItem(
-            label = "App Settings",
-            icon = Icons.Default.Settings,
-            onClick = { }
-        )
-
-        SettingsMenuItem(
             label = "Help & Support",
             icon = Icons.Default.HelpOutline,
             onClick = { }
@@ -185,6 +191,88 @@ fun SettingsScreen(
         }
 
         Spacer(modifier = Modifier.height(80.dp))
+    }
+}
+
+@Composable
+private fun AppearanceSettingsCard(
+    selectedMode: ThemeMode,
+    onModeSelected: (ThemeMode) -> Unit
+) {
+    SurfaceCard(
+        modifier = Modifier.fillMaxWidth(),
+        backgroundColor = SurfaceDark,
+        borderColor = SurfaceBorder,
+        cornerRadius = 20.dp
+    ) {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(EmeraldContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.BrightnessAuto, contentDescription = null, tint = EmeraldBright)
+                }
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("Appearance", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text("Choose how RetailSync looks", color = TextSecondary, fontSize = 12.sp)
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ThemeMode.entries.forEach { mode ->
+                    val isSelected = mode == selectedMode
+                    val icon = when (mode) {
+                        ThemeMode.SYSTEM -> Icons.Default.BrightnessAuto
+                        ThemeMode.LIGHT -> Icons.Default.LightMode
+                        ThemeMode.DARK -> Icons.Default.DarkMode
+                    }
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (isSelected) EmeraldContainer else SurfaceDarkVariant)
+                            .border(
+                                width = 1.dp,
+                                color = if (isSelected) EmeraldBright.copy(alpha = 0.55f) else SurfaceBorder,
+                                shape = RoundedCornerShape(14.dp)
+                            )
+                            .clickable { onModeSelected(mode) }
+                            .padding(vertical = 12.dp, horizontal = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = if (isSelected) EmeraldBright else TextSecondary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.height(5.dp))
+                        Text(
+                            text = mode.label,
+                            color = if (isSelected) EmeraldPrimary else TextSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = when (selectedMode) {
+                    ThemeMode.SYSTEM -> "Follows your phone's light or dark setting."
+                    ThemeMode.LIGHT -> "Always use the bright, easy-to-read theme."
+                    ThemeMode.DARK -> "Use a low-glare dark theme."
+                },
+                color = TextMuted,
+                fontSize = 11.sp
+            )
+        }
     }
 }
 

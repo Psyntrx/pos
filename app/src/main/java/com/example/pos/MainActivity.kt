@@ -9,6 +9,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.example.pos.ui.screens.LoginScreen
 import com.example.pos.ui.screens.MainContainerScreen
@@ -16,6 +18,7 @@ import com.example.pos.ui.screens.RegisterShopScreen
 import com.example.pos.ui.screens.SplashScreen
 import com.example.pos.ui.theme.BgDark
 import com.example.pos.ui.theme.POSTheme
+import com.example.pos.ui.theme.ThemeMode
 import com.example.pos.viewmodel.PosViewModel
 
 class MainActivity : ComponentActivity() {
@@ -23,7 +26,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            POSTheme {
+            val preferences = remember {
+                getSharedPreferences("appearance", MODE_PRIVATE)
+            }
+            var themeMode by remember {
+                mutableStateOf(ThemeMode.fromStorage(preferences.getString("theme_mode", null)))
+            }
+
+            POSTheme(themeMode = themeMode) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = BgDark
@@ -55,7 +65,12 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                         else -> MainContainerScreen(
-                            viewModel = posViewModel
+                            viewModel = posViewModel,
+                            themeMode = themeMode,
+                            onThemeModeChange = { selectedMode ->
+                                themeMode = selectedMode
+                                preferences.edit().putString("theme_mode", selectedMode.storageValue).apply()
+                            }
                         )
                     }
                 }
