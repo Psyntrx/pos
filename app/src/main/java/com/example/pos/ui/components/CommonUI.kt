@@ -278,6 +278,7 @@ fun StockBadge(isLowStock: Boolean, stockQty: Int) {
 fun RetailSyncHeader(
     shopName: String,
     ownerName: String,
+    profilePhotoUri: String? = null,
     onNotificationClick: () -> Unit = {},
     onProfileClick: () -> Unit = {}
 ) {
@@ -292,21 +293,18 @@ fun RetailSyncHeader(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.clickable { onProfileClick() }
         ) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
-                    .background(SurfaceDarkVariant)
-                    .border(1.dp, EmeraldPrimary.copy(alpha = 0.6f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = "Profile",
-                    tint = EmeraldBright,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
+            ProfileAvatar(
+                photoUri = profilePhotoUri,
+                modifier = Modifier.size(42.dp),
+                fallback = {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = "Profile",
+                        tint = EmeraldBright,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            )
 
             Spacer(modifier = Modifier.width(12.dp))
 

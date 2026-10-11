@@ -45,6 +45,7 @@ import com.example.pos.viewmodel.PosViewModel
 @Composable
 fun DashboardScreen(
     viewModel: PosViewModel,
+    profilePhotoUri: String?,
     onNavigateToTab: (Int) -> Unit,
     onOpenStockIn: () -> Unit,
     onOpenCreditSales: () -> Unit,
@@ -71,6 +72,7 @@ fun DashboardScreen(
         RetailSyncHeader(
             shopName = shop.name,
             ownerName = shop.ownerName,
+            profilePhotoUri = profilePhotoUri,
             onNotificationClick = { },
             onProfileClick = { onNavigateToTab(4) }
         )

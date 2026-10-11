@@ -146,6 +146,10 @@ class PosViewModel : ViewModel() {
         _currentScreen.value = "main"
     }
 
+    fun updateShopInformation(shop: Shop) {
+        _shop.value = shop
+    }
+
     fun logout() {
         _isLoggedIn.value = false
         _currentScreen.value = "login"

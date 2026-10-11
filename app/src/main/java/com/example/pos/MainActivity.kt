@@ -32,6 +32,9 @@ class MainActivity : ComponentActivity() {
             var themeMode by remember {
                 mutableStateOf(ThemeMode.fromStorage(preferences.getString("theme_mode", null)))
             }
+            var profilePhotoUri by remember {
+                mutableStateOf(preferences.getString("profile_photo_uri", null))
+            }
 
             POSTheme(themeMode = themeMode) {
                 Surface(
@@ -67,9 +70,14 @@ class MainActivity : ComponentActivity() {
                         else -> MainContainerScreen(
                             viewModel = posViewModel,
                             themeMode = themeMode,
+                            profilePhotoUri = profilePhotoUri,
                             onThemeModeChange = { selectedMode ->
                                 themeMode = selectedMode
                                 preferences.edit().putString("theme_mode", selectedMode.storageValue).apply()
+                            },
+                            onProfilePhotoChange = { uri ->
+                                profilePhotoUri = uri
+                                preferences.edit().putString("profile_photo_uri", uri).apply()
                             }
                         )
                     }
