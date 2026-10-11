@@ -40,7 +40,7 @@ import com.example.pos.ui.theme.*
 import com.example.pos.viewmodel.PosViewModel
 
 @Composable
-fun ProductsScreen(
+fun LegacyProductsScreen(
     viewModel: PosViewModel,
     onOpenAddProduct: () -> Unit
 ) {
@@ -159,7 +159,7 @@ fun ProductsScreen(
                         .weight(1f)
                 ) {
                     items(filteredProducts) { product ->
-                        ProductListItemCard(product = product)
+                        LegacyProductListItemCard(product = product)
                     }
                     item {
                         Spacer(modifier = Modifier.height(80.dp))
@@ -172,7 +172,7 @@ fun ProductsScreen(
         FloatingActionButton(
             onClick = onOpenAddProduct,
             containerColor = EmeraldBright,
-            contentColor = BgDark,
+            contentColor = TextOnPrimary,
             shape = CircleShape,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -189,7 +189,7 @@ fun ProductsScreen(
 }
 
 @Composable
-fun ProductListItemCard(product: Product) {
+fun LegacyProductListItemCard(product: Product) {
     SurfaceCard(
         modifier = Modifier.fillMaxWidth(),
         backgroundColor = SurfaceDark,
@@ -267,7 +267,7 @@ fun ProductListItemCard(product: Product) {
 }
 
 @Composable
-fun AddProductScreen(
+fun LegacyAddProductScreen(
     viewModel: PosViewModel,
     onClose: () -> Unit
 ) {

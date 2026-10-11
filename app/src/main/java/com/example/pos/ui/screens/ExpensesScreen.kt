@@ -36,32 +36,6 @@ fun ExpensesScreen(
     viewModel: PosViewModel,
     onClose: () -> Unit
 ) {
-    // light and dark mode toggle for credit sales and expenses
-    var isLightMode by remember { mutableStateOf(false) }
-
-    // Temporary, screen-local theme preview.
-    // Existing color references below can remain unchanged.
-    val BgDark = if (isLightMode) com.example.pos.ui.theme.BgLight
-    else com.example.pos.ui.theme.BgDark
-    val SurfaceDark = if (isLightMode) com.example.pos.ui.theme.SurfaceLight
-    else com.example.pos.ui.theme.SurfaceDark
-    val SurfaceDarkVariant = if (isLightMode) com.example.pos.ui.theme.SurfaceLightVariant
-    else com.example.pos.ui.theme.SurfaceDarkVariant
-    val SurfaceBorder = if (isLightMode) com.example.pos.ui.theme.SurfaceLightBorder
-    else com.example.pos.ui.theme.SurfaceBorder
-    val TextPrimary = if (isLightMode) com.example.pos.ui.theme.TextLightPrimary
-    else com.example.pos.ui.theme.TextPrimary
-    val TextSecondary = if (isLightMode) com.example.pos.ui.theme.TextLightSecondary
-    else com.example.pos.ui.theme.TextSecondary
-    val TextMuted = if (isLightMode) com.example.pos.ui.theme.TextLightMuted
-    else com.example.pos.ui.theme.TextMuted
-    val EmeraldBright = if (isLightMode) com.example.pos.ui.theme.EmeraldLightBright
-    else com.example.pos.ui.theme.EmeraldBright
-    val EmeraldContainer = if (isLightMode) com.example.pos.ui.theme.EmeraldLightContainer
-    else com.example.pos.ui.theme.EmeraldContainer
-
-    // continuation of original code is below
-
     val expenses by viewModel.expenses.collectAsState()
     var filterPeriod by remember { mutableStateOf("All") }
     var showAddDialog by remember { mutableStateOf(false) }
@@ -98,17 +72,6 @@ fun ExpensesScreen(
                         color = TextPrimary
                     )
                 )
-                // Button for dark and light mode
-                Spacer(modifier = Modifier.weight(1f))
-
-                TextButton(
-                    onClick = { isLightMode = !isLightMode }
-                ) {
-                    Text(
-                        text = if (isLightMode) "Dark ☾" else "Light ☀",
-                        color = EmeraldBright
-                    )
-                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -218,11 +181,7 @@ fun ExpensesScreen(
         FloatingActionButton(
             onClick = { showAddDialog = true },
             containerColor = EmeraldBright,
-            contentColor = if (isLightMode) {
-                TextLightPrimary
-            } else {
-                BgDark
-            },
+            contentColor = TextOnPrimary,
             shape = CircleShape,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
