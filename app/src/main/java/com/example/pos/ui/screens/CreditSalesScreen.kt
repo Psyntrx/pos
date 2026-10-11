@@ -10,19 +10,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -40,13 +37,16 @@ fun CreditSalesScreen(
     val customerCredits by viewModel.customerCredits.collectAsState()
     val totalOutstanding = customerCredits.sumOf { it.totalOutstanding }
 
-    var customerName by remember { mutableStateOf("Samuel Njuguna") }
+    var customerName by remember { mutableStateOf("") }
     var customerPhone by remember { mutableStateOf("+254 722 111 222") }
-    var productsSummary by remember { mutableStateOf("2 Items | Unga, Cooking Oil") }
-    var amountPaid by remember { mutableStateOf("500") }
-    var dueDate by remember { mutableStateOf("Sep 30, 2026") }
+    var productsSummary by remember { mutableStateOf("") }
+    var amountPaid by remember { mutableStateOf("") }
+    var dueDate by remember { mutableStateOf("Oct 30, 2026") }
 
-    val calculatedBalance = (8460.0 - (amountPaid.toDoubleOrNull() ?: 500.0)).coerceAtLeast(0.0)
+    var isSaving by remember { mutableStateOf(false) }
+    var snackbarMessage by remember { mutableStateOf<String?>(null) }
+
+    val calculatedBalance = (8460.0 - (amountPaid.toDoubleOrNull() ?: 0.0)).coerceAtLeast(0.0)
 
     Box(
         modifier = Modifier
@@ -101,7 +101,7 @@ fun CreditSalesScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Home,
+                            imageVector = Icons.Default.AccountBalanceWallet,
                             contentDescription = null,
                             tint = EmeraldBright,
                             modifier = Modifier.size(24.dp)
@@ -136,13 +136,17 @@ fun CreditSalesScreen(
                 leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = EmeraldBright) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
+                textStyle = TextStyle(color = TextPrimary),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = SurfaceDarkVariant,
                     unfocusedContainerColor = SurfaceDark,
                     focusedBorderColor = EmeraldBright,
                     unfocusedBorderColor = SurfaceBorder,
                     focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
+                    unfocusedTextColor = TextPrimary,
+                    focusedLabelColor = TextSecondary,
+                    unfocusedLabelColor = TextSecondary,
+                    cursorColor = EmeraldBright
                 ),
                 singleLine = true
             )
@@ -152,17 +156,21 @@ fun CreditSalesScreen(
             OutlinedTextField(
                 value = productsSummary,
                 onValueChange = { productsSummary = it },
-                label = { Text("Products", color = TextSecondary) },
+                label = { Text("Products e.g. Unga x 2", color = TextSecondary) },
                 leadingIcon = { Icon(Icons.Default.ShoppingBag, contentDescription = null, tint = EmeraldBright) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
+                textStyle = TextStyle(color = TextPrimary),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = SurfaceDarkVariant,
                     unfocusedContainerColor = SurfaceDark,
                     focusedBorderColor = EmeraldBright,
                     unfocusedBorderColor = SurfaceBorder,
                     focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
+                    unfocusedTextColor = TextPrimary,
+                    focusedLabelColor = TextSecondary,
+                    unfocusedLabelColor = TextSecondary,
+                    cursorColor = EmeraldBright
                 ),
                 singleLine = true
             )
@@ -179,13 +187,17 @@ fun CreditSalesScreen(
                     label = { Text("Amount Paid", color = TextSecondary) },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(14.dp),
+                    textStyle = TextStyle(color = TextPrimary),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = SurfaceDarkVariant,
                         unfocusedContainerColor = SurfaceDark,
                         focusedBorderColor = EmeraldBright,
                         unfocusedBorderColor = SurfaceBorder,
                         focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
+                        unfocusedTextColor = TextPrimary,
+                        focusedLabelColor = TextSecondary,
+                        unfocusedLabelColor = TextSecondary,
+                        cursorColor = EmeraldBright
                     ),
                     singleLine = true
                 )
@@ -197,13 +209,17 @@ fun CreditSalesScreen(
                     label = { Text("Balance", color = TextSecondary) },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(14.dp),
+                    textStyle = TextStyle(color = WarningYellow),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = SurfaceDarkVariant,
                         unfocusedContainerColor = SurfaceDark,
                         focusedBorderColor = EmeraldBright,
                         unfocusedBorderColor = SurfaceBorder,
                         focusedTextColor = WarningYellow,
-                        unfocusedTextColor = WarningYellow
+                        unfocusedTextColor = WarningYellow,
+                        focusedLabelColor = TextSecondary,
+                        unfocusedLabelColor = TextSecondary,
+                        cursorColor = WarningYellow
                     )
                 )
             }
@@ -217,13 +233,17 @@ fun CreditSalesScreen(
                 leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, tint = EmeraldBright) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
+                textStyle = TextStyle(color = TextPrimary),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = SurfaceDarkVariant,
                     unfocusedContainerColor = SurfaceDark,
                     focusedBorderColor = EmeraldBright,
                     unfocusedBorderColor = SurfaceBorder,
                     focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
+                    unfocusedTextColor = TextPrimary,
+                    focusedLabelColor = TextSecondary,
+                    unfocusedLabelColor = TextSecondary,
+                    cursorColor = EmeraldBright
                 ),
                 singleLine = true
             )
@@ -231,9 +251,29 @@ fun CreditSalesScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             PrimaryGreenButton(
-                text = "Save Credit Sale",
+                text = if (isSaving) "Saving..." else "Save Credit Sale",
+                enabled = !isSaving,
                 onClick = {
-                    onClose()
+                    if (customerName.isBlank()) {
+                        snackbarMessage = "Please enter a customer name."
+                        return@PrimaryGreenButton
+                    }
+                    isSaving = true
+                    viewModel.addCustomerCredit(
+                        customerName = customerName,
+                        phone = customerPhone,
+                        productsSummary = productsSummary.ifBlank { "1 Item | General Product" },
+                        amountPaid = amountPaid.toDoubleOrNull() ?: 0.0,
+                        balance = calculatedBalance,
+                        dueDate = dueDate
+                    )
+                    snackbarMessage = "Credit sale saved successfully!"
+                    isSaving = false
+                    // Reset form for next entry
+                    customerName = ""
+                    productsSummary = ""
+                    amountPaid = ""
+                    dueDate = "Oct 30, 2026"
                 }
             )
 
@@ -308,7 +348,11 @@ fun CreditSalesScreen(
                                 text = "Send Reminder",
                                 onClick = { },
                                 icon = Icons.AutoMirrored.Filled.Send,
-                                modifier = Modifier.height(36.dp)
+                                modifier = Modifier.height(36.dp),
+                                containerColor = SurfaceDarkVariant,
+                                contentColor = TextPrimary,
+                                borderColor = SurfaceBorder,
+                                iconTint = EmeraldPrimary
                             )
                         }
                     }
@@ -316,6 +360,24 @@ fun CreditSalesScreen(
             }
 
             Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // Snackbar feedback
+        if (snackbarMessage != null) {
+            Snackbar(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp),
+                containerColor = SurfaceDarkVariant,
+                contentColor = TextPrimary,
+                action = {
+                    TextButton(onClick = { snackbarMessage = null }) {
+                        Text("Dismiss", color = EmeraldBright)
+                    }
+                }
+            ) {
+                Text(snackbarMessage!!)
+            }
         }
     }
 }
