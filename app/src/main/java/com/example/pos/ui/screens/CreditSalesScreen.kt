@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -37,6 +38,33 @@ fun CreditSalesScreen(
     viewModel: PosViewModel,
     onClose: () -> Unit
 ) {
+
+    // light and dark mode toggle for creditsales and expenses
+    var isLightMode by remember { mutableStateOf(false) }
+
+    // Temporary, screen-local theme preview.
+    // Existing color references below can remain unchanged.
+    val BgDark = if (isLightMode) com.example.pos.ui.theme.BgLight
+    else com.example.pos.ui.theme.BgDark
+    val SurfaceDark = if (isLightMode) com.example.pos.ui.theme.SurfaceLight
+    else com.example.pos.ui.theme.SurfaceDark
+    val SurfaceDarkVariant = if (isLightMode) com.example.pos.ui.theme.SurfaceLightVariant
+    else com.example.pos.ui.theme.SurfaceDarkVariant
+    val SurfaceBorder = if (isLightMode) com.example.pos.ui.theme.SurfaceLightBorder
+    else com.example.pos.ui.theme.SurfaceBorder
+    val TextPrimary = if (isLightMode) com.example.pos.ui.theme.TextLightPrimary
+    else com.example.pos.ui.theme.TextPrimary
+    val TextSecondary = if (isLightMode) com.example.pos.ui.theme.TextLightSecondary
+    else com.example.pos.ui.theme.TextSecondary
+    val TextMuted = if (isLightMode) com.example.pos.ui.theme.TextLightMuted
+    else com.example.pos.ui.theme.TextMuted
+    val EmeraldBright = if (isLightMode) com.example.pos.ui.theme.EmeraldLightBright
+    else com.example.pos.ui.theme.EmeraldBright
+    val EmeraldContainer = if (isLightMode) com.example.pos.ui.theme.EmeraldLightContainer
+    else com.example.pos.ui.theme.EmeraldContainer
+
+    // continuation of original code is below
+
     val customerCredits by viewModel.customerCredits.collectAsState()
     val totalOutstanding = customerCredits.sumOf { it.totalOutstanding }
 
@@ -78,6 +106,17 @@ fun CreditSalesScreen(
                         color = TextPrimary
                     )
                 )
+                // Button for dark and light mode
+                Spacer(modifier = Modifier.weight(1f))
+
+                TextButton(
+                    onClick = { isLightMode = !isLightMode }
+                ) {
+                    Text(
+                        text = if (isLightMode) "Dark ☾" else "Light ☀",
+                        color = EmeraldBright
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -128,188 +167,214 @@ fun CreditSalesScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Form inputs
-            OutlinedTextField(
-                value = customerName,
-                onValueChange = { customerName = it },
-                label = { Text("Customer", color = TextSecondary) },
-                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = EmeraldBright) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = SurfaceDarkVariant,
-                    unfocusedContainerColor = SurfaceDark,
-                    focusedBorderColor = EmeraldBright,
-                    unfocusedBorderColor = SurfaceBorder,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
-                ),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            OutlinedTextField(
-                value = productsSummary,
-                onValueChange = { productsSummary = it },
-                label = { Text("Products", color = TextSecondary) },
-                leadingIcon = { Icon(Icons.Default.ShoppingBag, contentDescription = null, tint = EmeraldBright) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = SurfaceDarkVariant,
-                    unfocusedContainerColor = SurfaceDark,
-                    focusedBorderColor = EmeraldBright,
-                    unfocusedBorderColor = SurfaceBorder,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
-                ),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            key(isLightMode) {
+                // Form inputs
                 OutlinedTextField(
-                    value = amountPaid,
-                    onValueChange = { amountPaid = it },
-                    label = { Text("Amount Paid", color = TextSecondary) },
-                    modifier = Modifier.weight(1f),
+                    value = customerName,
+                    onValueChange = { customerName = it },
+                    label = { Text("Customer", color = TextSecondary) },
+                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = EmeraldBright) },
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
+                    textStyle = TextStyle(color = TextPrimary),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = SurfaceDarkVariant,
                         unfocusedContainerColor = SurfaceDark,
                         focusedBorderColor = EmeraldBright,
                         unfocusedBorderColor = SurfaceBorder,
                         focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
+                        unfocusedTextColor = TextPrimary,
+                        focusedLabelColor = TextSecondary,
+                        unfocusedLabelColor = TextSecondary,
+                        cursorColor = EmeraldBright
                     ),
                     singleLine = true
                 )
 
+                Spacer(modifier = Modifier.height(12.dp))
+
                 OutlinedTextField(
-                    value = "KSh ${String.format("%,.0f", calculatedBalance)}",
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Balance", color = TextSecondary) },
-                    modifier = Modifier.weight(1f),
+                    value = productsSummary,
+                    onValueChange = { productsSummary = it },
+                    label = { Text("Products", color = TextSecondary) },
+                    leadingIcon = { Icon(Icons.Default.ShoppingBag, contentDescription = null, tint = EmeraldBright) },
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
+                    textStyle = TextStyle(color = TextPrimary),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = SurfaceDarkVariant,
                         unfocusedContainerColor = SurfaceDark,
                         focusedBorderColor = EmeraldBright,
                         unfocusedBorderColor = SurfaceBorder,
-                        focusedTextColor = WarningYellow,
-                        unfocusedTextColor = WarningYellow
-                    )
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        focusedLabelColor = TextSecondary,
+                        unfocusedLabelColor = TextSecondary,
+                        cursorColor = EmeraldBright
+                    ),
+                    singleLine = true
                 )
-            }
 
-            Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-            OutlinedTextField(
-                value = dueDate,
-                onValueChange = { dueDate = it },
-                label = { Text("Due Date", color = TextSecondary) },
-                leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, tint = EmeraldBright) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = SurfaceDarkVariant,
-                    unfocusedContainerColor = SurfaceDark,
-                    focusedBorderColor = EmeraldBright,
-                    unfocusedBorderColor = SurfaceBorder,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
-                ),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            PrimaryGreenButton(
-                text = "Save Credit Sale",
-                onClick = {
-                    onClose()
-                }
-            )
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            // Credit Ledger List
-            Text(
-                text = "Active Credit Ledger",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                ),
-                modifier = Modifier.align(Alignment.Start)
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            customerCredits.forEach { c ->
-                SurfaceCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 10.dp),
-                    backgroundColor = SurfaceDark,
-                    borderColor = SurfaceBorder,
-                    cornerRadius = 18.dp
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
+                    OutlinedTextField(
+                        value = amountPaid,
+                        onValueChange = { amountPaid = it },
+                        label = { Text("Amount Paid", color = TextSecondary) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp),
+                        textStyle = TextStyle(color = TextPrimary),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = SurfaceDarkVariant,
+                            unfocusedContainerColor = SurfaceDark,
+                            focusedBorderColor = EmeraldBright,
+                            unfocusedBorderColor = SurfaceBorder,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            focusedLabelColor = TextSecondary,
+                            unfocusedLabelColor = TextSecondary,
+                            cursorColor = EmeraldBright
+                        ),
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = "KSh ${String.format("%,.0f", calculatedBalance)}",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Balance", color = TextSecondary) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp),
+                        textStyle = TextStyle(color = if (isLightMode) WarningLightYellow else WarningYellow),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = SurfaceDarkVariant,
+                            unfocusedContainerColor = SurfaceDark,
+                            focusedBorderColor = EmeraldBright,
+                            unfocusedBorderColor = SurfaceBorder,
+                            focusedTextColor = if (isLightMode) WarningLightYellow else WarningYellow,
+                            unfocusedTextColor = if (isLightMode) WarningLightYellow else WarningYellow,
+                            focusedLabelColor = TextSecondary,
+                            unfocusedLabelColor = TextSecondary,
+                            cursorColor = if (isLightMode) WarningLightYellow else WarningYellow
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = dueDate,
+                    onValueChange = { dueDate = it },
+                    label = { Text("Due Date", color = TextSecondary) },
+                    leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, tint = EmeraldBright) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    textStyle = TextStyle(color = TextPrimary),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = SurfaceDarkVariant,
+                        unfocusedContainerColor = SurfaceDark,
+                        focusedBorderColor = EmeraldBright,
+                        unfocusedBorderColor = SurfaceBorder,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        focusedLabelColor = TextSecondary,
+                        unfocusedLabelColor = TextSecondary,
+                        cursorColor = EmeraldBright
+                    ),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                PrimaryGreenButton(
+                    text = "Save Credit Sale",
+                    onClick = {
+                        onClose()
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(28.dp))
+
+                // Credit Ledger List
+                Text(
+                    text = "Active Credit Ledger",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    ),
+                    modifier = Modifier.align(Alignment.Start)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                customerCredits.forEach { c ->
+                    SurfaceCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 10.dp),
+                        backgroundColor = SurfaceDark,
+                        borderColor = SurfaceBorder,
+                        cornerRadius = 18.dp
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = c.customerName,
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = TextPrimary
+                                        )
+                                    )
+                                    Text(
+                                        text = c.productsSummary,
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            color = TextSecondary,
+                                            fontSize = 12.sp
+                                        )
+                                    )
+                                }
+
                                 Text(
-                                    text = c.customerName,
+                                    text = "KSh ${String.format("%,.0f", c.balance)}",
                                     style = MaterialTheme.typography.titleMedium.copy(
                                         fontWeight = FontWeight.Bold,
-                                        color = TextPrimary
-                                    )
-                                )
-                                Text(
-                                    text = c.productsSummary,
-                                    style = MaterialTheme.typography.bodyMedium.copy(
-                                        color = TextSecondary,
-                                        fontSize = 12.sp
+                                        color = if (isLightMode) WarningLightYellow else WarningYellow
                                     )
                                 )
                             }
 
-                            Text(
-                                text = "KSh ${String.format("%,.0f", c.balance)}",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = WarningYellow
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Due: ${c.dueDate}",
+                                    style = MaterialTheme.typography.labelSmall.copy(color = TextMuted)
                                 )
-                            )
-                        }
 
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Due: ${c.dueDate}",
-                                style = MaterialTheme.typography.labelSmall.copy(color = TextMuted)
-                            )
-
-                            SecondaryDarkButton(
-                                text = "Send Reminder",
-                                onClick = { },
-                                icon = Icons.Default.Send,
-                                modifier = Modifier.height(36.dp)
-                            )
+                                SecondaryDarkButton(
+                                    text = "Send Reminder",
+                                    onClick = { },
+                                    icon = Icons.Default.Send,
+                                    modifier = Modifier.height(36.dp),
+                                    containerColor = if (isLightMode) Color(0xFFF5F2EB) else SurfaceDarkVariant,
+                                    contentColor = TextPrimary,
+                                    borderColor = SurfaceBorder,
+                                    iconTint = if (isLightMode) EmeraldLightBright else EmeraldPrimary
+                                )
+                            }
                         }
                     }
                 }

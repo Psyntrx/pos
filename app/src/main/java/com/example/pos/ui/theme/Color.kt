@@ -25,3 +25,24 @@ val ErrorContainer = Color(0xFF2E1212)
 
 val CardGradientStart = Color(0xFF14241F)
 val CardGradientEnd = Color(0xFF0F1A16)
+
+
+/* RetailSync Light Theme Palette */
+val BgLight = Color(0xFFF5F9F5)
+val SurfaceLight = Color(0xFFFFFFFF)
+val SurfaceLightVariant = Color(0xFFEDF5EF)
+val SurfaceLightBorder = Color(0xFFDCE9DE)
+
+val EmeraldLightPrimary = Color(0xFF167D4A)
+val EmeraldLightBright = Color(0xFF16834A)
+val EmeraldLightContainer = Color(0xFFE1F3E6)
+
+val TextLightPrimary = Color(0xFF17251C)
+val TextLightSecondary = Color(0xFF65756A)
+val TextLightMuted = Color(0xFF87948A)
+
+val WarningLightYellow = Color(0xFF946200)
+val WarningLightContainer = Color(0xFFFFF2CC)
+
+val ErrorLightRed = Color(0xFFC62828)
+val ErrorLightContainer = Color(0xFFFFE8E6)

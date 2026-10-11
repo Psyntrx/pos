@@ -36,6 +36,32 @@ fun ExpensesScreen(
     viewModel: PosViewModel,
     onClose: () -> Unit
 ) {
+    // light and dark mode toggle for credit sales and expenses
+    var isLightMode by remember { mutableStateOf(false) }
+
+    // Temporary, screen-local theme preview.
+    // Existing color references below can remain unchanged.
+    val BgDark = if (isLightMode) com.example.pos.ui.theme.BgLight
+    else com.example.pos.ui.theme.BgDark
+    val SurfaceDark = if (isLightMode) com.example.pos.ui.theme.SurfaceLight
+    else com.example.pos.ui.theme.SurfaceDark
+    val SurfaceDarkVariant = if (isLightMode) com.example.pos.ui.theme.SurfaceLightVariant
+    else com.example.pos.ui.theme.SurfaceDarkVariant
+    val SurfaceBorder = if (isLightMode) com.example.pos.ui.theme.SurfaceLightBorder
+    else com.example.pos.ui.theme.SurfaceBorder
+    val TextPrimary = if (isLightMode) com.example.pos.ui.theme.TextLightPrimary
+    else com.example.pos.ui.theme.TextPrimary
+    val TextSecondary = if (isLightMode) com.example.pos.ui.theme.TextLightSecondary
+    else com.example.pos.ui.theme.TextSecondary
+    val TextMuted = if (isLightMode) com.example.pos.ui.theme.TextLightMuted
+    else com.example.pos.ui.theme.TextMuted
+    val EmeraldBright = if (isLightMode) com.example.pos.ui.theme.EmeraldLightBright
+    else com.example.pos.ui.theme.EmeraldBright
+    val EmeraldContainer = if (isLightMode) com.example.pos.ui.theme.EmeraldLightContainer
+    else com.example.pos.ui.theme.EmeraldContainer
+
+    // continuation of original code is below
+
     val expenses by viewModel.expenses.collectAsState()
     var filterPeriod by remember { mutableStateOf("All") }
     var showAddDialog by remember { mutableStateOf(false) }
@@ -58,7 +84,11 @@ fun ExpensesScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onClose) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = TextPrimary
+                    )
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
@@ -68,6 +98,17 @@ fun ExpensesScreen(
                         color = TextPrimary
                     )
                 )
+                // Button for dark and light mode
+                Spacer(modifier = Modifier.weight(1f))
+
+                TextButton(
+                    onClick = { isLightMode = !isLightMode }
+                ) {
+                    Text(
+                        text = if (isLightMode) "Dark ☾" else "Light ☀",
+                        color = EmeraldBright
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -82,7 +123,12 @@ fun ExpensesScreen(
                     FilterChipItem(
                         label = period,
                         isSelected = filterPeriod == period,
-                        onClick = { filterPeriod = period }
+                        onClick = { filterPeriod = period },
+                        backgroundColor = SurfaceDarkVariant,
+                        borderColor = SurfaceBorder,
+                        selectedBackgroundColor = EmeraldBright,
+                        selectedTextColor = BgDark,
+                        unselectedTextColor = TextSecondary
                     )
                 }
             }
@@ -168,85 +214,97 @@ fun ExpensesScreen(
             }
         }
 
-        // Add Expense FAB
+        // Add Expense FAB and modified it to use the new colors
         FloatingActionButton(
             onClick = { showAddDialog = true },
             containerColor = EmeraldBright,
-            contentColor = BgDark,
+            contentColor = if (isLightMode) {
+                TextLightPrimary
+            } else {
+                BgDark
+            },
             shape = CircleShape,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(bottom = 24.dp, end = 20.dp)
                 .size(56.dp)
         ) {
-            Icon(Icons.Default.Add, contentDescription = "Add Expense", modifier = Modifier.size(28.dp))
+            Icon(
+                Icons.Default.Add,
+                contentDescription = "Add Expense",
+                modifier = Modifier.size(28.dp)
+            )
         }
-    }
 
-    if (showAddDialog) {
-        var title by remember { mutableStateOf("") }
-        var amount by remember { mutableStateOf("") }
-        var category by remember { mutableStateOf("Utility") }
+        if (showAddDialog) {
+            var title by remember { mutableStateOf("") }
+            var amount by remember { mutableStateOf("") }
+            var category by remember { mutableStateOf("Utility") }
 
-        AlertDialog(
-            onDismissRequest = { showAddDialog = false },
-            containerColor = SurfaceDark,
-            title = {
-                Text(
-                    text = "Add Expense",
-                    style = MaterialTheme.typography.titleLarge.copy(color = TextPrimary)
-                )
-            },
-            text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    OutlinedTextField(
-                        value = title,
-                        onValueChange = { title = it },
-                        label = { Text("Title e.g. Repairs", color = TextSecondary) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = SurfaceDarkVariant,
-                            unfocusedContainerColor = SurfaceDark,
-                            focusedBorderColor = EmeraldBright,
-                            unfocusedBorderColor = SurfaceBorder,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
-                        ),
-                        singleLine = true
+            AlertDialog(
+                onDismissRequest = { showAddDialog = false },
+                containerColor = SurfaceDark,
+                title = {
+                    Text(
+                        text = "Add Expense",
+                        style = MaterialTheme.typography.titleLarge.copy(color = TextPrimary)
                     )
+                },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = title,
+                            onValueChange = { title = it },
+                            label = { Text("Title e.g. Repairs", color = TextSecondary) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = SurfaceDarkVariant,
+                                unfocusedContainerColor = SurfaceDark,
+                                focusedBorderColor = EmeraldBright,
+                                unfocusedBorderColor = SurfaceBorder,
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary
+                            ),
+                            singleLine = true
+                        )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                    OutlinedTextField(
-                        value = amount,
-                        onValueChange = { amount = it },
-                        label = { Text("Amount (KSh)", color = TextSecondary) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = SurfaceDarkVariant,
-                            unfocusedContainerColor = SurfaceDark,
-                            focusedBorderColor = EmeraldBright,
-                            unfocusedBorderColor = SurfaceBorder,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
-                        ),
-                        singleLine = true
+                        OutlinedTextField(
+                            value = amount,
+                            onValueChange = { amount = it },
+                            label = { Text("Amount (KSh)", color = TextSecondary) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = SurfaceDarkVariant,
+                                unfocusedContainerColor = SurfaceDark,
+                                focusedBorderColor = EmeraldBright,
+                                unfocusedBorderColor = SurfaceBorder,
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary
+                            ),
+                            singleLine = true
+                        )
+                    }
+                },
+                confirmButton = {
+                    PrimaryGreenButton(
+                        text = "Save Expense",
+                        onClick = {
+                            if (title.isNotBlank()) {
+                                viewModel.addExpense(
+                                    title,
+                                    category,
+                                    amount.toDoubleOrNull() ?: 500.0
+                                )
+                                showAddDialog = false
+                            }
+                        }
                     )
                 }
-            },
-            confirmButton = {
-                PrimaryGreenButton(
-                    text = "Save Expense",
-                    onClick = {
-                        if (title.isNotBlank()) {
-                            viewModel.addExpense(title, category, amount.toDoubleOrNull() ?: 500.0)
-                            showAddDialog = false
-                        }
-                    }
-                )
-            }
-        )
+            )
+        }
     }
 }

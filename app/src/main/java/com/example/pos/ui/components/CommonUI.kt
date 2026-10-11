@@ -84,17 +84,21 @@ fun SecondaryDarkButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    icon: ImageVector? = null
+    icon: ImageVector? = null,
+    containerColor: Color = SurfaceDarkVariant,
+    contentColor: Color = TextPrimary,
+    borderColor: Color = SurfaceBorder,
+    iconTint: Color = EmeraldPrimary
 ) {
     OutlinedButton(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
             .height(52.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, SurfaceBorder),
+        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
         colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = SurfaceDarkVariant,
-            contentColor = TextPrimary
+            containerColor = containerColor,
+            contentColor = contentColor
         ),
         shape = RoundedCornerShape(26.dp)
     ) {
@@ -107,14 +111,14 @@ fun SecondaryDarkButton(
                     imageVector = icon,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
-                    tint = EmeraldPrimary
+                    tint = iconTint
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
             Text(
                 text = text,
                 style = MaterialTheme.typography.titleMedium.copy(
-                    color = TextPrimary,
+                    color = contentColor,
                     fontWeight = FontWeight.SemiBold
                 )
             )
@@ -222,17 +226,22 @@ fun MetricStatCard(
 fun FilterChipItem(
     label: String,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    backgroundColor: Color = SurfaceDarkVariant,
+    borderColor: Color = SurfaceBorder,
+    selectedBackgroundColor: Color = EmeraldBright,
+    selectedTextColor: Color = BgDark,
+    unselectedTextColor: Color = TextSecondary
 ) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
             .background(
-                if (isSelected) EmeraldBright else SurfaceDarkVariant
+                if (isSelected) selectedBackgroundColor else backgroundColor
             )
             .border(
                 width = 1.dp,
-                color = if (isSelected) EmeraldBright else SurfaceBorder,
+                color = if (isSelected) selectedBackgroundColor else borderColor,
                 shape = RoundedCornerShape(20.dp)
             )
             .clickable { onClick() }
@@ -242,7 +251,7 @@ fun FilterChipItem(
         Text(
             text = label,
             style = MaterialTheme.typography.labelLarge.copy(
-                color = if (isSelected) BgDark else TextSecondary,
+                color = if (isSelected) selectedTextColor else unselectedTextColor,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                 fontSize = 13.sp
             )
