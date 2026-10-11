@@ -17,10 +17,10 @@ import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.ShoppingBag
-import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material.icons.outlined.Receipt
-import androidx.compose.material.icons.outlined.ReceiptLong
+import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -192,7 +192,7 @@ fun DashboardScreen(
                 MetricStatCard(
                     title = "Gross Profit",
                     value = "KSh ${String.format("%,.0f", grossProfit)}",
-                    icon = Icons.Default.TrendingUp,
+                    icon = Icons.AutoMirrored.Filled.TrendingUp,
                     iconBgColor = EmeraldContainer,
                     iconTint = EmeraldBright,
                     modifier = Modifier.weight(1f)
@@ -201,7 +201,7 @@ fun DashboardScreen(
                 MetricStatCard(
                     title = "Expenses",
                     value = "KSh ${String.format("%,.0f", totalExpenses)}",
-                    icon = Icons.Outlined.ReceiptLong,
+                    icon = Icons.AutoMirrored.Outlined.ReceiptLong,
                     iconBgColor = SurfaceDarkVariant,
                     iconTint = EmeraldPrimary,
                     modifier = Modifier.weight(1f)

@@ -63,6 +63,7 @@ fun LoginScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(BgDark)
+            .navigationBarsPadding()
             .padding(24.dp)
     ) {
         Column(
@@ -297,6 +298,7 @@ fun RegisterShopStep1Screen(
         modifier = Modifier
             .fillMaxSize()
             .background(BgDark)
+            .navigationBarsPadding()
             .padding(20.dp)
     ) {
         Column(
@@ -567,6 +569,7 @@ fun RegisterShopStep2Screen(
         modifier = Modifier
             .fillMaxSize()
             .background(BgDark)
+            .navigationBarsPadding()
             .padding(20.dp)
     ) {
         Column(
@@ -835,6 +838,7 @@ fun ForgotPasswordScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(BgDark)
+            .navigationBarsPadding()
             .padding(24.dp)
     ) {
         Column(

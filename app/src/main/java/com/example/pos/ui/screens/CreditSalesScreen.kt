@@ -15,7 +15,7 @@ import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Receipt
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -307,7 +307,7 @@ fun CreditSalesScreen(
                             SecondaryDarkButton(
                                 text = "Send Reminder",
                                 onClick = { },
-                                icon = Icons.Default.Send,
+                                icon = Icons.AutoMirrored.Filled.Send,
                                 modifier = Modifier.height(36.dp)
                             )
                         }
