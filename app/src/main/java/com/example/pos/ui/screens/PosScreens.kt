@@ -98,14 +98,8 @@ fun NewSaleScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = SurfaceDarkVariant,
-                    unfocusedContainerColor = SurfaceDark,
-                    focusedBorderColor = EmeraldBright,
-                    unfocusedBorderColor = SurfaceBorder,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
-                ),
+                textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                colors = com.example.pos.ui.components.posTextFieldColors(),
                 singleLine = true
             )
 
@@ -427,19 +421,13 @@ fun PaymentScreen(
                 OutlinedTextField(
                     value = customerInput,
                     onValueChange = { customerInput = it },
-                    label = { Text("Customer (Optional)", color = TextSecondary) },
+                    label = { Text("Customer (Optional)") },
                     placeholder = { Text("Name or phone number", color = TextMuted) },
                     leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = EmeraldBright) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = SurfaceDarkVariant,
-                        unfocusedContainerColor = SurfaceDark,
-                        focusedBorderColor = EmeraldBright,
-                        unfocusedBorderColor = SurfaceBorder,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
-                    ),
+                    textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                    colors = com.example.pos.ui.components.posTextFieldColors(),
                     singleLine = true
                 )
             }

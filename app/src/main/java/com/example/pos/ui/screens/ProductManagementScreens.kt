@@ -140,6 +140,7 @@ fun ProductsScreen(
             },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(17.dp),
+            textStyle = LocalTextStyle.current.copy(color = TextPrimary),
             colors = productTextFieldColors(),
             singleLine = true
         )
@@ -721,23 +722,12 @@ private fun ProductFormField(
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         shape = RoundedCornerShape(14.dp),
+        textStyle = LocalTextStyle.current.copy(color = TextPrimary),
         colors = productTextFieldColors()
     )
 }
 
 @Composable
-private fun productTextFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedContainerColor = SurfaceDarkVariant,
-    unfocusedContainerColor = SurfaceDarkVariant,
-    disabledContainerColor = SurfaceDarkVariant,
-    focusedBorderColor = EmeraldBright,
-    unfocusedBorderColor = SurfaceBorder,
-    errorBorderColor = ErrorRed,
-    focusedLabelColor = EmeraldBright,
-    unfocusedLabelColor = TextSecondary,
-    focusedTextColor = TextPrimary,
-    unfocusedTextColor = TextPrimary,
-    focusedPlaceholderColor = TextMuted,
-    unfocusedPlaceholderColor = TextMuted,
-    cursorColor = EmeraldBright
+private fun productTextFieldColors() = com.example.pos.ui.components.posTextFieldColors(
+    unfocusedContainerColor = SurfaceDarkVariant
 )

@@ -9,7 +9,9 @@ import androidx.compose.ui.graphics.Color
 private val isDarkPalette = mutableStateOf(false)
 
 internal fun updatePaletteForDarkTheme(isDark: Boolean) {
-    isDarkPalette.value = isDark
+    if (isDarkPalette.value != isDark) {
+        isDarkPalette.value = isDark
+    }
 }
 
 private fun palette(light: Color, dark: Color): Color =

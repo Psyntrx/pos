@@ -202,17 +202,11 @@ fun ExpensesScreen(
                     OutlinedTextField(
                         value = title,
                         onValueChange = { title = it },
-                        label = { Text("Title e.g. Repairs", color = TextSecondary) },
+                        label = { Text("Title e.g. Repairs") },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = SurfaceDarkVariant,
-                            unfocusedContainerColor = SurfaceDark,
-                            focusedBorderColor = EmeraldBright,
-                            unfocusedBorderColor = SurfaceBorder,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
-                        ),
+                        textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                        colors = com.example.pos.ui.components.posTextFieldColors(),
                         singleLine = true
                     )
 
@@ -221,17 +215,11 @@ fun ExpensesScreen(
                     OutlinedTextField(
                         value = amount,
                         onValueChange = { amount = it },
-                        label = { Text("Amount (KSh)", color = TextSecondary) },
+                        label = { Text("Amount (KSh)") },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = SurfaceDarkVariant,
-                            unfocusedContainerColor = SurfaceDark,
-                            focusedBorderColor = EmeraldBright,
-                            unfocusedBorderColor = SurfaceBorder,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
-                        ),
+                        textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                        colors = com.example.pos.ui.components.posTextFieldColors(),
                         singleLine = true
                     )
                 }

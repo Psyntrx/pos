@@ -109,14 +109,8 @@ fun LegacyProductsScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = SurfaceDarkVariant,
-                    unfocusedContainerColor = SurfaceDark,
-                    focusedBorderColor = EmeraldBright,
-                    unfocusedBorderColor = SurfaceBorder,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
-                ),
+                textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                colors = com.example.pos.ui.components.posTextFieldColors(),
                 singleLine = true
             )
 
@@ -349,17 +343,11 @@ fun LegacyAddProductScreen(
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Product Name", color = TextSecondary) },
+                label = { Text("Product Name") },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = SurfaceDarkVariant,
-                    unfocusedContainerColor = SurfaceDark,
-                    focusedBorderColor = EmeraldBright,
-                    unfocusedBorderColor = SurfaceBorder,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
-                ),
+                textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                colors = com.example.pos.ui.components.posTextFieldColors(),
                 singleLine = true
             )
 
@@ -368,18 +356,12 @@ fun LegacyAddProductScreen(
             OutlinedTextField(
                 value = category,
                 onValueChange = { category = it },
-                label = { Text("Category", color = TextSecondary) },
+                label = { Text("Category") },
                 trailingIcon = { Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = EmeraldBright) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = SurfaceDarkVariant,
-                    unfocusedContainerColor = SurfaceDark,
-                    focusedBorderColor = EmeraldBright,
-                    unfocusedBorderColor = SurfaceBorder,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
-                ),
+                textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                colors = com.example.pos.ui.components.posTextFieldColors(),
                 singleLine = true
             )
 
@@ -392,34 +374,22 @@ fun LegacyAddProductScreen(
                 OutlinedTextField(
                     value = sku,
                     onValueChange = { sku = it },
-                    label = { Text("SKU / Code", color = TextSecondary) },
+                    label = { Text("SKU / Code") },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(14.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = SurfaceDarkVariant,
-                        unfocusedContainerColor = SurfaceDark,
-                        focusedBorderColor = EmeraldBright,
-                        unfocusedBorderColor = SurfaceBorder,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
-                    ),
+                    textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                    colors = com.example.pos.ui.components.posTextFieldColors(),
                     singleLine = true
                 )
 
                 OutlinedTextField(
                     value = unit,
                     onValueChange = { unit = it },
-                    label = { Text("Unit", color = TextSecondary) },
+                    label = { Text("Unit") },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(14.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = SurfaceDarkVariant,
-                        unfocusedContainerColor = SurfaceDark,
-                        focusedBorderColor = EmeraldBright,
-                        unfocusedBorderColor = SurfaceBorder,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
-                    ),
+                    textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                    colors = com.example.pos.ui.components.posTextFieldColors(),
                     singleLine = true
                 )
             }
@@ -433,34 +403,22 @@ fun LegacyAddProductScreen(
                 OutlinedTextField(
                     value = buyingPrice,
                     onValueChange = { buyingPrice = it },
-                    label = { Text("Buying Price", color = TextSecondary) },
+                    label = { Text("Buying Price") },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(14.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = SurfaceDarkVariant,
-                        unfocusedContainerColor = SurfaceDark,
-                        focusedBorderColor = EmeraldBright,
-                        unfocusedBorderColor = SurfaceBorder,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
-                    ),
+                    textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                    colors = com.example.pos.ui.components.posTextFieldColors(),
                     singleLine = true
                 )
 
                 OutlinedTextField(
                     value = sellingPrice,
                     onValueChange = { sellingPrice = it },
-                    label = { Text("Selling Price", color = TextSecondary) },
+                    label = { Text("Selling Price") },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(14.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = SurfaceDarkVariant,
-                        unfocusedContainerColor = SurfaceDark,
-                        focusedBorderColor = EmeraldBright,
-                        unfocusedBorderColor = SurfaceBorder,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
-                    ),
+                    textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                    colors = com.example.pos.ui.components.posTextFieldColors(),
                     singleLine = true
                 )
             }
@@ -474,34 +432,22 @@ fun LegacyAddProductScreen(
                 OutlinedTextField(
                     value = quantity,
                     onValueChange = { quantity = it },
-                    label = { Text("Quantity", color = TextSecondary) },
+                    label = { Text("Quantity") },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(14.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = SurfaceDarkVariant,
-                        unfocusedContainerColor = SurfaceDark,
-                        focusedBorderColor = EmeraldBright,
-                        unfocusedBorderColor = SurfaceBorder,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
-                    ),
+                    textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                    colors = com.example.pos.ui.components.posTextFieldColors(),
                     singleLine = true
                 )
 
                 OutlinedTextField(
                     value = minStock,
                     onValueChange = { minStock = it },
-                    label = { Text("Minimum Stock", color = TextSecondary) },
+                    label = { Text("Minimum Stock") },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(14.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = SurfaceDarkVariant,
-                        unfocusedContainerColor = SurfaceDark,
-                        focusedBorderColor = EmeraldBright,
-                        unfocusedBorderColor = SurfaceBorder,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
-                    ),
+                    textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                    colors = com.example.pos.ui.components.posTextFieldColors(),
                     singleLine = true
                 )
             }
@@ -511,17 +457,11 @@ fun LegacyAddProductScreen(
             OutlinedTextField(
                 value = supplier,
                 onValueChange = { supplier = it },
-                label = { Text("Supplier (Optional)", color = TextSecondary) },
+                label = { Text("Supplier (Optional)") },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = SurfaceDarkVariant,
-                    unfocusedContainerColor = SurfaceDark,
-                    focusedBorderColor = EmeraldBright,
-                    unfocusedBorderColor = SurfaceBorder,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
-                ),
+                textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                colors = com.example.pos.ui.components.posTextFieldColors(),
                 singleLine = true
             )
 
@@ -603,18 +543,12 @@ fun StockInScreen(
                 value = selectedProduct?.name ?: "Select Product",
                 onValueChange = {},
                 readOnly = true,
-                label = { Text("Product", color = TextSecondary) },
+                label = { Text("Product") },
                 trailingIcon = { Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = EmeraldBright) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = SurfaceDarkVariant,
-                    unfocusedContainerColor = SurfaceDark,
-                    focusedBorderColor = EmeraldBright,
-                    unfocusedBorderColor = SurfaceBorder,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
-                )
+                textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                colors = com.example.pos.ui.components.posTextFieldColors()
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -669,17 +603,11 @@ fun StockInScreen(
             OutlinedTextField(
                 value = buyingPrice,
                 onValueChange = { buyingPrice = it },
-                label = { Text("Buying Price (KSh)", color = TextSecondary) },
+                label = { Text("Buying Price (KSh)") },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = SurfaceDarkVariant,
-                    unfocusedContainerColor = SurfaceDark,
-                    focusedBorderColor = EmeraldBright,
-                    unfocusedBorderColor = SurfaceBorder,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
-                ),
+                textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                colors = com.example.pos.ui.components.posTextFieldColors(),
                 singleLine = true
             )
 
@@ -688,17 +616,11 @@ fun StockInScreen(
             OutlinedTextField(
                 value = supplier,
                 onValueChange = { supplier = it },
-                label = { Text("Supplier", color = TextSecondary) },
+                label = { Text("Supplier") },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = SurfaceDarkVariant,
-                    unfocusedContainerColor = SurfaceDark,
-                    focusedBorderColor = EmeraldBright,
-                    unfocusedBorderColor = SurfaceBorder,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
-                ),
+                textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                colors = com.example.pos.ui.components.posTextFieldColors(),
                 singleLine = true
             )
 
@@ -708,18 +630,12 @@ fun StockInScreen(
                 value = "Sep 28, 2026 09:41 AM",
                 onValueChange = {},
                 readOnly = true,
-                label = { Text("Date & Time", color = TextSecondary) },
+                label = { Text("Date & Time") },
                 trailingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, tint = EmeraldBright) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = SurfaceDarkVariant,
-                    unfocusedContainerColor = SurfaceDark,
-                    focusedBorderColor = EmeraldBright,
-                    unfocusedBorderColor = SurfaceBorder,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
-                )
+                textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                colors = com.example.pos.ui.components.posTextFieldColors()
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -728,18 +644,12 @@ fun StockInScreen(
                 value = "Faith (Owner)",
                 onValueChange = {},
                 readOnly = true,
-                label = { Text("Employee", color = TextSecondary) },
+                label = { Text("Employee") },
                 trailingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = EmeraldBright) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = SurfaceDarkVariant,
-                    unfocusedContainerColor = SurfaceDark,
-                    focusedBorderColor = EmeraldBright,
-                    unfocusedBorderColor = SurfaceBorder,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
-                )
+                textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                colors = com.example.pos.ui.components.posTextFieldColors()
             )
 
             Spacer(modifier = Modifier.height(32.dp))

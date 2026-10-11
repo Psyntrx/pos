@@ -33,6 +33,7 @@ fun POSTheme(
     content: @Composable () -> Unit
 ) {
     val useDarkTheme = themeMode.resolvesToDark(androidx.compose.foundation.isSystemInDarkTheme())
+    updatePaletteForDarkTheme(useDarkTheme)
     val colorScheme = if (useDarkTheme) {
         darkColorScheme(
             primary = androidx.compose.ui.graphics.Color(0xFF10B981),
