@@ -18,7 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
@@ -180,7 +180,7 @@ fun SettingsScreen(
 
         SettingsMenuItem(
             label = "Help & Support",
-            icon = Icons.Default.HelpOutline,
+            icon = Icons.AutoMirrored.Filled.HelpOutline,
             onClick = { }
         )
 

@@ -72,31 +72,37 @@ fun MainContainerScreen(
                 .background(BgDark)
         ) {
             if (activeModal != null) {
-                when (activeModal) {
-                    "payment" -> PaymentScreen(
-                        viewModel = viewModel,
-                        onBack = { activeModal = null }
-                    )
-                    "add_product" -> AddProductScreen(
-                        viewModel = viewModel,
-                        onClose = { activeModal = null }
-                    )
-                    "stock_in" -> StockInScreen(
-                        viewModel = viewModel,
-                        onClose = { activeModal = null }
-                    )
-                    "credit_sales" -> CreditSalesScreen(
-                        viewModel = viewModel,
-                        onClose = { activeModal = null }
-                    )
-                    "expenses" -> ExpensesScreen(
-                        viewModel = viewModel,
-                        onClose = { activeModal = null }
-                    )
-                    "employees" -> EmployeesScreen(
-                        viewModel = viewModel,
-                        onClose = { activeModal = null }
-                    )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .navigationBarsPadding()
+                ) {
+                    when (activeModal) {
+                        "payment" -> PaymentScreen(
+                            viewModel = viewModel,
+                            onBack = { activeModal = null }
+                        )
+                        "add_product" -> AddProductScreen(
+                            viewModel = viewModel,
+                            onClose = { activeModal = null }
+                        )
+                        "stock_in" -> StockInScreen(
+                            viewModel = viewModel,
+                            onClose = { activeModal = null }
+                        )
+                        "credit_sales" -> CreditSalesScreen(
+                            viewModel = viewModel,
+                            onClose = { activeModal = null }
+                        )
+                        "expenses" -> ExpensesScreen(
+                            viewModel = viewModel,
+                            onClose = { activeModal = null }
+                        )
+                        "employees" -> EmployeesScreen(
+                            viewModel = viewModel,
+                            onClose = { activeModal = null }
+                        )
+                    }
                 }
             } else {
                 when (selectedTab) {
