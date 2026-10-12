@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.LocalGroceryStore
 import androidx.compose.material.icons.filled.Refresh
@@ -64,6 +65,7 @@ fun ProductsScreen(
     viewModel: PosViewModel,
     onOpenAddProduct: () -> Unit
 ) {
+    var editingProduct by remember { mutableStateOf<Product?>(null) }
     val products by viewModel.products.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
@@ -188,10 +190,18 @@ fun ProductsScreen(
                 contentPadding = PaddingValues(bottom = 18.dp)
             ) {
                 items(filteredProducts, key = Product::id) { product ->
-                    ProductListItemCard(product = product)
+                    ProductListItemCard(product = product, onEdit = { editingProduct = product })
                 }
             }
         }
+    }
+
+    editingProduct?.let { product ->
+        EditProductDialog(
+            product = product,
+            viewModel = viewModel,
+            onDismiss = { editingProduct = null }
+        )
     }
 }
 
@@ -248,7 +258,7 @@ private fun InventoryOverviewCard(totalProducts: Int, lowStockCount: Int) {
 }
 
 @Composable
-fun ProductListItemCard(product: Product) {
+fun ProductListItemCard(product: Product, onEdit: () -> Unit) {
     val accent = when (product.category.lowercase()) {
         "groceries" -> Color(0xFF16834A)
         "beverages" -> Color(0xFF2879B9)
@@ -314,8 +324,102 @@ fun ProductListItemCard(product: Product) {
                 )
                 Text("per ${product.unit}", color = TextMuted, fontSize = 10.sp)
             }
+            IconButton(onClick = onEdit) {
+                Icon(Icons.Default.Edit, contentDescription = "Edit ${product.name}", tint = EmeraldBright)
+            }
         }
     }
+}
+
+@Composable
+private fun EditProductDialog(
+    product: Product,
+    viewModel: PosViewModel,
+    onDismiss: () -> Unit
+) {
+    val products by viewModel.products.collectAsState()
+    var name by remember(product.id) { mutableStateOf(product.name) }
+    var category by remember(product.id) { mutableStateOf(product.category) }
+    var sku by remember(product.id) { mutableStateOf(product.sku) }
+    var unit by remember(product.id) { mutableStateOf(product.unit) }
+    var buyingPrice by remember(product.id) { mutableStateOf(product.buyingPrice.toString()) }
+    var sellingPrice by remember(product.id) { mutableStateOf(product.sellingPrice.toString()) }
+    var quantity by remember(product.id) { mutableStateOf(product.stockQuantity.toString()) }
+    var minStock by remember(product.id) { mutableStateOf(product.minStock.toString()) }
+    var supplier by remember(product.id) { mutableStateOf(product.supplier) }
+    var attemptedSave by remember(product.id) { mutableStateOf(false) }
+    var saveError by remember(product.id) { mutableStateOf<String?>(null) }
+
+    val parsedBuyingPrice = buyingPrice.toDoubleOrNull()
+    val parsedSellingPrice = sellingPrice.toDoubleOrNull()
+    val parsedQuantity = quantity.toIntOrNull()
+    val parsedMinStock = minStock.toIntOrNull()
+    val duplicateSku = sku.isNotBlank() && products.any {
+        it.id != product.id && it.sku.equals(sku.trim(), ignoreCase = true)
+    }
+    val valid = name.isNotBlank() && category.isNotBlank() && sku.isNotBlank() && !duplicateSku &&
+        unit.isNotBlank() && parsedBuyingPrice != null && parsedBuyingPrice.isFinite() && parsedBuyingPrice >= 0 &&
+        parsedSellingPrice != null && parsedSellingPrice.isFinite() && parsedSellingPrice > 0 &&
+        parsedQuantity != null && parsedQuantity >= 0 && parsedMinStock != null && parsedMinStock >= 0
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit product", color = TextPrimary, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(
+                modifier = Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ProductFormField(name, { name = it; saveError = null }, "Product name *", placeholder = "Product name")
+                ProductFormField(category, { category = it; saveError = null }, "Category *", placeholder = "Category")
+                ProductFormField(
+                    sku,
+                    { sku = it; saveError = null },
+                    "SKU / barcode *",
+                    placeholder = "Unique code",
+                    isError = attemptedSave && (sku.isBlank() || duplicateSku),
+                    supportingText = if (attemptedSave && duplicateSku) "This SKU is already in use." else null
+                )
+                ProductFormField(unit, { unit = it; saveError = null }, "Unit *", placeholder = "e.g. kg, pcs, bottle")
+                ProductFormField(buyingPrice, { buyingPrice = it; saveError = null }, "Cost price *", prefix = "KSh", keyboardType = KeyboardType.Decimal)
+                ProductFormField(sellingPrice, { sellingPrice = it; saveError = null }, "Selling price *", prefix = "KSh", keyboardType = KeyboardType.Decimal)
+                ProductFormField(quantity, { quantity = it.filter(Char::isDigit); saveError = null }, "Quantity *", keyboardType = KeyboardType.Number)
+                ProductFormField(minStock, { minStock = it.filter(Char::isDigit); saveError = null }, "Low-stock alert *", keyboardType = KeyboardType.Number)
+                ProductFormField(supplier, { supplier = it }, "Supplier", placeholder = "Optional")
+                if (attemptedSave && !valid && saveError == null) {
+                    Text("Check all required fields and numeric values.", color = ErrorRed, fontSize = 12.sp)
+                }
+                saveError?.let { Text(it, color = ErrorRed, fontSize = 12.sp) }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                attemptedSave = true
+                saveError = null
+                if (valid) {
+                    val saved = viewModel.updateProduct(
+                        productId = product.id,
+                        name = name,
+                        category = category,
+                        sku = sku,
+                        unit = unit,
+                        buyingPrice = parsedBuyingPrice!!,
+                        sellingPrice = parsedSellingPrice!!,
+                        quantity = parsedQuantity!!,
+                        minStock = parsedMinStock!!,
+                        supplier = supplier
+                    )
+                    if (saved) onDismiss() else saveError = "Could not update the product. Check its SKU and try again."
+                }
+            }) { Text("Save changes", color = EmeraldBright, fontWeight = FontWeight.Bold) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel", color = TextSecondary) }
+        },
+        containerColor = SurfaceDark,
+        titleContentColor = TextPrimary,
+        textContentColor = TextSecondary
+    )
 }
 
 @Composable
