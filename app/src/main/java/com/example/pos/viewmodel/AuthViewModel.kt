@@ -1,11 +1,14 @@
 package com.example.pos.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.pos.data.SupabaseClient
 import com.example.pos.data.Shop
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 /**
  * Shared ViewModel managing state, seamless data retention across registration steps,
@@ -77,6 +80,8 @@ data class ForgotPasswordUiState(
 }
 
 class AuthViewModel : ViewModel() {
+
+    private val supabase = SupabaseClient.service
 
     private val _registerState = MutableStateFlow(RegisterUiState())
     val registerState: StateFlow<RegisterUiState> = _registerState.asStateFlow()
@@ -153,8 +158,6 @@ class AuthViewModel : ViewModel() {
             return
         }
 
-        _registerState.update { it.copy(isLoading = true, errorMessage = null) }
-
         val createdShop = Shop(
             name = state.shopName.trim(),
             ownerName = state.ownerName.trim(),
@@ -164,13 +167,23 @@ class AuthViewModel : ViewModel() {
             category = state.category.trim()
         )
 
-        _registerState.update {
-            it.copy(
-                isLoading = false,
-                isRegisteredSuccessfully = true
+        _registerState.update { it.copy(isLoading = true, errorMessage = null) }
+        viewModelScope.launch {
+            val result = supabase.signUp(state.email.trim(), state.password)
+            result.fold(
+                onSuccess = {
+                    _registerState.update {
+                        it.copy(isLoading = false, isRegisteredSuccessfully = true)
+                    }
+                    onSuccess(createdShop)
+                },
+                onFailure = { error ->
+                    _registerState.update {
+                        it.copy(isLoading = false, errorMessage = error.message ?: "Registration failed.")
+                    }
+                }
             )
         }
-        onSuccess(createdShop)
     }
 
     // -------------------------------------------------------------
@@ -196,8 +209,20 @@ class AuthViewModel : ViewModel() {
         }
 
         _loginState.update { it.copy(isLoading = true, errorMessage = null) }
-        _loginState.update { it.copy(isLoading = false) }
-        onSuccess(state.email, state.password)
+        viewModelScope.launch {
+            val result = supabase.signIn(state.email.trim(), state.password)
+            result.fold(
+                onSuccess = {
+                    _loginState.update { it.copy(isLoading = false) }
+                    onSuccess(state.email, state.password)
+                },
+                onFailure = { error ->
+                    _loginState.update {
+                        it.copy(isLoading = false, errorMessage = error.message ?: "Login failed.")
+                    }
+                }
+            )
+        }
     }
 
     // -------------------------------------------------------------
@@ -219,11 +244,17 @@ class AuthViewModel : ViewModel() {
         }
 
         _forgotPasswordState.update { it.copy(isLoading = true, errorMessage = null) }
-        // Simulate sending reset link
-        _forgotPasswordState.update {
-            it.copy(
-                isLoading = false,
-                isResetSent = true
+        viewModelScope.launch {
+            val result = supabase.resetPasswordForEmail(state.email.trim())
+            result.fold(
+                onSuccess = {
+                    _forgotPasswordState.update { it.copy(isLoading = false, isResetSent = true) }
+                },
+                onFailure = { error ->
+                    _forgotPasswordState.update {
+                        it.copy(isLoading = false, errorMessage = error.message ?: "Could not send reset email.")
+                    }
+                }
             )
         }
     }
