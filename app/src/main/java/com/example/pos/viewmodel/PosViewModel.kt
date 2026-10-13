@@ -305,6 +305,38 @@ class PosViewModel : ViewModel() {
         return true
     }
 
+    fun updateProduct(
+        productId: String,
+        name: String, category: String, sku: String, unit: String,
+        buyingPrice: Double, sellingPrice: Double, quantity: Int, minStock: Int, supplier: String
+    ): Boolean {
+        val currentProduct = _products.value.find { it.id == productId } ?: return false
+        val normalizedName = name.trim()
+        val normalizedCategory = category.trim()
+        val normalizedSku = sku.trim()
+        val normalizedUnit = unit.trim()
+        if (normalizedName.isBlank() || normalizedCategory.isBlank() || normalizedSku.isBlank() ||
+            normalizedUnit.isBlank() || !buyingPrice.isFinite() || buyingPrice < 0 ||
+            !sellingPrice.isFinite() || sellingPrice <= 0 || quantity < 0 || minStock < 0 ||
+            _products.value.any { it.id != productId && it.sku.equals(normalizedSku, ignoreCase = true) }
+        ) return false
+
+        val updatedProduct = currentProduct.copy(
+            name = normalizedName,
+            category = normalizedCategory,
+            sku = normalizedSku,
+            unit = normalizedUnit,
+            buyingPrice = buyingPrice,
+            sellingPrice = sellingPrice,
+            stockQuantity = quantity,
+            minStock = minStock,
+            supplier = supplier.trim(),
+            iconType = normalizedCategory.lowercase()
+        )
+        _products.update { products -> products.map { if (it.id == productId) updatedProduct else it } }
+        return true
+    }
+
     // Stock In / Restocking
     fun recordStockIn(
         productId: String,
