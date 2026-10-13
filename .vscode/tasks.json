@@ -1,0 +1,85 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build Debug APK",
+      "type": "shell",
+      "command": "./gradlew assembleDebug",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$gradle"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Run App (Install & Launch)",
+      "type": "shell",
+      "command": "./gradlew installDebug && $ANDROID_HOME/platform-tools/adb shell am start -n com.example.pos/.MainActivity",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": ["$gradle"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Install Debug APK",
+      "type": "shell",
+      "command": "./gradlew installDebug",
+      "group": "build",
+      "problemMatcher": ["$gradle"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Launch App on Device",
+      "type": "shell",
+      "command": "$ANDROID_HOME/platform-tools/adb shell am start -n com.example.pos/.MainActivity",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "View Logcat",
+      "type": "shell",
+      "command": "$ANDROID_HOME/platform-tools/adb logcat -v time com.example.pos:V *:S",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Run Unit Tests",
+      "type": "shell",
+      "command": "./gradlew test",
+      "group": "test",
+      "problemMatcher": ["$gradle"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Clean Project",
+      "type": "shell",
+      "command": "./gradlew clean",
+      "problemMatcher": ["$gradle"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    }
+  ]
+}

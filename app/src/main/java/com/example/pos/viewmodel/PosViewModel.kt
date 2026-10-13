@@ -29,7 +29,7 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
     // Navigation state
-    private val _currentScreen = MutableStateFlow("main") // "splash", "login", "register_shop", "main"
+    private val _currentScreen = MutableStateFlow("splash") // "splash", "login", "forgot_password", "register_step1", "register_step2", "main"
     val currentScreen: StateFlow<String> = _currentScreen.asStateFlow()
 
     private val _selectedTab = MutableStateFlow(0) // 0: Home, 1: Sales, 2: Inventory, 3: Reports, 4: More
@@ -158,6 +158,10 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
         _currentScreen.value = "main"
     }
 
+    fun updateShopInformation(shop: Shop) {
+        _shop.value = shop
+    }
+
     fun logout() {
         _isLoggedIn.value = false
         _currentScreen.value = "login"
@@ -269,35 +273,102 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
         _completedSale.value = null
     }
 
+    fun addCustomerCredit(customerName: String, phone: String, productsSummary: String, amountPaid: Double, balance: Double, dueDate: String) {
+        val total = amountPaid + balance
+        val creditRecord = CustomerCredit(
+            id = "c_${System.currentTimeMillis()}",
+            customerName = customerName.ifBlank { "Credit Customer" },
+            customerPhone = phone.ifBlank { "+254 722 111 222" },
+            totalOutstanding = total,
+            productsSummary = productsSummary.ifBlank { "1 Item | Product" },
+            amountPaid = amountPaid,
+            balance = balance,
+            dueDate = dueDate.ifBlank { "Sep 30, 2026" }
+        )
+        _customerCredits.update { listOf(creditRecord) + it }
+    }
+
     // Add Product
     fun addProduct(
         name: String, category: String, sku: String, unit: String,
         buyingPrice: Double, sellingPrice: Double, quantity: Int, minStock: Int, supplier: String
-    ) {
+    ): Boolean {
+        val normalizedName = name.trim()
+        val normalizedCategory = category.trim()
+        val normalizedSku = sku.trim()
+        val normalizedUnit = unit.trim()
+        if (normalizedName.isBlank() || normalizedCategory.isBlank() || normalizedSku.isBlank() ||
+            normalizedUnit.isBlank() || !buyingPrice.isFinite() || buyingPrice < 0 ||
+            !sellingPrice.isFinite() || sellingPrice <= 0 || quantity < 0 || minStock < 0 ||
+            _products.value.any { it.sku.equals(normalizedSku, ignoreCase = true) }
+        ) return false
+
         val newProduct = Product(
             id = "p_${System.currentTimeMillis()}",
-            name = name,
-            category = category,
-            sku = sku,
-            unit = unit,
+            name = normalizedName,
+            category = normalizedCategory,
+            sku = normalizedSku,
+            unit = normalizedUnit,
             buyingPrice = buyingPrice,
             sellingPrice = sellingPrice,
             stockQuantity = quantity,
             minStock = minStock,
-            supplier = supplier
+            supplier = supplier.trim(),
+            iconType = normalizedCategory.lowercase()
         )
         _products.update { listOf(newProduct) + it }
-        storageManager.saveProducts(_products.value)
+        return true
+    }
+
+    fun updateProduct(
+        productId: String,
+        name: String, category: String, sku: String, unit: String,
+        buyingPrice: Double, sellingPrice: Double, quantity: Int, minStock: Int, supplier: String
+    ): Boolean {
+        val currentProduct = _products.value.find { it.id == productId } ?: return false
+        val normalizedName = name.trim()
+        val normalizedCategory = category.trim()
+        val normalizedSku = sku.trim()
+        val normalizedUnit = unit.trim()
+        if (normalizedName.isBlank() || normalizedCategory.isBlank() || normalizedSku.isBlank() ||
+            normalizedUnit.isBlank() || !buyingPrice.isFinite() || buyingPrice < 0 ||
+            !sellingPrice.isFinite() || sellingPrice <= 0 || quantity < 0 || minStock < 0 ||
+            _products.value.any { it.id != productId && it.sku.equals(normalizedSku, ignoreCase = true) }
+        ) return false
+
+        val updatedProduct = currentProduct.copy(
+            name = normalizedName,
+            category = normalizedCategory,
+            sku = normalizedSku,
+            unit = normalizedUnit,
+            buyingPrice = buyingPrice,
+            sellingPrice = sellingPrice,
+            stockQuantity = quantity,
+            minStock = minStock,
+            supplier = supplier.trim(),
+            iconType = normalizedCategory.lowercase()
+        )
+        _products.update { products -> products.map { if (it.id == productId) updatedProduct else it } }
+        return true
     }
 
     // Stock In / Restocking
-    fun recordStockIn(productId: String, quantityAdded: Int, buyingPrice: Double, supplier: String, employeeName: String) {
+    fun recordStockIn(
+        productId: String,
+        quantityAdded: Int,
+        buyingPrice: Double,
+        sellingPrice: Double = 0.0,
+        supplier: String,
+        employeeName: String
+    ) {
         _products.update { currentList ->
             currentList.map { p ->
                 if (p.id == productId) {
                     p.copy(
                         stockQuantity = p.stockQuantity + quantityAdded,
-                        buyingPrice = if (buyingPrice > 0) buyingPrice else p.buyingPrice
+                        buyingPrice = if (buyingPrice > 0) buyingPrice else p.buyingPrice,
+                        sellingPrice = if (sellingPrice > 0) sellingPrice else p.sellingPrice,
+                        supplier = if (supplier.isNotBlank()) supplier else p.supplier
                     )
                 } else p
             }

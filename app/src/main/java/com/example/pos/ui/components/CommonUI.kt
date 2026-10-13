@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -26,6 +27,82 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.pos.ui.theme.*
+
+@Composable
+fun posTextFieldColors(
+    focusedTextColor: Color = TextPrimary,
+    unfocusedTextColor: Color = TextPrimary,
+    focusedContainerColor: Color = SurfaceDarkVariant,
+    unfocusedContainerColor: Color = SurfaceDark,
+    disabledContainerColor: Color = SurfaceDarkVariant,
+    errorContainerColor: Color = SurfaceDark,
+    focusedBorderColor: Color = EmeraldBright,
+    unfocusedBorderColor: Color = SurfaceBorder,
+    disabledBorderColor: Color = SurfaceBorder.copy(alpha = 0.5f),
+    errorBorderColor: Color = ErrorRed,
+    cursorColor: Color = EmeraldBright,
+    errorCursorColor: Color = ErrorRed,
+    focusedLabelColor: Color = EmeraldBright,
+    unfocusedLabelColor: Color = TextSecondary,
+    disabledLabelColor: Color = TextMuted,
+    errorLabelColor: Color = ErrorRed,
+    focusedPlaceholderColor: Color = TextMuted,
+    unfocusedPlaceholderColor: Color = TextMuted,
+    disabledPlaceholderColor: Color = TextMuted,
+    errorPlaceholderColor: Color = TextMuted,
+    focusedLeadingIconColor: Color = EmeraldBright,
+    unfocusedLeadingIconColor: Color = TextSecondary,
+    disabledLeadingIconColor: Color = TextMuted,
+    errorLeadingIconColor: Color = ErrorRed,
+    focusedTrailingIconColor: Color = TextSecondary,
+    unfocusedTrailingIconColor: Color = TextSecondary,
+    disabledTrailingIconColor: Color = TextMuted,
+    errorTrailingIconColor: Color = ErrorRed,
+    focusedPrefixColor: Color = TextSecondary,
+    unfocusedPrefixColor: Color = TextSecondary,
+    disabledPrefixColor: Color = TextMuted,
+    errorPrefixColor: Color = TextSecondary,
+    selectionColors: TextSelectionColors = TextSelectionColors(
+        handleColor = EmeraldBright,
+        backgroundColor = EmeraldBright.copy(alpha = 0.35f)
+    )
+): TextFieldColors = OutlinedTextFieldDefaults.colors(
+    focusedTextColor = focusedTextColor,
+    unfocusedTextColor = unfocusedTextColor,
+    disabledTextColor = TextMuted,
+    errorTextColor = TextPrimary,
+    focusedContainerColor = focusedContainerColor,
+    unfocusedContainerColor = unfocusedContainerColor,
+    disabledContainerColor = disabledContainerColor,
+    errorContainerColor = errorContainerColor,
+    cursorColor = cursorColor,
+    errorCursorColor = errorCursorColor,
+    selectionColors = selectionColors,
+    focusedBorderColor = focusedBorderColor,
+    unfocusedBorderColor = unfocusedBorderColor,
+    disabledBorderColor = disabledBorderColor,
+    errorBorderColor = errorBorderColor,
+    focusedLabelColor = focusedLabelColor,
+    unfocusedLabelColor = unfocusedLabelColor,
+    disabledLabelColor = disabledLabelColor,
+    errorLabelColor = errorLabelColor,
+    focusedPlaceholderColor = focusedPlaceholderColor,
+    unfocusedPlaceholderColor = unfocusedPlaceholderColor,
+    disabledPlaceholderColor = disabledPlaceholderColor,
+    errorPlaceholderColor = errorPlaceholderColor,
+    focusedLeadingIconColor = focusedLeadingIconColor,
+    unfocusedLeadingIconColor = unfocusedLeadingIconColor,
+    disabledLeadingIconColor = disabledLeadingIconColor,
+    errorLeadingIconColor = errorLeadingIconColor,
+    focusedTrailingIconColor = focusedTrailingIconColor,
+    unfocusedTrailingIconColor = unfocusedTrailingIconColor,
+    disabledTrailingIconColor = disabledTrailingIconColor,
+    errorTrailingIconColor = errorTrailingIconColor,
+    focusedPrefixColor = focusedPrefixColor,
+    unfocusedPrefixColor = unfocusedPrefixColor,
+    disabledPrefixColor = disabledPrefixColor,
+    errorPrefixColor = errorPrefixColor
+)
 
 @Composable
 fun PrimaryGreenButton(
@@ -42,14 +119,15 @@ fun PrimaryGreenButton(
             .fillMaxWidth()
             .height(52.dp)
             .shadow(
-                elevation = 8.dp,
+                elevation = if (enabled) 8.dp else 0.dp,
                 shape = RoundedCornerShape(26.dp),
                 spotColor = EmeraldPrimary.copy(alpha = 0.5f)
             ),
+        border = if (!enabled) androidx.compose.foundation.BorderStroke(1.dp, SurfaceBorder) else null,
         colors = ButtonDefaults.buttonColors(
             containerColor = EmeraldBright,
-            contentColor = BgDark,
-            disabledContainerColor = SurfaceDarkVariant,
+            contentColor = TextOnPrimary,
+            disabledContainerColor = EmeraldBright.copy(alpha = 0.15f),
             disabledContentColor = TextMuted
         ),
         shape = RoundedCornerShape(26.dp),
@@ -64,14 +142,14 @@ fun PrimaryGreenButton(
                     imageVector = icon,
                     contentDescription = null,
                     modifier = Modifier.size(20.dp),
-                    tint = BgDark
+                    tint = if (enabled) TextOnPrimary else TextMuted
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
             Text(
                 text = text,
                 style = MaterialTheme.typography.titleMedium.copy(
-                    color = BgDark,
+                    color = if (enabled) TextOnPrimary else TextMuted,
                     fontWeight = FontWeight.Bold
                 )
             )
@@ -84,17 +162,21 @@ fun SecondaryDarkButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    icon: ImageVector? = null
+    icon: ImageVector? = null,
+    containerColor: Color = SurfaceDarkVariant,
+    contentColor: Color = TextPrimary,
+    borderColor: Color = SurfaceBorder,
+    iconTint: Color = EmeraldPrimary
 ) {
     OutlinedButton(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
             .height(52.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, SurfaceBorder),
+        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
         colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = SurfaceDarkVariant,
-            contentColor = TextPrimary
+            containerColor = containerColor,
+            contentColor = contentColor
         ),
         shape = RoundedCornerShape(26.dp)
     ) {
@@ -107,14 +189,14 @@ fun SecondaryDarkButton(
                     imageVector = icon,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
-                    tint = EmeraldPrimary
+                    tint = iconTint
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
             Text(
                 text = text,
                 style = MaterialTheme.typography.titleMedium.copy(
-                    color = TextPrimary,
+                    color = contentColor,
                     fontWeight = FontWeight.SemiBold
                 )
             )
@@ -222,17 +304,22 @@ fun MetricStatCard(
 fun FilterChipItem(
     label: String,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    backgroundColor: Color = SurfaceDarkVariant,
+    borderColor: Color = SurfaceBorder,
+    selectedBackgroundColor: Color = EmeraldBright,
+    selectedTextColor: Color = BgDark,
+    unselectedTextColor: Color = TextSecondary
 ) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
             .background(
-                if (isSelected) EmeraldBright else SurfaceDarkVariant
+                if (isSelected) selectedBackgroundColor else backgroundColor
             )
             .border(
                 width = 1.dp,
-                color = if (isSelected) EmeraldBright else SurfaceBorder,
+                color = if (isSelected) selectedBackgroundColor else borderColor,
                 shape = RoundedCornerShape(20.dp)
             )
             .clickable { onClick() }
@@ -242,7 +329,7 @@ fun FilterChipItem(
         Text(
             text = label,
             style = MaterialTheme.typography.labelLarge.copy(
-                color = if (isSelected) BgDark else TextSecondary,
+                color = if (isSelected) selectedTextColor else unselectedTextColor,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                 fontSize = 13.sp
             )
@@ -278,6 +365,7 @@ fun StockBadge(isLowStock: Boolean, stockQty: Int) {
 fun RetailSyncHeader(
     shopName: String,
     ownerName: String,
+    profilePhotoUri: String? = null,
     onNotificationClick: () -> Unit = {},
     onProfileClick: () -> Unit = {}
 ) {
@@ -292,21 +380,18 @@ fun RetailSyncHeader(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.clickable { onProfileClick() }
         ) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
-                    .background(SurfaceDarkVariant)
-                    .border(1.dp, EmeraldPrimary.copy(alpha = 0.6f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = "Profile",
-                    tint = EmeraldBright,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
+            ProfileAvatar(
+                photoUri = profilePhotoUri,
+                modifier = Modifier.size(42.dp),
+                fallback = {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = "Profile",
+                        tint = EmeraldBright,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            )
 
             Spacer(modifier = Modifier.width(12.dp))
 
@@ -412,6 +497,7 @@ fun CustomBottomNavBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
                 .padding(vertical = 10.dp, horizontal = 12.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically

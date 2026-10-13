@@ -8,14 +8,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import com.example.pos.ui.components.CustomBottomNavBar
 import com.example.pos.ui.theme.BgDark
+import com.example.pos.ui.theme.ThemeMode
 import com.example.pos.viewmodel.PosViewModel
 
 @Composable
 fun MainContainerScreen(
-    viewModel: PosViewModel
+    viewModel: PosViewModel,
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit,
+    profilePhotoUri: String?,
+    onProfilePhotoChange: (String?) -> Unit
 ) {
     val selectedTab by viewModel.selectedTab.collectAsState()
     var activeModal by remember { mutableStateOf<String?>(null) } // "payment", "add_product", "stock_in", "credit_sales", "expenses", "employees"
+    var preselectedStockInProductId by remember { mutableStateOf<String?>(null) }
 
     val completedSale by viewModel.completedSale.collectAsState()
 
@@ -30,8 +36,10 @@ fun MainContainerScreen(
         if (completedSale != null) {
             viewModel.dismissReceiptModal()
             activeModal = null
+            preselectedStockInProductId = null
         } else if (activeModal != null) {
             activeModal = null
+            preselectedStockInProductId = null
         } else if (selectedTab != 0) {
             viewModel.selectTab(0)
         }
@@ -44,6 +52,7 @@ fun MainContainerScreen(
             onDismiss = {
                 viewModel.dismissReceiptModal()
                 activeModal = null
+                preselectedStockInProductId = null
                 viewModel.selectTab(0) // Return to home
             }
         )
@@ -67,38 +76,52 @@ fun MainContainerScreen(
                 .background(BgDark)
         ) {
             if (activeModal != null) {
-                when (activeModal) {
-                    "payment" -> PaymentScreen(
-                        viewModel = viewModel,
-                        onBack = { activeModal = null }
-                    )
-                    "add_product" -> AddProductScreen(
-                        viewModel = viewModel,
-                        onClose = { activeModal = null }
-                    )
-                    "stock_in" -> StockInScreen(
-                        viewModel = viewModel,
-                        onClose = { activeModal = null }
-                    )
-                    "credit_sales" -> CreditSalesScreen(
-                        viewModel = viewModel,
-                        onClose = { activeModal = null }
-                    )
-                    "expenses" -> ExpensesScreen(
-                        viewModel = viewModel,
-                        onClose = { activeModal = null }
-                    )
-                    "employees" -> EmployeesScreen(
-                        viewModel = viewModel,
-                        onClose = { activeModal = null }
-                    )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .navigationBarsPadding()
+                ) {
+                    when (activeModal) {
+                        "payment" -> PaymentScreen(
+                            viewModel = viewModel,
+                            onBack = { activeModal = null }
+                        )
+                        "add_product" -> AddProductScreen(
+                            viewModel = viewModel,
+                            onClose = { activeModal = null }
+                        )
+                        "stock_in" -> StockInScreen(
+                            viewModel = viewModel,
+                            initialProductId = preselectedStockInProductId,
+                            onClose = {
+                                activeModal = null
+                                preselectedStockInProductId = null
+                            }
+                        )
+                        "credit_sales" -> CreditSalesScreen(
+                            viewModel = viewModel,
+                            onClose = { activeModal = null }
+                        )
+                        "expenses" -> ExpensesScreen(
+                            viewModel = viewModel,
+                            onClose = { activeModal = null }
+                        )
+                        "employees" -> EmployeesScreen(
+                            viewModel = viewModel,
+                            onClose = { activeModal = null }
+                        )
+                    }
                 }
             } else {
                 when (selectedTab) {
                     0 -> DashboardScreen(
                         viewModel = viewModel,
+                        profilePhotoUri = profilePhotoUri,
                         onNavigateToTab = { viewModel.selectTab(it) },
-                        onOpenStockIn = { activeModal = "stock_in" },
+                        onOpenStockIn = { productId ->
+                            preselectedStockInProductId = productId
+                            activeModal = "stock_in"
+                        },
                         onOpenCreditSales = { activeModal = "credit_sales" },
                         onOpenExpenses = { activeModal = "expenses" }
                     )
@@ -115,6 +138,10 @@ fun MainContainerScreen(
                     )
                     4 -> SettingsScreen(
                         viewModel = viewModel,
+                        themeMode = themeMode,
+                        onThemeModeChange = onThemeModeChange,
+                        profilePhotoUri = profilePhotoUri,
+                        onProfilePhotoChange = onProfilePhotoChange,
                         onOpenEmployees = { activeModal = "employees" },
                         onOpenCreditReminders = { activeModal = "credit_sales" },
                         onOpenExpenses = { activeModal = "expenses" }
