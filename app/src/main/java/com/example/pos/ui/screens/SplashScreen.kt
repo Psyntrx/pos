@@ -80,6 +80,20 @@ fun SplashScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(WelcomeBgTop, WelcomeBgBottom)))
+            .drawBehind {
+                // Full-screen haze so the bottom (behind the button) glows softly, no hard edge
+                drawRect(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            EmeraldBright.copy(alpha = 0.22f),
+                            EmeraldBright.copy(alpha = 0.07f),
+                            Color.Transparent
+                        ),
+                        center = Offset(size.width * 0.5f, size.height * 0.78f),
+                        radius = size.width * 1.1f
+                    )
+                )
+            }
     ) {
         SilkWaves(
             phase = phase,
@@ -240,15 +254,8 @@ private fun DrawScope.drawSilk(phase: Float) {
     fun spread(u: Float) =
         0.10f + 0.20f * (0.5f + 0.5f * sin(tau * 0.8f * u + phase + 1.4f))
 
-    // 1) Ambient glows (pulse gently with the loop)
+    // 1) Lime glow on the left slope (pulses gently with the loop)
     val pulse = 0.85f + 0.15f * sin(phase)
-    drawRect(
-        brush = Brush.radialGradient(
-            colors = listOf(EmeraldBright.copy(alpha = 0.20f), Color.Transparent),
-            center = Offset(w * 0.5f, h * 0.80f),
-            radius = w * 0.85f
-        )
-    )
     drawRect(
         brush = Brush.radialGradient(
             colors = listOf(
