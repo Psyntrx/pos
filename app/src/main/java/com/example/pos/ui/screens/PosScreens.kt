@@ -388,7 +388,7 @@ fun PaymentScreen(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                val methods = listOf("Cash", "M-Pesa", "Card", "Other")
+                val methods = listOf("Cash", "M-Pesa")
 
                 SurfaceCard(
                     modifier = Modifier.fillMaxWidth(),

@@ -8,8 +8,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.pos.ui.screens.LoginScreen
 import com.example.pos.ui.screens.MainContainerScreen
 import com.example.pos.ui.screens.RegisterShopScreen
@@ -28,7 +28,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = BgDark
                 ) {
-                    val posViewModel = remember { PosViewModel() }
+                    val posViewModel: PosViewModel = viewModel()
                     val currentScreen by posViewModel.currentScreen.collectAsState()
 
                     when (currentScreen) {
