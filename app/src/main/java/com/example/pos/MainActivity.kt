@@ -54,7 +54,7 @@ class MainActivity : ComponentActivity() {
                         )
                         "login" -> LoginScreen(
                             authViewModel = authViewModel,
-                            onLoginSuccess = { email, pass ->
+                            onLoginSuccess = { email: String, pass: String ->
                                 posViewModel.login(email, pass)
                             },
                             onNavigateToRegisterStep1 = {

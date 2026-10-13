@@ -5,33 +5,35 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.Email
-import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.pos.ui.components.AbstractBlobHeader
 import com.example.pos.ui.components.PrimaryGreenButton
+import com.example.pos.ui.components.posTextFieldColors
 import com.example.pos.ui.theme.*
 import com.example.pos.viewmodel.AuthViewModel
 
 /**
  * Forgot Password Composable Screen
+ * Redesigned with consistent decorative organic blob header, clean form inputs,
+ * and emerald palette branding while preserving reset logic.
  */
 @Composable
 fun ForgotPasswordScreen(
@@ -49,83 +51,72 @@ fun ForgotPasswordScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(BgDark)
-            .padding(24.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
+                .verticalScroll(rememberScrollState())
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Header Bar
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = {
+            // ── Decorative Header with Back Button ─────────────────────────────
+            Box {
+                AbstractBlobHeader(headerHeight = 220.dp)
+
+                TextButton(
+                    onClick = {
                         authViewModel.resetForgotState()
                         onBackToLogin()
-                    }) {
+                    },
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .padding(start = 8.dp, top = 8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back to Login",
-                            tint = TextPrimary
+                            contentDescription = "Back",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Back",
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                color = Color.White,
+                                fontWeight = FontWeight.Medium
+                            )
                         )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Reset Password",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                    )
                 }
+            }
 
-                Spacer(modifier = Modifier.height(32.dp))
-
-                // Icon Badge
-                Box(
-                    modifier = Modifier
-                        .size(72.dp)
-                        .clip(CircleShape)
-                        .background(EmeraldContainer)
-                        .border(1.5.dp, EmeraldBright, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Lock,
-                        contentDescription = null,
-                        tint = EmeraldBright,
-                        modifier = Modifier.size(36.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
+            // ── Form Area ──────────────────────────────────────────────────────
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(top = 28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Text(
-                    text = "Forgot Your Password?",
-                    style = MaterialTheme.typography.headlineMedium.copy(
+                    text = "Reset Password",
+                    style = MaterialTheme.typography.headlineLarge.copy(
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        fontStyle = FontStyle.Italic,
+                        color = TextPrimary,
+                        fontSize = 30.sp
                     )
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = "Enter your registered email address below and we will send you a reset link.",
+                    text = "Enter your registered email address and we'll send you instructions to reset your account password.",
                     style = MaterialTheme.typography.bodyMedium.copy(
                         color = TextSecondary,
-                        textAlign = TextAlign.Center
-                    )
+                        textAlign = TextAlign.Center,
+                        lineHeight = 20.sp
+                    ),
+                    modifier = Modifier.padding(horizontal = 12.dp)
                 )
 
                 Spacer(modifier = Modifier.height(32.dp))
@@ -134,7 +125,8 @@ fun ForgotPasswordScreen(
                 OutlinedTextField(
                     value = forgotState.email,
                     onValueChange = { authViewModel.updateForgotEmail(it) },
-                    label = { Text("Registered Email Address") },
+                    label = { Text("Email Address") },
+                    placeholder = { Text("Enter your registered email") },
                     leadingIcon = {
                         Icon(Icons.Outlined.Email, contentDescription = null, tint = EmeraldBright)
                     },
@@ -145,9 +137,9 @@ fun ForgotPasswordScreen(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(14.dp),
                     textStyle = LocalTextStyle.current.copy(color = TextPrimary),
-                    colors = com.example.pos.ui.components.posTextFieldColors(),
+                    colors = posTextFieldColors(),
                     singleLine = true
                 )
 
@@ -203,31 +195,35 @@ fun ForgotPasswordScreen(
                     enabled = forgotState.canSubmit,
                     onClick = { authViewModel.sendPasswordResetLink() }
                 )
-            }
 
-            // Back to Login Link
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Remember your password? ",
-                    style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
-                )
-                Text(
-                    text = "Back to Login",
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        color = EmeraldBright,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    modifier = Modifier.clickable {
-                        authViewModel.resetForgotState()
-                        onBackToLogin()
-                    }
-                )
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Back to Login Link
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Remember your password? ",
+                        style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
+                    )
+                    Text(
+                        text = "Back to Login",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            color = EmeraldBright,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        modifier = Modifier.clickable {
+                            authViewModel.resetForgotState()
+                            onBackToLogin()
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp).navigationBarsPadding())
             }
         }
     }
