@@ -1,10 +1,12 @@
 package com.example.pos.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import com.example.pos.data.CartItem
 import com.example.pos.data.CustomerCredit
 import com.example.pos.data.Employee
 import com.example.pos.data.Expense
+import com.example.pos.data.PosStorageManager
 import com.example.pos.data.Product
 import com.example.pos.data.Sale
 import com.example.pos.data.Shop
@@ -14,10 +16,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-class PosViewModel : ViewModel() {
+class PosViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val storageManager = PosStorageManager(application)
 
     // Shop & Profile
-    private val _shop = MutableStateFlow(Shop())
+    private val defaultShop = Shop()
+    private val _shop = MutableStateFlow(storageManager.loadShop(defaultShop))
     val shop: StateFlow<Shop> = _shop.asStateFlow()
 
     private val _isLoggedIn = MutableStateFlow(true)
@@ -31,18 +36,17 @@ class PosViewModel : ViewModel() {
     val selectedTab: StateFlow<Int> = _selectedTab.asStateFlow()
 
     // Products & Inventory
-    private val _products = MutableStateFlow(
-        listOf(
-            Product("p1", "Unga", "Groceries", "UG001", "pcs", 110.0, 150.0, 20, 10, "Pemba Millers", "groceries"),
-            Product("p2", "Sukari", "Groceries", "SK001", "kg", 110.0, 140.0, 35, 15, "Mumias Sugar", "sugar"),
-            Product("p3", "Cooking Oil", "Groceries", "CO001", "L", 340.0, 420.0, 12, 10, "Bidco Africa", "oil"),
-            Product("p4", "Rice", "Groceries", "RI001", "kg", 260.0, 350.0, 8, 10, "Mwea Farmers", "rice"),
-            Product("p5", "Detergent", "Household", "DE001", "pkt", 200.0, 280.0, 18, 5, "Unilever", "household"),
-            Product("p6", "Fresh Milk", "Beverages", "MK001", "pkt", 50.0, 70.0, 4, 10, "Brookside", "beverage"),
-            Product("p7", "Soda 500ml", "Beverages", "SD001", "btl", 45.0, 65.0, 40, 12, "Coca Cola", "beverage"),
-            Product("p8", "Potato Chips", "Snacks", "SN001", "pkt", 80.0, 120.0, 25, 8, "Tropical", "snack")
-        )
+    private val defaultProducts = listOf(
+        Product("p1", "Unga", "Groceries", "UG001", "pcs", 110.0, 150.0, 20, 10, "Pemba Millers", "groceries"),
+        Product("p2", "Sukari", "Groceries", "SK001", "kg", 110.0, 140.0, 35, 15, "Mumias Sugar", "sugar"),
+        Product("p3", "Cooking Oil", "Groceries", "CO001", "L", 340.0, 420.0, 12, 10, "Bidco Africa", "oil"),
+        Product("p4", "Rice", "Groceries", "RI001", "kg", 260.0, 350.0, 8, 10, "Mwea Farmers", "rice"),
+        Product("p5", "Detergent", "Household", "DE001", "pkt", 200.0, 280.0, 18, 5, "Unilever", "household"),
+        Product("p6", "Fresh Milk", "Beverages", "MK001", "pkt", 50.0, 70.0, 4, 10, "Brookside", "beverage"),
+        Product("p7", "Soda 500ml", "Beverages", "SD001", "btl", 45.0, 65.0, 40, 12, "Coca Cola", "beverage"),
+        Product("p8", "Potato Chips", "Snacks", "SN001", "pkt", 80.0, 120.0, 25, 8, "Tropical", "snack")
     )
+    private val _products = MutableStateFlow(storageManager.loadProducts(defaultProducts))
     val products: StateFlow<List<Product>> = _products.asStateFlow()
 
     private val _selectedCategory = MutableStateFlow("All")
@@ -60,64 +64,70 @@ class PosViewModel : ViewModel() {
     val completedSale: StateFlow<Sale?> = _completedSale.asStateFlow()
 
     // Sales History
-    private val _salesHistory = MutableStateFlow(
-        listOf(
-            Sale("SL-1092", listOf(
-                CartItem(Product("p1", "Unga", "Groceries", "UG001", "pcs", 110.0, 150.0, 20, 10), 3),
-                CartItem(Product("p3", "Cooking Oil", "Groceries", "CO001", "L", 340.0, 420.0, 12, 10), 1),
-                CartItem(Product("p2", "Sukari", "Groceries", "SK001", "kg", 110.0, 140.0, 35, 15), 1)
-            ), 1010.0, "M-Pesa", "John Doe", "Today, 10:42 AM", System.currentTimeMillis() - 3600000),
-            Sale("SL-1091", listOf(
-                CartItem(Product("p7", "Soda 500ml", "Beverages", "SD001", "btl", 45.0, 65.0, 40, 12), 4)
-            ), 260.0, "Cash", "Walk-in Customer", "Today, 09:15 AM", System.currentTimeMillis() - 7200000),
-            Sale("SL-1090", listOf(
-                CartItem(Product("p4", "Rice", "Groceries", "RI001", "kg", 260.0, 350.0, 8, 10), 5)
-            ), 1750.0, "Card", "Sarah M.", "Yesterday, 04:30 PM", System.currentTimeMillis() - 86400000)
-        )
+    private val defaultSalesHistory = listOf(
+        Sale("SL-1092", listOf(
+            CartItem(Product("p1", "Unga", "Groceries", "UG001", "pcs", 110.0, 150.0, 20, 10), 3),
+            CartItem(Product("p3", "Cooking Oil", "Groceries", "CO001", "L", 340.0, 420.0, 12, 10), 1),
+            CartItem(Product("p2", "Sukari", "Groceries", "SK001", "kg", 110.0, 140.0, 35, 15), 1)
+        ), 1010.0, "M-Pesa", "John Doe", "Today, 10:42 AM", System.currentTimeMillis() - 3600000),
+        Sale("SL-1091", listOf(
+            CartItem(Product("p7", "Soda 500ml", "Beverages", "SD001", "btl", 45.0, 65.0, 40, 12), 4)
+        ), 260.0, "Cash", "Walk-in Customer", "Today, 09:15 AM", System.currentTimeMillis() - 7200000),
+        Sale("SL-1090", listOf(
+            CartItem(Product("p4", "Rice", "Groceries", "RI001", "kg", 260.0, 350.0, 8, 10), 5)
+        ), 1750.0, "M-Pesa", "Sarah M.", "Yesterday, 04:30 PM", System.currentTimeMillis() - 86400000)
     )
+    private val _salesHistory = MutableStateFlow(storageManager.loadSales(defaultSalesHistory))
     val salesHistory: StateFlow<List<Sale>> = _salesHistory.asStateFlow()
 
     // Expenses
-    private val _expenses = MutableStateFlow(
-        listOf(
-            Expense("e1", "Rent", "Utility", 3000.0, "Sep 28, 2026", "rent"),
-            Expense("e2", "Electricity", "Utility", 1200.0, "Sep 26, 2026", "electricity"),
-            Expense("e3", "Transport", "Logistics", 800.0, "Sep 24, 2026", "transport"),
-            Expense("e4", "Salaries", "Payroll", 5000.0, "Sep 22, 2026", "salaries"),
-            Expense("e5", "Internet", "Utility", 1000.0, "Sep 20, 2026", "wifi"),
-            Expense("e6", "Repairs", "Maintenance", 600.0, "Sep 18, 2026", "repairs")
-        )
+    private val defaultExpenses = listOf(
+        Expense("e1", "Rent", "Utility", 3000.0, "Sep 28, 2026", "rent"),
+        Expense("e2", "Electricity", "Utility", 1200.0, "Sep 26, 2026", "electricity"),
+        Expense("e3", "Transport", "Logistics", 800.0, "Sep 24, 2026", "transport"),
+        Expense("e4", "Salaries", "Payroll", 5000.0, "Sep 22, 2026", "salaries"),
+        Expense("e5", "Internet", "Utility", 1000.0, "Sep 20, 2026", "wifi"),
+        Expense("e6", "Repairs", "Maintenance", 600.0, "Sep 18, 2026", "repairs")
     )
+    private val _expenses = MutableStateFlow(storageManager.loadExpenses(defaultExpenses))
     val expenses: StateFlow<List<Expense>> = _expenses.asStateFlow()
 
     // Customer Credit Balances
-    private val _customerCredits = MutableStateFlow(
-        listOf(
-            CustomerCredit("c1", "Samuel Njuguna", "+254 722 111 222", 8460.0, "2 Items | Unga, Cooking Oil", 500.0, 750.0, "Sep 30, 2026", "Pending"),
-            CustomerCredit("c2", "Mary Wanjiku", "+254 733 444 555", 3200.0, "4 Items | Sukari, Rice", 1000.0, 2200.0, "Oct 05, 2026", "Pending"),
-            CustomerCredit("c3", "David Ochieng", "+254 711 888 999", 5510.0, "1 Item | Cooking Oil x5", 1500.0, 4010.0, "Oct 12, 2026", "Pending")
-        )
+    private val defaultCustomerCredits = listOf(
+        CustomerCredit("c1", "Samuel Njuguna", "+254 722 111 222", 8460.0, "2 Items | Unga, Cooking Oil", 500.0, 750.0, "Sep 30, 2026", "Pending"),
+        CustomerCredit("c2", "Mary Wanjiku", "+254 733 444 555", 3200.0, "4 Items | Sukari, Rice", 1000.0, 2200.0, "Oct 05, 2026", "Pending"),
+        CustomerCredit("c3", "David Ochieng", "+254 711 888 999", 5510.0, "1 Item | Cooking Oil x5", 1500.0, 4010.0, "Oct 12, 2026", "Pending")
     )
+    private val _customerCredits = MutableStateFlow(storageManager.loadCustomerCredits(defaultCustomerCredits))
     val customerCredits: StateFlow<List<CustomerCredit>> = _customerCredits.asStateFlow()
 
     // Employees
-    private val _employees = MutableStateFlow(
-        listOf(
-            Employee("emp1", "Faith W.", "Owner", "+254 712 345 678", "faith@store.com", isOwner = true),
-            Employee("emp2", "Kevin Otieno", "Sales Clerk", "+254 720 998 877", "kevin@store.com"),
-            Employee("emp3", "Amina Hassan", "Manager", "+254 735 112 233", "amina@store.com")
-        )
+    private val defaultEmployees = listOf(
+        Employee("emp1", "Faith W.", "Owner", "+254 712 345 678", "faith@store.com", isOwner = true),
+        Employee("emp2", "Kevin Otieno", "Sales Clerk", "+254 720 998 877", "kevin@store.com"),
+        Employee("emp3", "Amina Hassan", "Manager", "+254 735 112 233", "amina@store.com")
     )
+    private val _employees = MutableStateFlow(storageManager.loadEmployees(defaultEmployees))
     val employees: StateFlow<List<Employee>> = _employees.asStateFlow()
 
     // Stock In History
-    private val _stockInRecords = MutableStateFlow(
-        listOf(
-            StockInRecord("stk1", "p1", "Unga", 50, 110.0, "Pemba Millers", "Sep 28, 2026 09:41 AM", "Faith"),
-            StockInRecord("stk2", "p3", "Cooking Oil", 20, 340.0, "Bidco Africa", "Sep 25, 2026 02:15 PM", "Amina")
-        )
+    private val defaultStockInRecords = listOf(
+        StockInRecord("stk1", "p1", "Unga", 50, 110.0, "Pemba Millers", "Sep 28, 2026 09:41 AM", "Faith"),
+        StockInRecord("stk2", "p3", "Cooking Oil", 20, 340.0, "Bidco Africa", "Sep 25, 2026 02:15 PM", "Amina")
     )
+    private val _stockInRecords = MutableStateFlow(storageManager.loadStockInRecords(defaultStockInRecords))
     val stockInRecords: StateFlow<List<StockInRecord>> = _stockInRecords.asStateFlow()
+
+    init {
+        // Save initial defaults if not already stored
+        storageManager.saveProducts(_products.value)
+        storageManager.saveSales(_salesHistory.value)
+        storageManager.saveExpenses(_expenses.value)
+        storageManager.saveCustomerCredits(_customerCredits.value)
+        storageManager.saveEmployees(_employees.value)
+        storageManager.saveStockInRecords(_stockInRecords.value)
+        storageManager.saveShop(_shop.value)
+    }
 
     // Navigation & Auth actions
     fun navigateTo(screen: String) {
@@ -134,7 +144,7 @@ class PosViewModel : ViewModel() {
     }
 
     fun registerShop(shopName: String, ownerName: String, email: String, phone: String, address: String, category: String) {
-        _shop.value = Shop(
+        val newShop = Shop(
             name = shopName.ifBlank { "Faith's Store" },
             ownerName = ownerName.ifBlank { "Faith" },
             email = email.ifBlank { "faith@store.com" },
@@ -142,6 +152,8 @@ class PosViewModel : ViewModel() {
             address = address.ifBlank { "Nairobi, Kenya" },
             category = category.ifBlank { "Retail & Grocery" }
         )
+        _shop.value = newShop
+        storageManager.saveShop(newShop)
         _isLoggedIn.value = true
         _currentScreen.value = "main"
     }
@@ -218,6 +230,7 @@ class PosViewModel : ViewModel() {
                 }
             }
         }
+        storageManager.saveProducts(_products.value)
 
         val newSale = Sale(
             id = "SL-${(1093..9999).random()}",
@@ -234,6 +247,7 @@ class PosViewModel : ViewModel() {
         )
 
         _salesHistory.update { listOf(newSale) + it }
+        storageManager.saveSales(_salesHistory.value)
 
         if (isCredit) {
             val creditRecord = CustomerCredit(
@@ -247,6 +261,7 @@ class PosViewModel : ViewModel() {
                 dueDate = dueDate.ifBlank { "In 14 Days" }
             )
             _customerCredits.update { listOf(creditRecord) + it }
+            storageManager.saveCustomerCredits(_customerCredits.value)
         }
 
         _completedSale.value = newSale
@@ -358,6 +373,7 @@ class PosViewModel : ViewModel() {
                 } else p
             }
         }
+        storageManager.saveProducts(_products.value)
 
         val prodName = _products.value.find { it.id == productId }?.name ?: "Product"
         val record = StockInRecord(
@@ -371,6 +387,7 @@ class PosViewModel : ViewModel() {
             employeeName = employeeName
         )
         _stockInRecords.update { listOf(record) + it }
+        storageManager.saveStockInRecords(_stockInRecords.value)
     }
 
     // Expenses
@@ -384,6 +401,7 @@ class PosViewModel : ViewModel() {
             iconType = category.lowercase()
         )
         _expenses.update { listOf(newExpense) + it }
+        storageManager.saveExpenses(_expenses.value)
     }
 
     // Add Employee
@@ -396,5 +414,6 @@ class PosViewModel : ViewModel() {
             email = email
         )
         _employees.update { it + emp }
+        storageManager.saveEmployees(_employees.value)
     }
 }
