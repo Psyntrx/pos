@@ -2,6 +2,7 @@ package com.example.pos.viewmodel
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.pos.data.CartItem
 import com.example.pos.data.CustomerCredit
 import com.example.pos.data.Employee
@@ -11,14 +12,17 @@ import com.example.pos.data.Product
 import com.example.pos.data.Sale
 import com.example.pos.data.Shop
 import com.example.pos.data.StockInRecord
+import com.example.pos.data.SupabaseClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 class PosViewModel(application: Application) : AndroidViewModel(application) {
 
     private val storageManager = PosStorageManager(application)
+    private val supabase = SupabaseClient.service
 
     // Shop & Profile
     private val defaultShop = Shop()
@@ -127,6 +131,53 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
         storageManager.saveEmployees(_employees.value)
         storageManager.saveStockInRecords(_stockInRecords.value)
         storageManager.saveShop(_shop.value)
+
+        // Asynchronously pull live data from Supabase
+        syncWithSupabase()
+    }
+
+    /**
+     * Synchronize Products, Expenses, Sales, and Stock Records with Supabase.
+     * Offline-first: Falls back seamlessly to local storage cache if network is unavailable.
+     */
+    fun syncWithSupabase() {
+        viewModelScope.launch {
+            // 1. Fetch live products from Supabase (updates Low Stock alerts & catalog)
+            supabase.getProducts().onSuccess { remoteProducts ->
+                if (remoteProducts.isNotEmpty()) {
+                    _products.value = remoteProducts
+                    storageManager.saveProducts(remoteProducts)
+                }
+            }
+            // 2. Fetch live expenses from Supabase (powers Home screen Net Profit)
+            supabase.getExpenses().onSuccess { remoteExpenses ->
+                if (remoteExpenses.isNotEmpty()) {
+                    _expenses.value = remoteExpenses
+                    storageManager.saveExpenses(remoteExpenses)
+                }
+            }
+            // 3. Fetch live sales if any (powers Home screen Sales Trend and metrics)
+            supabase.getSales().onSuccess { remoteSales ->
+                if (remoteSales.isNotEmpty()) {
+                    _salesHistory.value = remoteSales
+                    storageManager.saveSales(remoteSales)
+                }
+            }
+            // 4. Fetch stock in records from Supabase
+            supabase.getStockInRecords().onSuccess { remoteStockIn ->
+                if (remoteStockIn.isNotEmpty()) {
+                    _stockInRecords.value = remoteStockIn
+                    storageManager.saveStockInRecords(remoteStockIn)
+                }
+            }
+            // 5. Fetch shop info if any
+            supabase.getShop().onSuccess { remoteShop ->
+                if (remoteShop != null) {
+                    _shop.value = remoteShop
+                    storageManager.saveShop(remoteShop)
+                }
+            }
+        }
     }
 
     // Navigation & Auth actions
@@ -388,6 +439,15 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
         )
         _stockInRecords.update { listOf(record) + it }
         storageManager.saveStockInRecords(_stockInRecords.value)
+
+        // Asynchronously update product inventory and insert stock-in record in Supabase
+        val updatedProduct = _products.value.find { it.id == productId }
+        viewModelScope.launch {
+            supabase.insertStockInRecord(record)
+            if (updatedProduct != null) {
+                supabase.upsertProduct(updatedProduct)
+            }
+        }
     }
 
     // Expenses

@@ -106,6 +106,7 @@ fun DashboardScreen(
     var animationTrigger by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         animationTrigger = true
+        viewModel.syncWithSupabase()
     }
     val animatedTargetProgress by animateFloatAsState(
         targetValue = if (animationTrigger) targetRatio else 0f,
