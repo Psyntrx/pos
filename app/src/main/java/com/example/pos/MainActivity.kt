@@ -44,7 +44,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = BgDark
                 ) {
-                    val posViewModel = remember { PosViewModel() }
+                    val posViewModel = remember { PosViewModel(application) }
                     val authViewModel = remember { AuthViewModel() }
                     val currentScreen by posViewModel.currentScreen.collectAsState()
 
