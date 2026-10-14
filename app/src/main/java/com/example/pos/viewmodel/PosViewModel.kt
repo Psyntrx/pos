@@ -136,17 +136,38 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
         syncWithSupabase()
     }
 
+    // Guard against race conditions when local product updates are in flight
+    private val pendingProductUpdates = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private var lastSyncTime = 0L
+
     /**
      * Synchronize Products, Expenses, Sales, and Stock Records with Supabase.
      * Offline-first: Falls back seamlessly to local storage cache if network is unavailable.
+     * Includes a throttle guard so rapid UI transitions do not trigger redundant or racing requests.
      */
-    fun syncWithSupabase() {
+    fun syncWithSupabase(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (!force && (now - lastSyncTime < 15_000L)) {
+            return
+        }
+        lastSyncTime = now
+
         viewModelScope.launch {
             // 1. Fetch live products from Supabase (updates Low Stock alerts & catalog)
+            // Preserves in-flight local modifications so optimistic UI updates are not overwritten by stale GETs
             supabase.getProducts().onSuccess { remoteProducts ->
                 if (remoteProducts.isNotEmpty()) {
-                    _products.value = remoteProducts
-                    storageManager.saveProducts(remoteProducts)
+                    _products.update { currentList ->
+                        val currentMap = currentList.associateBy { it.id }
+                        remoteProducts.map { remote ->
+                            if (pendingProductUpdates.contains(remote.id)) {
+                                currentMap[remote.id] ?: remote
+                            } else {
+                                remote
+                            }
+                        }
+                    }
+                    storageManager.saveProducts(_products.value)
                 }
             }
             // 2. Fetch live expenses from Supabase (powers Home screen Net Profit)
@@ -400,6 +421,17 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
             iconType = normalizedCategory.lowercase()
         )
         _products.update { products -> products.map { if (it.id == productId) updatedProduct else it } }
+        storageManager.saveProducts(_products.value)
+
+        // Asynchronously update product in Supabase while safeguarding local state
+        viewModelScope.launch {
+            pendingProductUpdates.add(productId)
+            try {
+                supabase.upsertProduct(updatedProduct)
+            } finally {
+                pendingProductUpdates.remove(productId)
+            }
+        }
         return true
     }
 
@@ -443,9 +475,14 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
         // Asynchronously update product inventory and insert stock-in record in Supabase
         val updatedProduct = _products.value.find { it.id == productId }
         viewModelScope.launch {
-            supabase.insertStockInRecord(record)
-            if (updatedProduct != null) {
-                supabase.upsertProduct(updatedProduct)
+            pendingProductUpdates.add(productId)
+            try {
+                supabase.insertStockInRecord(record)
+                if (updatedProduct != null) {
+                    supabase.upsertProduct(updatedProduct)
+                }
+            } finally {
+                pendingProductUpdates.remove(productId)
             }
         }
     }
