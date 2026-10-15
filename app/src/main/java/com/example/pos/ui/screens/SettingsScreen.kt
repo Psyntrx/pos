@@ -304,16 +304,15 @@ private fun ProfileHeaderCard(
                 ProfileAvatar(
                     photoUri = photoUri,
                     modifier = Modifier.size(62.dp),
-                    onClick = if (photoUri != null) onPreviewPhoto else onChangePhoto,
-                    fallback = {
-                        Text(
-                            shop.ownerName.firstOrNull()?.uppercase() ?: "?",
-                            color = EmeraldPrimary,
-                            fontSize = 25.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                )
+                    onClick = if (photoUri != null) onPreviewPhoto else onChangePhoto
+                ) {
+                    Text(
+                        shop.ownerName.firstOrNull()?.uppercase() ?: "?",
+                        color = EmeraldPrimary,
+                        fontSize = 25.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)

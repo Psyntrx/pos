@@ -14,6 +14,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import com.example.pos.data.AuthSession
+import com.example.pos.data.PosStorageManager
+import com.example.pos.data.SupabaseClient
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import com.example.pos.ui.screens.ForgotPasswordScreen
@@ -68,7 +71,7 @@ class MainActivity : ComponentActivity() {
                     color = BgDark
                 ) {
                     val posViewModel = remember { PosViewModel(application) }
-                    val authViewModel = remember { AuthViewModel() }
+                    val authViewModel = remember { AuthViewModel(SupabaseClient.service, PosStorageManager(application)) }
                     val currentScreen by posViewModel.currentScreen.collectAsState()
 
                     LaunchedEffect(notificationRequest) {
@@ -81,8 +84,8 @@ class MainActivity : ComponentActivity() {
                         )
                         "login" -> LoginScreen(
                             authViewModel = authViewModel,
-                            onLoginSuccess = { email: String, pass: String ->
-                                posViewModel.login(email, pass)
+                            onLoginSuccess = { email: String, pass: String, session: AuthSession? ->
+                                posViewModel.login(email, pass, session)
                             },
                             onNavigateToRegisterStep1 = {
                                 posViewModel.navigateTo("register_step1")

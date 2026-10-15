@@ -383,16 +383,15 @@ fun RetailSyncHeader(
         ) {
             ProfileAvatar(
                 photoUri = profilePhotoUri,
-                modifier = Modifier.size(42.dp),
-                fallback = {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = "Profile",
-                        tint = EmeraldBright,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            )
+                modifier = Modifier.size(42.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = "Profile",
+                    tint = EmeraldBright,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
 
             Spacer(modifier = Modifier.width(12.dp))
 

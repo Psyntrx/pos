@@ -2,8 +2,11 @@ package com.example.pos.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.pos.data.SupabaseClient
+import com.example.pos.data.AuthSession
+import com.example.pos.data.PosStorageManager
 import com.example.pos.data.Shop
+import com.example.pos.data.SupabaseClient
+import com.example.pos.data.SupabaseService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -62,6 +65,7 @@ data class LoginUiState(
     val email: String = "faith@store.com",
     val password: String = "password123",
     val passwordVisible: Boolean = false,
+    val rememberMe: Boolean = true,
     val isLoading: Boolean = false,
     val errorMessage: String? = null
 ) {
@@ -79,9 +83,10 @@ data class ForgotPasswordUiState(
     val canSubmit: Boolean get() = isEmailValid && !isLoading
 }
 
-class AuthViewModel : ViewModel() {
-
-    private val supabase = SupabaseClient.service
+class AuthViewModel(
+    private val supabase: SupabaseService = SupabaseClient.service,
+    private val storageManager: PosStorageManager? = null
+) : ViewModel() {
 
     private val _registerState = MutableStateFlow(RegisterUiState())
     val registerState: StateFlow<RegisterUiState> = _registerState.asStateFlow()
@@ -91,6 +96,19 @@ class AuthViewModel : ViewModel() {
 
     private val _forgotPasswordState = MutableStateFlow(ForgotPasswordUiState())
     val forgotPasswordState: StateFlow<ForgotPasswordUiState> = _forgotPasswordState.asStateFlow()
+
+    init {
+        storageManager?.let { storage ->
+            val rememberedEmail = storage.loadRememberedEmail()
+            val rememberPref = storage.loadRememberMePreference()
+            _loginState.update { current ->
+                current.copy(
+                    email = if (!rememberedEmail.isNullOrBlank()) rememberedEmail else current.email,
+                    rememberMe = rememberPref
+                )
+            }
+        }
+    }
 
     // -------------------------------------------------------------
     // Register Step 1 Actions
@@ -201,7 +219,12 @@ class AuthViewModel : ViewModel() {
         _loginState.update { it.copy(passwordVisible = !it.passwordVisible) }
     }
 
-    fun login(onSuccess: (email: String, pass: String) -> Unit) {
+    fun updateRememberMe(rememberMe: Boolean) {
+        _loginState.update { it.copy(rememberMe = rememberMe) }
+        storageManager?.saveRememberMePreference(rememberMe)
+    }
+
+    fun login(onSuccessWithSession: (email: String, pass: String, session: AuthSession?) -> Unit) {
         val state = _loginState.value
         if (!state.canSubmit) {
             _loginState.update { it.copy(errorMessage = "Please enter a valid email address and password.") }
@@ -212,9 +235,21 @@ class AuthViewModel : ViewModel() {
         viewModelScope.launch {
             val result = supabase.signIn(state.email.trim(), state.password)
             result.fold(
-                onSuccess = {
+                onSuccess = { responseBody ->
                     _loginState.update { it.copy(isLoading = false) }
-                    onSuccess(state.email, state.password)
+                    val session = supabase.parseAuthSession(responseBody, state.rememberMe)
+                    if (storageManager != null) {
+                        storageManager.saveRememberMePreference(state.rememberMe)
+                        if (session != null) {
+                            storageManager.saveAuthSession(session)
+                        }
+                        if (state.rememberMe) {
+                            storageManager.saveRememberedEmail(state.email.trim())
+                        } else {
+                            storageManager.clearRememberedEmail()
+                        }
+                    }
+                    onSuccessWithSession(state.email, state.password, session)
                 },
                 onFailure = { error ->
                     _loginState.update {
@@ -223,6 +258,10 @@ class AuthViewModel : ViewModel() {
                 }
             )
         }
+    }
+
+    fun login(onSuccess: (email: String, pass: String) -> Unit) {
+        login { email, pass, _ -> onSuccess(email, pass) }
     }
 
     // -------------------------------------------------------------
