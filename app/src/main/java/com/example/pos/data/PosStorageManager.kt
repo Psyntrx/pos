@@ -5,8 +5,8 @@ import android.content.SharedPreferences
 import org.json.JSONArray
 import org.json.JSONObject
 
-class PosStorageManager(context: Context) {
-    private val prefs: SharedPreferences = context.getSharedPreferences("pos_data_prefs", Context.MODE_PRIVATE)
+class PosStorageManager(context: Context? = null) {
+    private val prefs: SharedPreferences? = context?.getSharedPreferences("pos_data_prefs", Context.MODE_PRIVATE)
 
     companion object {
         private const val KEY_PRODUCTS = "key_products"
@@ -16,16 +16,22 @@ class PosStorageManager(context: Context) {
         private const val KEY_EMPLOYEES = "key_employees"
         private const val KEY_STOCK_IN = "key_stock_in"
         private const val KEY_SHOP = "key_shop"
+        private const val KEY_AUTH_SESSION = "key_auth_session"
+        private const val KEY_REMEMBERED_EMAIL = "key_remembered_email"
+        private const val KEY_REMEMBER_ME = "key_remember_me"
+        private const val KEY_NOTIFICATIONS = "key_notifications"
+        private const val KEY_SYSTEM_NOTIFICATIONS_ENABLED = "key_system_notifications_enabled"
     }
 
     fun saveProducts(products: List<Product>) {
+        if (prefs == null) return
         val jsonArray = JSONArray()
         products.forEach { jsonArray.put(it.toJson()) }
         prefs.edit().putString(KEY_PRODUCTS, jsonArray.toString()).apply()
     }
 
     fun loadProducts(defaultProducts: List<Product>): List<Product> {
-        val jsonString = prefs.getString(KEY_PRODUCTS, null) ?: return defaultProducts
+        val jsonString = prefs?.getString(KEY_PRODUCTS, null) ?: return defaultProducts
         return try {
             val jsonArray = JSONArray(jsonString)
             val list = mutableListOf<Product>()
@@ -38,14 +44,55 @@ class PosStorageManager(context: Context) {
         }
     }
 
+    fun saveNotifications(notifications: List<AppNotification>) {
+        val json = JSONArray()
+        notifications.forEach { notification ->
+            json.put(JSONObject().apply {
+                put("id", notification.id)
+                put("kind", notification.kind.storageValue)
+                put("title", notification.title)
+                put("message", notification.message)
+                put("productIds", JSONArray(notification.productIds))
+                put("createdAt", notification.createdAt)
+                put("isRead", notification.isRead)
+            })
+        }
+        prefs.edit().putString(KEY_NOTIFICATIONS, json.toString()).apply()
+    }
+
+    fun loadNotifications(): List<AppNotification> = runCatching {
+        val json = JSONArray(prefs.getString(KEY_NOTIFICATIONS, "[]"))
+        (0 until json.length()).map { index ->
+            val item = json.getJSONObject(index)
+            val ids = item.optJSONArray("productIds") ?: JSONArray()
+            AppNotification(
+                id = item.getString("id"),
+                kind = InventoryAlertKind.fromStorage(item.optString("kind")),
+                title = item.optString("title"),
+                message = item.optString("message"),
+                productIds = (0 until ids.length()).map { ids.getString(it) },
+                createdAt = item.optLong("createdAt", System.currentTimeMillis()),
+                isRead = item.optBoolean("isRead", false)
+            )
+        }
+    }.getOrDefault(emptyList())
+
+    fun areSystemNotificationsEnabled(): Boolean =
+        prefs.getBoolean(KEY_SYSTEM_NOTIFICATIONS_ENABLED, false)
+
+    fun setSystemNotificationsEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_SYSTEM_NOTIFICATIONS_ENABLED, enabled).apply()
+    }
+
     fun saveSales(sales: List<Sale>) {
+        if (prefs == null) return
         val jsonArray = JSONArray()
         sales.forEach { jsonArray.put(it.toJson()) }
         prefs.edit().putString(KEY_SALES, jsonArray.toString()).apply()
     }
 
     fun loadSales(defaultSales: List<Sale>): List<Sale> {
-        val jsonString = prefs.getString(KEY_SALES, null) ?: return defaultSales
+        val jsonString = prefs?.getString(KEY_SALES, null) ?: return defaultSales
         return try {
             val jsonArray = JSONArray(jsonString)
             val list = mutableListOf<Sale>()
@@ -59,13 +106,14 @@ class PosStorageManager(context: Context) {
     }
 
     fun saveExpenses(expenses: List<Expense>) {
+        if (prefs == null) return
         val jsonArray = JSONArray()
         expenses.forEach { jsonArray.put(it.toJson()) }
         prefs.edit().putString(KEY_EXPENSES, jsonArray.toString()).apply()
     }
 
     fun loadExpenses(defaultExpenses: List<Expense>): List<Expense> {
-        val jsonString = prefs.getString(KEY_EXPENSES, null) ?: return defaultExpenses
+        val jsonString = prefs?.getString(KEY_EXPENSES, null) ?: return defaultExpenses
         return try {
             val jsonArray = JSONArray(jsonString)
             val list = mutableListOf<Expense>()
@@ -79,13 +127,14 @@ class PosStorageManager(context: Context) {
     }
 
     fun saveCustomerCredits(credits: List<CustomerCredit>) {
+        if (prefs == null) return
         val jsonArray = JSONArray()
         credits.forEach { jsonArray.put(it.toJson()) }
         prefs.edit().putString(KEY_CUSTOMER_CREDITS, jsonArray.toString()).apply()
     }
 
     fun loadCustomerCredits(defaultCredits: List<CustomerCredit>): List<CustomerCredit> {
-        val jsonString = prefs.getString(KEY_CUSTOMER_CREDITS, null) ?: return defaultCredits
+        val jsonString = prefs?.getString(KEY_CUSTOMER_CREDITS, null) ?: return defaultCredits
         return try {
             val jsonArray = JSONArray(jsonString)
             val list = mutableListOf<CustomerCredit>()
@@ -99,13 +148,14 @@ class PosStorageManager(context: Context) {
     }
 
     fun saveEmployees(employees: List<Employee>) {
+        if (prefs == null) return
         val jsonArray = JSONArray()
         employees.forEach { jsonArray.put(it.toJson()) }
         prefs.edit().putString(KEY_EMPLOYEES, jsonArray.toString()).apply()
     }
 
     fun loadEmployees(defaultEmployees: List<Employee>): List<Employee> {
-        val jsonString = prefs.getString(KEY_EMPLOYEES, null) ?: return defaultEmployees
+        val jsonString = prefs?.getString(KEY_EMPLOYEES, null) ?: return defaultEmployees
         return try {
             val jsonArray = JSONArray(jsonString)
             val list = mutableListOf<Employee>()
@@ -119,13 +169,14 @@ class PosStorageManager(context: Context) {
     }
 
     fun saveStockInRecords(records: List<StockInRecord>) {
+        if (prefs == null) return
         val jsonArray = JSONArray()
         records.forEach { jsonArray.put(it.toJson()) }
         prefs.edit().putString(KEY_STOCK_IN, jsonArray.toString()).apply()
     }
 
     fun loadStockInRecords(defaultRecords: List<StockInRecord>): List<StockInRecord> {
-        val jsonString = prefs.getString(KEY_STOCK_IN, null) ?: return defaultRecords
+        val jsonString = prefs?.getString(KEY_STOCK_IN, null) ?: return defaultRecords
         return try {
             val jsonArray = JSONArray(jsonString)
             val list = mutableListOf<StockInRecord>()
@@ -139,16 +190,92 @@ class PosStorageManager(context: Context) {
     }
 
     fun saveShop(shop: Shop) {
+        if (prefs == null) return
         prefs.edit().putString(KEY_SHOP, shop.toJson().toString()).apply()
     }
 
     fun loadShop(defaultShop: Shop): Shop {
-        val jsonString = prefs.getString(KEY_SHOP, null) ?: return defaultShop
+        val jsonString = prefs?.getString(KEY_SHOP, null) ?: return defaultShop
         return try {
             JSONObject(jsonString).toShop()
         } catch (e: Exception) {
             defaultShop
         }
+    }
+
+    // ==========================================
+    // AUTH SESSION & REMEMBER ME
+    // ==========================================
+    fun saveAuthSession(session: AuthSession) {
+        if (prefs == null) return
+        val json = JSONObject().apply {
+            put("accessToken", session.accessToken)
+            put("refreshToken", session.refreshToken)
+            put("userEmail", session.userEmail)
+            put("userId", session.userId)
+            put("tokenExpiresAt", session.tokenExpiresAt)
+            put("rememberMe", session.rememberMe)
+            put("loginTimestamp", session.loginTimestamp)
+        }
+        prefs.edit().putString(KEY_AUTH_SESSION, json.toString()).apply()
+    }
+
+    fun loadAuthSession(): AuthSession? {
+        val jsonString = prefs?.getString(KEY_AUTH_SESSION, null) ?: return null
+        return try {
+            val obj = JSONObject(jsonString)
+            AuthSession(
+                accessToken = obj.getString("accessToken"),
+                refreshToken = obj.optString("refreshToken", ""),
+                userEmail = obj.optString("userEmail", ""),
+                userId = obj.optString("userId", ""),
+                tokenExpiresAt = obj.optLong("tokenExpiresAt", 0L),
+                rememberMe = obj.optBoolean("rememberMe", true),
+                loginTimestamp = obj.optLong("loginTimestamp", System.currentTimeMillis())
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun updateSessionTokens(accessToken: String, refreshToken: String, expiresAt: Long) {
+        val current = loadAuthSession() ?: return
+        val updated = current.copy(
+            accessToken = accessToken,
+            refreshToken = refreshToken.ifBlank { current.refreshToken },
+            tokenExpiresAt = expiresAt,
+            loginTimestamp = System.currentTimeMillis()
+        )
+        saveAuthSession(updated)
+    }
+
+    fun clearAuthSession() {
+        prefs?.edit()?.remove(KEY_AUTH_SESSION)?.apply()
+    }
+
+    fun isSessionValid(): Boolean {
+        val session = loadAuthSession() ?: return false
+        return session.isSessionValid()
+    }
+
+    fun saveRememberedEmail(email: String) {
+        prefs?.edit()?.putString(KEY_REMEMBERED_EMAIL, email)?.apply()
+    }
+
+    fun loadRememberedEmail(): String? {
+        return prefs?.getString(KEY_REMEMBERED_EMAIL, null)
+    }
+
+    fun clearRememberedEmail() {
+        prefs?.edit()?.remove(KEY_REMEMBERED_EMAIL)?.apply()
+    }
+
+    fun saveRememberMePreference(enabled: Boolean) {
+        prefs?.edit()?.putBoolean(KEY_REMEMBER_ME, enabled)?.apply()
+    }
+
+    fun loadRememberMePreference(): Boolean {
+        return prefs?.getBoolean(KEY_REMEMBER_ME, true) ?: true
     }
 }
 
@@ -166,6 +293,7 @@ fun Product.toJson(): JSONObject {
         put("minStock", minStock)
         put("supplier", supplier)
         put("iconType", iconType)
+        put("imageUri", imageUri)
     }
 }
 
@@ -181,7 +309,8 @@ fun JSONObject.toProduct(): Product {
         stockQuantity = getInt("stockQuantity"),
         minStock = optInt("minStock", 10),
         supplier = optString("supplier", ""),
-        iconType = optString("iconType", "box")
+        iconType = optString("iconType", "box"),
+        imageUri = optString("imageUri", "").takeIf { it.isNotBlank() && it != "null" }
     )
 }
 

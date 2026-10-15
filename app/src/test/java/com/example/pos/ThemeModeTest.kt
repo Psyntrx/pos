@@ -1,10 +1,24 @@
 package com.example.pos
 
 import com.example.pos.ui.theme.ThemeMode
+import com.example.pos.ui.theme.AppColorTheme
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ThemeModeTest {
+    @Test
+    fun missingOrUnknownColorThemeDefaultsToEmerald() {
+        assertEquals(AppColorTheme.EMERALD, AppColorTheme.fromStorage(null))
+        assertEquals(AppColorTheme.EMERALD, AppColorTheme.fromStorage("unexpected"))
+    }
+
+    @Test
+    fun savedColorThemesRestoreCorrectly() {
+        AppColorTheme.entries.forEach { theme ->
+            assertEquals(theme, AppColorTheme.fromStorage(theme.storageValue))
+        }
+    }
+
     @Test
     fun missingOrUnknownPreferenceDefaultsToSystem() {
         assertEquals(ThemeMode.SYSTEM, ThemeMode.fromStorage(null))

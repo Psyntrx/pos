@@ -17,6 +17,30 @@ class SupabaseService(
     @Volatile
     private var accessToken: String? = null
 
+    @Volatile
+    private var refreshToken: String? = null
+
+    @Volatile
+    private var tokenExpiresAt: Long = 0L
+
+    var onSessionRefreshedListener: ((AuthSession) -> Unit)? = null
+
+    fun setTokens(access: String?, refresh: String? = null, expiresAt: Long = 0L) {
+        this.accessToken = access
+        this.refreshToken = refresh
+        this.tokenExpiresAt = expiresAt
+    }
+
+    fun setAccessToken(token: String?) {
+        this.accessToken = token
+    }
+
+    fun getAccessToken(): String? = accessToken
+
+    fun getRefreshToken(): String? = refreshToken
+
+    fun getTokenExpiresAt(): Long = tokenExpiresAt
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
@@ -54,6 +78,32 @@ class SupabaseService(
         return builder.build()
     }
 
+    fun parseAuthSession(responseBody: String, rememberMe: Boolean = true): AuthSession? {
+        return try {
+            val obj = JSONObject(responseBody)
+            val token = obj.optString("access_token")
+            if (token.isBlank()) return null
+            val refresh = obj.optString("refresh_token")
+            val expiresIn = obj.optLong("expires_in", 3600L)
+            val userObj = obj.optJSONObject("user")
+            val email = userObj?.optString("email").orEmpty()
+            val userId = userObj?.optString("id").orEmpty()
+            val expiresAt = System.currentTimeMillis() + (expiresIn * 1000L)
+
+            AuthSession(
+                accessToken = token,
+                refreshToken = refresh,
+                userEmail = email,
+                userId = userId,
+                tokenExpiresAt = expiresAt,
+                rememberMe = rememberMe,
+                loginTimestamp = System.currentTimeMillis()
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     // ==========================================
     // AUTHENTICATION
     // ==========================================
@@ -71,7 +121,12 @@ class SupabaseService(
             client.newCall(request).execute().use { response ->
                 val body = response.body?.string().orEmpty()
                 if (response.isSuccessful) {
-                    accessToken = JSONObject(body).optString("access_token").takeIf { it.isNotBlank() }
+                    val session = parseAuthSession(body, true)
+                    if (session != null) {
+                        setTokens(session.accessToken, session.refreshToken, session.tokenExpiresAt)
+                    } else {
+                        accessToken = JSONObject(body).optString("access_token").takeIf { it.isNotBlank() }
+                    }
                     Result.success(body)
                 } else {
                     val msg = parseErrorMessage(body, "Signup failed (${response.code})")
@@ -97,7 +152,12 @@ class SupabaseService(
             client.newCall(request).execute().use { response ->
                 val body = response.body?.string().orEmpty()
                 if (response.isSuccessful) {
-                    accessToken = JSONObject(body).optString("access_token").takeIf { it.isNotBlank() }
+                    val session = parseAuthSession(body, true)
+                    if (session != null) {
+                        setTokens(session.accessToken, session.refreshToken, session.tokenExpiresAt)
+                    } else {
+                        accessToken = JSONObject(body).optString("access_token").takeIf { it.isNotBlank() }
+                    }
                     Result.success(body)
                 } else {
                     val msg = parseErrorMessage(body, "Login failed (${response.code})")
@@ -109,8 +169,41 @@ class SupabaseService(
         }
     }
 
+    suspend fun refreshSession(refreshTokenStr: String, rememberMe: Boolean = true): Result<AuthSession> = withContext(Dispatchers.IO) {
+        try {
+            val json = JSONObject().apply {
+                put("refresh_token", refreshTokenStr)
+            }
+            val request = buildRequest(
+                path = "/auth/v1/token?grant_type=refresh_token",
+                method = "POST",
+                bodyString = json.toString()
+            )
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                if (response.isSuccessful) {
+                    val session = parseAuthSession(body, rememberMe)
+                    if (session != null) {
+                        setTokens(session.accessToken, session.refreshToken, session.tokenExpiresAt)
+                        onSessionRefreshedListener?.invoke(session)
+                        Result.success(session)
+                    } else {
+                        Result.failure(Exception("Failed to parse refreshed token"))
+                    }
+                } else {
+                    val msg = parseErrorMessage(body, "Token refresh failed (${response.code})")
+                    Result.failure(Exception(msg))
+                }
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     fun clearSession() {
         accessToken = null
+        refreshToken = null
+        tokenExpiresAt = 0L
     }
 
     suspend fun resetPasswordForEmail(email: String): Result<Unit> = withContext(Dispatchers.IO) {

@@ -367,7 +367,8 @@ fun RetailSyncHeader(
     ownerName: String,
     profilePhotoUri: String? = null,
     onNotificationClick: () -> Unit = {},
-    onProfileClick: () -> Unit = {}
+    onProfileClick: () -> Unit = {},
+    hasUnreadNotifications: Boolean = false
 ) {
     Row(
         modifier = Modifier
@@ -382,16 +383,15 @@ fun RetailSyncHeader(
         ) {
             ProfileAvatar(
                 photoUri = profilePhotoUri,
-                modifier = Modifier.size(42.dp),
-                fallback = {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = "Profile",
-                        tint = EmeraldBright,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            )
+                modifier = Modifier.size(42.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = "Profile",
+                    tint = EmeraldBright,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
 
             Spacer(modifier = Modifier.width(12.dp))
 
@@ -460,14 +460,15 @@ fun RetailSyncHeader(
                     tint = TextPrimary,
                     modifier = Modifier.size(20.dp)
                 )
-                // Green indicator dot
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(EmeraldBright)
-                        .align(Alignment.TopEnd)
-                )
+                if (hasUnreadNotifications) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(EmeraldBright)
+                            .align(Alignment.TopEnd)
+                    )
+                }
             }
         }
     }

@@ -27,9 +27,9 @@ import kotlinx.coroutines.withContext
 @Composable
 fun ProfileAvatar(
     photoUri: String?,
-    fallback: @Composable () -> Unit,
     modifier: Modifier = Modifier,
-    onClick: (() -> Unit)? = null
+    onClick: (() -> Unit)? = null,
+    fallback: @Composable () -> Unit
 ) {
     val context = LocalContext.current
     val bitmap by produceState<ImageBitmap?>(initialValue = null, photoUri) {

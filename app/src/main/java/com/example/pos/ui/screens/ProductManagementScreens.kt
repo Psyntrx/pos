@@ -1,7 +1,13 @@
 package com.example.pos.ui.screens
 
+import android.graphics.BitmapFactory
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -17,6 +23,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Edit
@@ -29,6 +36,10 @@ import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,12 +51,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.pos.data.Product
+import com.example.pos.data.ProductImageStorage
 import com.example.pos.ui.components.FilterChipItem
 import com.example.pos.ui.components.PrimaryGreenButton
 import com.example.pos.ui.components.StockBadge
 import com.example.pos.ui.components.SurfaceCard
 import com.example.pos.ui.theme.*
 import com.example.pos.viewmodel.PosViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val standardProductCategories = listOf("Groceries", "Beverages", "Snacks", "Household")
 
@@ -281,16 +296,18 @@ fun ProductListItemCard(product: Product, onEdit: () -> Unit) {
                     .border(1.dp, accent.copy(alpha = 0.18f), RoundedCornerShape(16.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = when (product.category.lowercase()) {
-                        "groceries" -> Icons.Default.LocalGroceryStore
-                        "beverages" -> Icons.Default.Category
-                        else -> Icons.Default.ShoppingBag
-                    },
-                    contentDescription = null,
-                    tint = accent,
-                    modifier = Modifier.size(23.dp)
-                )
+                ProductPhotoImage(product.imageUri) {
+                    Icon(
+                        imageVector = when (product.category.lowercase()) {
+                            "groceries" -> Icons.Default.LocalGroceryStore
+                            "beverages" -> Icons.Default.Category
+                            else -> Icons.Default.ShoppingBag
+                        },
+                        contentDescription = null,
+                        tint = accent,
+                        modifier = Modifier.size(23.dp)
+                    )
+                }
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -347,6 +364,7 @@ private fun EditProductDialog(
     var quantity by remember(product.id) { mutableStateOf(product.stockQuantity.toString()) }
     var minStock by remember(product.id) { mutableStateOf(product.minStock.toString()) }
     var supplier by remember(product.id) { mutableStateOf(product.supplier) }
+    var imageUri by remember(product.id) { mutableStateOf(product.imageUri) }
     var attemptedSave by remember(product.id) { mutableStateOf(false) }
     var saveError by remember(product.id) { mutableStateOf<String?>(null) }
 
@@ -370,6 +388,7 @@ private fun EditProductDialog(
                 modifier = Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                ProductPhotoField(imageUri = imageUri, onImageUriChange = { imageUri = it })
                 ProductFormField(name, { name = it; saveError = null }, "Product name *", placeholder = "Product name")
                 ProductFormField(category, { category = it; saveError = null }, "Category *", placeholder = "Category")
                 ProductFormField(
@@ -407,7 +426,8 @@ private fun EditProductDialog(
                         sellingPrice = parsedSellingPrice!!,
                         quantity = parsedQuantity!!,
                         minStock = parsedMinStock!!,
-                        supplier = supplier
+                        supplier = supplier,
+                        imageUri = imageUri
                     )
                     if (saved) onDismiss() else saveError = "Could not update the product. Check its SKU and try again."
                 }
@@ -480,6 +500,7 @@ fun AddProductScreen(
     var quantity by remember { mutableStateOf("") }
     var minStock by remember { mutableStateOf("") }
     var supplier by remember { mutableStateOf("") }
+    var imageUri by remember { mutableStateOf<String?>(null) }
     var categoryMenuExpanded by remember { mutableStateOf(false) }
     var attemptedSave by remember { mutableStateOf(false) }
     var saveError by remember { mutableStateOf<String?>(null) }
@@ -539,6 +560,8 @@ fun AddProductScreen(
             Spacer(Modifier.height(16.dp))
 
             FormSectionCard(title = "Product details", subtitle = "Identify and organize this item", icon = Icons.Default.ShoppingBag) {
+                ProductPhotoField(imageUri = imageUri, onImageUriChange = { imageUri = it })
+                Spacer(Modifier.height(12.dp))
                 ProductFormField(
                     value = name,
                     onValueChange = { name = it; saveError = null },
@@ -720,7 +743,8 @@ fun AddProductScreen(
                                 sellingPrice = parsedSellingPrice!!,
                                 quantity = parsedQuantity!!,
                                 minStock = parsedMinStock!!,
-                                supplier = supplier.trim()
+                                supplier = supplier.trim(),
+                                imageUri = imageUri
                             )
                             if (saved) onClose() else saveError = "Could not save this product. Check the SKU and try again."
                         }
@@ -736,6 +760,124 @@ fun AddProductScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ProductPhotoField(
+    imageUri: String?,
+    onImageUriChange: (String?) -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var imageError by remember { mutableStateOf<String?>(null) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch {
+                val savedUri = withContext(Dispatchers.IO) { ProductImageStorage.save(context, uri) }
+                if (savedUri != null) {
+                    onImageUriChange(savedUri)
+                    imageError = null
+                } else {
+                    imageError = "Could not load that photo. Try another image."
+                }
+            }
+        }
+    }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
+        if (bitmap != null) {
+            scope.launch {
+                val savedUri = withContext(Dispatchers.IO) { ProductImageStorage.save(context, bitmap) }
+                if (savedUri != null) {
+                    onImageUriChange(savedUri)
+                    imageError = null
+                } else {
+                    imageError = "Could not save the photo. Please try again."
+                }
+            }
+        }
+    }
+
+    Column {
+        SurfaceCard(
+            modifier = Modifier.fillMaxWidth(),
+            backgroundColor = SurfaceDarkVariant,
+            borderColor = SurfaceBorder,
+            cornerRadius = 16.dp
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(EmeraldContainer)
+                        .clickable { picker.launch(arrayOf("image/*")) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    ProductPhotoImage(imageUri) {
+                        Icon(Icons.Default.CameraAlt, contentDescription = null, tint = EmeraldBright, modifier = Modifier.size(25.dp))
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        if (imageUri == null) "Product photo" else "Photo selected",
+                        color = TextPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text("Optional · square thumbnail", color = TextMuted, fontSize = 11.sp)
+                    Spacer(Modifier.height(4.dp))
+                    Row {
+                        TextButton(
+                            onClick = { picker.launch(arrayOf("image/*")) },
+                            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
+                        ) {
+                            Text(if (imageUri == null) "Gallery" else "Change", color = EmeraldBright, fontSize = 12.sp)
+                        }
+                        TextButton(
+                            onClick = { camera.launch(null) },
+                            contentPadding = PaddingValues(start = 8.dp, end = 0.dp, top = 0.dp, bottom = 0.dp)
+                        ) {
+                            Text("Camera", color = EmeraldBright, fontSize = 12.sp)
+                        }
+                    }
+                }
+                if (imageUri != null) {
+                    TextButton(onClick = { onImageUriChange(null) }) {
+                        Text("Remove", color = ErrorRed, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+        imageError?.let { Text(it, color = ErrorRed, fontSize = 11.sp, modifier = Modifier.padding(top = 5.dp)) }
+    }
+}
+
+@Composable
+private fun ProductPhotoImage(
+    imageUri: String?,
+    fallback: @Composable () -> Unit
+) {
+    val context = LocalContext.current
+    val bitmap by produceState<ImageBitmap?>(initialValue = null, imageUri) {
+        value = if (imageUri.isNullOrBlank()) null else withContext(Dispatchers.IO) {
+            runCatching {
+                context.contentResolver.openInputStream(Uri.parse(imageUri))?.use {
+                    BitmapFactory.decodeStream(it)?.asImageBitmap()
+                }
+            }.getOrNull()
+        }
+    }
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap!!,
+            contentDescription = "Product photo",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        fallback()
     }
 }
 
