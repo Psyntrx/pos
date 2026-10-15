@@ -81,7 +81,8 @@ fun SettingsScreen(
     onProfilePhotoChange: (String?) -> Unit,
     onOpenEmployees: () -> Unit,
     onOpenCreditReminders: () -> Unit,
-    onOpenExpenses: () -> Unit
+    onOpenExpenses: () -> Unit,
+    onOpenNotifications: () -> Unit
 ) {
     val shop by viewModel.shop.collectAsState()
     var showShopEditor by remember { mutableStateOf(false) }
@@ -179,9 +180,9 @@ fun SettingsScreen(
         )
 
         SettingsMenuItem(
-            label = "Notifications",
+            label = "Notifications & alerts",
             icon = Icons.Default.Notifications,
-            onClick = { }
+            onClick = onOpenNotifications
         )
 
         SettingsMenuItem(

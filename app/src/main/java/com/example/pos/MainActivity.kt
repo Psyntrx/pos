@@ -9,8 +9,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -28,10 +30,18 @@ import com.example.pos.viewmodel.AuthViewModel
 import com.example.pos.viewmodel.PosViewModel
 
 class MainActivity : ComponentActivity() {
+    private var notificationNavigationRequest by mutableIntStateOf(0)
+
+    companion object {
+        const val EXTRA_OPEN_NOTIFICATIONS = "com.example.pos.OPEN_NOTIFICATIONS"
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        consumeNotificationNavigation(intent)
         enableEdgeToEdge()
         setContent {
+            val notificationRequest = notificationNavigationRequest
             val preferences = remember {
                 getSharedPreferences("appearance", MODE_PRIVATE)
             }
@@ -60,6 +70,10 @@ class MainActivity : ComponentActivity() {
                     val posViewModel = remember { PosViewModel(application) }
                     val authViewModel = remember { AuthViewModel() }
                     val currentScreen by posViewModel.currentScreen.collectAsState()
+
+                    LaunchedEffect(notificationRequest) {
+                        if (notificationRequest > 0) posViewModel.navigateTo("main")
+                    }
 
                     when (currentScreen) {
                         "splash" -> SplashScreen(
@@ -114,6 +128,7 @@ class MainActivity : ComponentActivity() {
                         )
                         else -> MainContainerScreen(
                             viewModel = posViewModel,
+                            notificationNavigationRequest = notificationRequest,
                             themeMode = themeMode,
                             colorTheme = colorTheme,
                             customAccentColor = customAccentColor,
@@ -142,6 +157,19 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        consumeNotificationNavigation(intent)
+    }
+
+    private fun consumeNotificationNavigation(intent: android.content.Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_NOTIFICATIONS, false) == true) {
+            notificationNavigationRequest += 1
+            intent.removeExtra(EXTRA_OPEN_NOTIFICATIONS)
         }
     }
 }

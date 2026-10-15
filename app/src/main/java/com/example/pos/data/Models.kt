@@ -28,6 +28,26 @@ data class Product(
     val isLowStock: Boolean get() = stockQuantity <= minStock
 }
 
+enum class InventoryAlertKind(val storageValue: String, val label: String) {
+    LOW_STOCK("low_stock", "Low stock"),
+    OUT_OF_STOCK("out_of_stock", "Out of stock");
+
+    companion object {
+        fun fromStorage(value: String?): InventoryAlertKind =
+            entries.firstOrNull { it.storageValue == value } ?: LOW_STOCK
+    }
+}
+
+data class AppNotification(
+    val id: String,
+    val kind: InventoryAlertKind,
+    val title: String,
+    val message: String,
+    val productIds: List<String>,
+    val createdAt: Long = System.currentTimeMillis(),
+    val isRead: Boolean = false
+)
+
 data class CartItem(
     val product: Product,
     val quantity: Int

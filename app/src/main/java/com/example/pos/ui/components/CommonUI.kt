@@ -367,7 +367,8 @@ fun RetailSyncHeader(
     ownerName: String,
     profilePhotoUri: String? = null,
     onNotificationClick: () -> Unit = {},
-    onProfileClick: () -> Unit = {}
+    onProfileClick: () -> Unit = {},
+    hasUnreadNotifications: Boolean = false
 ) {
     Row(
         modifier = Modifier
@@ -460,14 +461,15 @@ fun RetailSyncHeader(
                     tint = TextPrimary,
                     modifier = Modifier.size(20.dp)
                 )
-                // Green indicator dot
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(EmeraldBright)
-                        .align(Alignment.TopEnd)
-                )
+                if (hasUnreadNotifications) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(EmeraldBright)
+                            .align(Alignment.TopEnd)
+                    )
+                }
             }
         }
     }

@@ -16,6 +16,7 @@ import com.example.pos.viewmodel.PosViewModel
 @Composable
 fun MainContainerScreen(
     viewModel: PosViewModel,
+    notificationNavigationRequest: Int = 0,
     themeMode: ThemeMode,
     colorTheme: AppColorTheme,
     customAccentColor: Color,
@@ -26,8 +27,16 @@ fun MainContainerScreen(
     onProfilePhotoChange: (String?) -> Unit
 ) {
     val selectedTab by viewModel.selectedTab.collectAsState()
-    var activeModal by remember { mutableStateOf<String?>(null) } // "payment", "add_product", "stock_in", "credit_sales", "expenses", "employees"
+    val notifications by viewModel.notifications.collectAsState()
+    val hasUnreadNotifications = notifications.any { !it.isRead }
+    var activeModal by remember {
+        mutableStateOf(if (notificationNavigationRequest > 0) "notifications" else null)
+    } // "payment", "add_product", "stock_in", "credit_sales", "expenses", "employees", "notifications"
     var preselectedStockInProductId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(notificationNavigationRequest) {
+        if (notificationNavigationRequest > 0) activeModal = "notifications"
+    }
 
     val completedSale by viewModel.completedSale.collectAsState()
 
@@ -116,6 +125,15 @@ fun MainContainerScreen(
                             viewModel = viewModel,
                             onClose = { activeModal = null }
                         )
+                        "notifications" -> NotificationCenterScreen(
+                            viewModel = viewModel,
+                            onClose = { activeModal = null },
+                            onViewInventory = {
+                                viewModel.markAllNotificationsRead()
+                                activeModal = null
+                                viewModel.selectTab(2)
+                            }
+                        )
                     }
                 }
             } else {
@@ -129,7 +147,9 @@ fun MainContainerScreen(
                             activeModal = "stock_in"
                         },
                         onOpenCreditSales = { activeModal = "credit_sales" },
-                        onOpenExpenses = { activeModal = "expenses" }
+                        onOpenExpenses = { activeModal = "expenses" },
+                        onOpenNotifications = { activeModal = "notifications" },
+                        hasUnreadNotifications = hasUnreadNotifications
                     )
                     1 -> NewSaleScreen(
                         viewModel = viewModel,
@@ -154,7 +174,8 @@ fun MainContainerScreen(
                         onProfilePhotoChange = onProfilePhotoChange,
                         onOpenEmployees = { activeModal = "employees" },
                         onOpenCreditReminders = { activeModal = "credit_sales" },
-                        onOpenExpenses = { activeModal = "expenses" }
+                        onOpenExpenses = { activeModal = "expenses" },
+                        onOpenNotifications = { activeModal = "notifications" }
                     )
                 }
             }
