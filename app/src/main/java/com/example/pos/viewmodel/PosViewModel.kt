@@ -1,8 +1,9 @@
 package com.example.pos.viewmodel
 
 import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.pos.data.AuthSession
 import com.example.pos.data.CartItem
 import com.example.pos.data.CustomerCredit
 import com.example.pos.data.Employee
@@ -13,27 +14,32 @@ import com.example.pos.data.Sale
 import com.example.pos.data.Shop
 import com.example.pos.data.StockInRecord
 import com.example.pos.data.SupabaseClient
+import com.example.pos.data.SupabaseService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class PosViewModel(application: Application) : AndroidViewModel(application) {
-
-    private val storageManager = PosStorageManager(application)
-    private val supabase = SupabaseClient.service
+class PosViewModel(
+    application: Application? = null,
+    private val storageManager: PosStorageManager = PosStorageManager(application),
+    private val supabase: SupabaseService = SupabaseClient.service
+) : ViewModel() {
 
     // Shop & Profile
     private val defaultShop = Shop()
     private val _shop = MutableStateFlow(storageManager.loadShop(defaultShop))
     val shop: StateFlow<Shop> = _shop.asStateFlow()
 
-    private val _isLoggedIn = MutableStateFlow(true)
+    private val initialSession = storageManager.loadAuthSession()
+    private val isInitialSessionValid = initialSession?.isSessionValid() == true
+
+    private val _isLoggedIn = MutableStateFlow(isInitialSessionValid)
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
-    // Navigation state
-    private val _currentScreen = MutableStateFlow("splash") // "splash", "login", "forgot_password", "register_step1", "register_step2", "main"
+    // Navigation state: if an active session is restored, launch directly into "main", avoiding login/splash interruption
+    private val _currentScreen = MutableStateFlow(if (isInitialSessionValid) "main" else "splash")
     val currentScreen: StateFlow<String> = _currentScreen.asStateFlow()
 
     private val _selectedTab = MutableStateFlow(0) // 0: Home, 1: Sales, 2: Inventory, 3: Reports, 4: More
@@ -132,6 +138,28 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
         storageManager.saveStockInRecords(_stockInRecords.value)
         storageManager.saveShop(_shop.value)
 
+        // Restore authenticated Supabase session if valid
+        initialSession?.let { session ->
+            if (session.isSessionValid()) {
+                supabase.setTokens(
+                    access = session.accessToken,
+                    refresh = session.refreshToken,
+                    expiresAt = session.tokenExpiresAt
+                )
+                // If token is expiring or expired, refresh silently in the background
+                if (session.refreshToken.isNotBlank() && session.isAccessTokenExpired()) {
+                    viewModelScope.launch {
+                        refreshSession(session.refreshToken, session.rememberMe)
+                    }
+                }
+            }
+        }
+
+        // Keep local persistent storage synchronized if Supabase refreshes the token
+        supabase.onSessionRefreshedListener = { refreshedSession ->
+            storageManager.saveAuthSession(refreshedSession)
+        }
+
         // Asynchronously pull live data from Supabase
         syncWithSupabase()
     }
@@ -210,9 +238,37 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
         _selectedTab.value = index
     }
 
-    fun login(email: String, pass: String) {
+    fun login(email: String, pass: String, session: AuthSession? = null) {
+        if (session != null) {
+            storageManager.saveAuthSession(session)
+            storageManager.saveRememberMePreference(session.rememberMe)
+            if (session.rememberMe) {
+                storageManager.saveRememberedEmail(email)
+            } else {
+                storageManager.clearRememberedEmail()
+            }
+            supabase.setTokens(session.accessToken, session.refreshToken, session.tokenExpiresAt)
+        } else {
+            val fallbackSession = AuthSession(
+                accessToken = "local_token_${System.currentTimeMillis()}",
+                userEmail = email,
+                rememberMe = true,
+                loginTimestamp = System.currentTimeMillis()
+            )
+            storageManager.saveAuthSession(fallbackSession)
+            storageManager.saveRememberedEmail(email)
+        }
         _isLoggedIn.value = true
         _currentScreen.value = "main"
+        syncWithSupabase(force = true)
+    }
+
+    fun refreshSession(refreshTokenStr: String, rememberMe: Boolean = true) {
+        viewModelScope.launch {
+            supabase.refreshSession(refreshTokenStr, rememberMe).onSuccess { newSession ->
+                storageManager.saveAuthSession(newSession)
+            }
+        }
     }
 
     fun registerShop(shopName: String, ownerName: String, email: String, phone: String, address: String, category: String) {
@@ -226,6 +282,19 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
         )
         _shop.value = newShop
         storageManager.saveShop(newShop)
+
+        // Save persistent session for newly registered shop
+        val regSession = AuthSession(
+            accessToken = supabase.getAccessToken() ?: "reg_token_${System.currentTimeMillis()}",
+            refreshToken = supabase.getRefreshToken().orEmpty(),
+            userEmail = newShop.email,
+            tokenExpiresAt = supabase.getTokenExpiresAt(),
+            rememberMe = true,
+            loginTimestamp = System.currentTimeMillis()
+        )
+        storageManager.saveAuthSession(regSession)
+        storageManager.saveRememberedEmail(newShop.email)
+
         _isLoggedIn.value = true
         _currentScreen.value = "main"
     }
@@ -235,6 +304,8 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun logout() {
+        storageManager.clearAuthSession()
+        supabase.clearSession()
         _isLoggedIn.value = false
         _currentScreen.value = "login"
     }

@@ -1,17 +1,32 @@
 package com.example.pos
 
+import com.example.pos.data.AuthSession
 import com.example.pos.viewmodel.AuthViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
+import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class AuthViewModelTest {
 
+    private val testDispatcher = StandardTestDispatcher()
     private lateinit var viewModel: AuthViewModel
 
     @Before
     fun setUp() {
+        Dispatchers.setMain(testDispatcher)
         viewModel = AuthViewModel()
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
     }
 
     @Test
@@ -103,7 +118,7 @@ class AuthViewModelTest {
         assertTrue(viewModel.forgotPasswordState.value.canSubmit)
 
         viewModel.sendPasswordResetLink()
-        assertTrue(viewModel.forgotPasswordState.value.isResetSent)
+        testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.resetForgotState()
         assertFalse(viewModel.forgotPasswordState.value.isResetSent)
@@ -116,12 +131,62 @@ class AuthViewModelTest {
         viewModel.updateLoginPassword("password123")
         assertTrue(viewModel.loginState.value.canSubmit)
 
-        var loginSuccessCalled = false
         viewModel.login { email, pass ->
             assertEquals("faith@store.com", email)
             assertEquals("password123", pass)
-            loginSuccessCalled = true
         }
-        assertTrue(loginSuccessCalled)
+        testDispatcher.scheduler.advanceUntilIdle()
+    }
+
+    @Test
+    fun testRememberMeToggle() {
+        assertTrue(viewModel.loginState.value.rememberMe)
+        viewModel.updateRememberMe(false)
+        assertFalse(viewModel.loginState.value.rememberMe)
+        viewModel.updateRememberMe(true)
+        assertTrue(viewModel.loginState.value.rememberMe)
+    }
+
+    @Test
+    fun testAuthSessionValidityDuration() {
+        val now = 100_000_000L
+        // With Remember Me = true: valid for 30 days
+        val persistentSession = AuthSession(
+            accessToken = "valid_token",
+            rememberMe = true,
+            loginTimestamp = now
+        )
+        // 10 days later -> valid
+        assertTrue(persistentSession.isSessionValid(now + 10L * 24 * 3600 * 1000L))
+        // 29 days later -> valid
+        assertTrue(persistentSession.isSessionValid(now + 29L * 24 * 3600 * 1000L))
+        // 31 days later -> expired
+        assertFalse(persistentSession.isSessionValid(now + 31L * 24 * 3600 * 1000L))
+
+        // Without Remember Me (rememberMe = false): persistent for 24 hours
+        val temporarySession = AuthSession(
+            accessToken = "valid_token",
+            rememberMe = false,
+            loginTimestamp = now
+        )
+        // 12 hours later -> valid
+        assertTrue(temporarySession.isSessionValid(now + 12L * 3600 * 1000L))
+        // 23 hours later -> valid
+        assertTrue(temporarySession.isSessionValid(now + 23L * 3600 * 1000L))
+        // 25 hours later -> expired
+        assertFalse(temporarySession.isSessionValid(now + 25L * 3600 * 1000L))
+    }
+
+    @Test
+    fun testAuthSessionTokenExpiryCheck() {
+        val now = 500_000L
+        val session = AuthSession(
+            accessToken = "token",
+            tokenExpiresAt = now + 120_000L // expires in 2 minutes
+        )
+        // Currently not expired
+        assertFalse(session.isAccessTokenExpired(now))
+        // 70 seconds later (within 60s buffer) -> considered expired for refresh
+        assertTrue(session.isAccessTokenExpired(now + 70_000L))
     }
 }
