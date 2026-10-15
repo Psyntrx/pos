@@ -85,6 +85,8 @@ fun SettingsScreen(
     onOpenNotifications: () -> Unit
 ) {
     val shop by viewModel.shop.collectAsState()
+    val notifications by viewModel.notifications.collectAsState()
+    val unreadNotificationsCount = notifications.count { !it.isRead }
     var showShopEditor by remember { mutableStateOf(false) }
     var showPhotoPreview by remember { mutableStateOf(false) }
     var photoBeingEdited by remember { mutableStateOf<Bitmap?>(null) }
@@ -182,6 +184,7 @@ fun SettingsScreen(
         SettingsMenuItem(
             label = "Notifications & alerts",
             icon = Icons.Default.Notifications,
+            badgeCount = unreadNotificationsCount,
             onClick = onOpenNotifications
         )
 
@@ -941,6 +944,7 @@ private fun Color.toHexString(): String =
 fun SettingsMenuItem(
     label: String,
     icon: ImageVector,
+    badgeCount: Int = 0,
     onClick: () -> Unit
 ) {
     SurfaceCard(
@@ -985,12 +989,31 @@ fun SettingsMenuItem(
                 )
             }
 
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = TextMuted,
-                modifier = Modifier.size(20.dp)
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (badgeCount > 0) {
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(EmeraldBright)
+                            .padding(horizontal = 7.dp, vertical = 2.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (badgeCount > 99) "99+" else badgeCount.toString(),
+                            color = TextOnPrimary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = TextMuted,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }
