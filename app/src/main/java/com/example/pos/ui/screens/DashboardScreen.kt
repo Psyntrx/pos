@@ -81,7 +81,8 @@ fun DashboardScreen(
     onOpenCreditSales: () -> Unit,
     onOpenExpenses: () -> Unit,
     onOpenNotifications: () -> Unit,
-    hasUnreadNotifications: Boolean
+    hasUnreadNotifications: Boolean = false,
+    unreadNotificationsCount: Int = if (hasUnreadNotifications) 1 else 0
 ) {
     val shop by viewModel.shop.collectAsState()
     val products by viewModel.products.collectAsState()
@@ -152,7 +153,8 @@ fun DashboardScreen(
             profilePhotoUri = profilePhotoUri,
             onNotificationClick = onOpenNotifications,
             onProfileClick = { onNavigateToTab(4) },
-            hasUnreadNotifications = hasUnreadNotifications
+            hasUnreadNotifications = hasUnreadNotifications,
+            unreadCount = unreadNotificationsCount
         )
 
         Column(
