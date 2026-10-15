@@ -107,11 +107,22 @@ class SupabaseService(
     // ==========================================
     // AUTHENTICATION
     // ==========================================
-    suspend fun signUp(email: String, pass: String): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun signUp(
+        email: String,
+        pass: String,
+        userData: Map<String, Any?> = emptyMap()
+    ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val json = JSONObject().apply {
                 put("email", email)
                 put("password", pass)
+                if (userData.isNotEmpty()) {
+                    val dataObj = JSONObject()
+                    userData.forEach { (k, v) ->
+                        if (v != null) dataObj.put(k, v)
+                    }
+                    put("data", dataObj)
+                }
             }
             val request = buildRequest(
                 path = "/auth/v1/signup",
@@ -233,37 +244,60 @@ class SupabaseService(
     // ==========================================
     // SHOP
     // ==========================================
-    suspend fun getShop(): Result<Shop?> = withContext(Dispatchers.IO) {
+    suspend fun getShop(email: String? = null): Result<Shop?> = withContext(Dispatchers.IO) {
         try {
-            val req = buildRequest("/rest/v1/shops?select=*&limit=1")
+            val queryPath = if (!email.isNullOrBlank()) {
+                "/rest/v1/shops?email=eq.$email&select=*&limit=1"
+            } else {
+                "/rest/v1/shops?select=*&order=created_at.desc&limit=1"
+            }
+            val req = buildRequest(queryPath)
             client.newCall(req).execute().use { resp ->
                 val str = resp.body?.string().orEmpty()
                 if (!resp.isSuccessful) return@withContext Result.failure(Exception("Failed to fetch shop: ${resp.code}"))
                 val arr = JSONArray(str)
-                if (arr.length() == 0) return@withContext Result.success(null)
+                if (arr.length() == 0) {
+                    if (!email.isNullOrBlank()) {
+                        // Fallback: Check if any shop exists
+                        val fallbackReq = buildRequest("/rest/v1/shops?select=*&order=created_at.desc&limit=1")
+                        client.newCall(fallbackReq).execute().use { fbResp ->
+                            val fbStr = fbResp.body?.string().orEmpty()
+                            if (fbResp.isSuccessful) {
+                                val fbArr = JSONArray(fbStr)
+                                if (fbArr.length() > 0) {
+                                    val obj = fbArr.getJSONObject(0)
+                                    return@withContext Result.success(parseShopJson(obj))
+                                }
+                            }
+                        }
+                    }
+                    return@withContext Result.success(null)
+                }
                 val obj = arr.getJSONObject(0)
-                Result.success(
-                    Shop(
-                        id = obj.optString("id", "shop_1"),
-                        name = obj.optString("name", "Faith's Store"),
-                        ownerName = obj.optString("owner_name", "Faith"),
-                        email = obj.optString("email", ""),
-                        phone = obj.optString("phone", ""),
-                        category = obj.optString("category", ""),
-                        address = obj.optString("address", ""),
-                        currency = obj.optString("currency", "KSh")
-                    )
-                )
+                Result.success(parseShopJson(obj))
             }
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
+    private fun parseShopJson(obj: JSONObject): Shop {
+        return Shop(
+            id = obj.optString("id", "shop_1"),
+            name = obj.optString("name", ""),
+            ownerName = obj.optString("owner_name", ""),
+            email = obj.optString("email", ""),
+            phone = obj.optString("phone", ""),
+            category = obj.optString("category", ""),
+            address = obj.optString("address", ""),
+            currency = obj.optString("currency", "KSh")
+        )
+    }
+
     suspend fun saveShop(shop: Shop): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val json = JSONObject().apply {
-                put("id", shop.id)
+                if (shop.id.isNotBlank()) put("id", shop.id)
                 put("name", shop.name)
                 put("owner_name", shop.ownerName)
                 put("email", shop.email)
@@ -279,8 +313,22 @@ class SupabaseService(
                 extraHeaders = mapOf("Prefer" to "resolution=merge-duplicates")
             )
             client.newCall(req).execute().use { resp ->
-                if (resp.isSuccessful) Result.success(Unit)
-                else Result.failure(Exception("Failed to update shop (${resp.code})"))
+                if (resp.isSuccessful) return@withContext Result.success(Unit)
+            }
+            // If POST fails (e.g. unique constraint on email or existing ID), attempt PATCH
+            val patchPath = if (shop.email.isNotBlank()) {
+                "/rest/v1/shops?email=eq.${shop.email}"
+            } else {
+                "/rest/v1/shops?id=eq.${shop.id}"
+            }
+            val patchReq = buildRequest(
+                path = patchPath,
+                method = "PATCH",
+                bodyString = json.toString()
+            )
+            client.newCall(patchReq).execute().use { patchResp ->
+                if (patchResp.isSuccessful) Result.success(Unit)
+                else Result.failure(Exception("Failed to update shop (${patchResp.code})"))
             }
         } catch (e: Exception) {
             Result.failure(e)

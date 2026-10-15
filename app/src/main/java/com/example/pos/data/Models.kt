@@ -5,12 +5,12 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class Shop(
     val id: String = "shop_1",
-    val name: String = "Faith's Store",
-    val ownerName: String = "Faith",
-    val email: String = "faith@store.com",
-    val phone: String = "+254 712 345 678",
-    val category: String = "Retail & Grocery",
-    val address: String = "Plot 42, Biashara Street, Nairobi",
+    val name: String = "",
+    val ownerName: String = "",
+    val email: String = "",
+    val phone: String = "",
+    val category: String = "",
+    val address: String = "",
     val currency: String = "KSh"
 )
 

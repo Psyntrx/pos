@@ -19,12 +19,12 @@ import kotlinx.coroutines.launch
  */
 data class RegisterUiState(
     // Step 1 Fields
-    val shopName: String = "Faith's Store",
-    val ownerName: String = "Faith",
-    val phone: String = "+254 712 345 678",
-    val email: String = "faith@store.com",
-    val category: String = "Groceries & Retail",
-    val address: String = "Plot 42, Biashara Street, Nairobi",
+    val shopName: String = "",
+    val ownerName: String = "",
+    val phone: String = "",
+    val email: String = "",
+    val category: String = "",
+    val address: String = "",
 
     // Step 2 Fields
     val password: String = "",
@@ -62,8 +62,8 @@ data class RegisterUiState(
 }
 
 data class LoginUiState(
-    val email: String = "faith@store.com",
-    val password: String = "password123",
+    val email: String = "",
+    val password: String = "",
     val passwordVisible: Boolean = false,
     val rememberMe: Boolean = true,
     val isLoading: Boolean = false,
@@ -185,11 +185,22 @@ class AuthViewModel(
             category = state.category.trim()
         )
 
+        val metadata = mapOf(
+            "shop_name" to createdShop.name,
+            "owner_name" to createdShop.ownerName,
+            "phone" to createdShop.phone,
+            "address" to createdShop.address,
+            "category" to createdShop.category,
+            "business_reg_no" to state.businessRegNo.trim()
+        )
+
         _registerState.update { it.copy(isLoading = true, errorMessage = null) }
         viewModelScope.launch {
-            val result = supabase.signUp(state.email.trim(), state.password)
+            val result = supabase.signUp(state.email.trim(), state.password, metadata)
             result.fold(
                 onSuccess = {
+                    // Ensure the shop is persisted in Supabase shops table
+                    supabase.saveShop(createdShop)
                     _registerState.update {
                         it.copy(isLoading = false, isRegisteredSuccessfully = true)
                     }

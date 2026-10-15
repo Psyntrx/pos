@@ -297,8 +297,9 @@ class PosViewModel(
                 }
             }
             // 5. Fetch shop info if any
-            supabase.getShop().onSuccess { remoteShop ->
-                if (remoteShop != null) {
+            val userEmail = storageManager.loadRememberedEmail() ?: _shop.value.email
+            supabase.getShop(userEmail).onSuccess { remoteShop ->
+                if (remoteShop != null && remoteShop.name.isNotBlank()) {
                     _shop.value = remoteShop
                     storageManager.saveShop(remoteShop)
                 }
@@ -350,12 +351,13 @@ class PosViewModel(
 
     fun registerShop(shopName: String, ownerName: String, email: String, phone: String, address: String, category: String) {
         val newShop = Shop(
-            name = shopName.ifBlank { "Faith's Store" },
-            ownerName = ownerName.ifBlank { "Faith" },
-            email = email.ifBlank { "faith@store.com" },
-            phone = phone.ifBlank { "+254 712 345 678" },
-            address = address.ifBlank { "Nairobi, Kenya" },
-            category = category.ifBlank { "Retail & Grocery" }
+            id = "shop_${System.currentTimeMillis()}",
+            name = shopName.trim().ifBlank { "My Shop" },
+            ownerName = ownerName.trim().ifBlank { "Owner" },
+            email = email.trim(),
+            phone = phone.trim(),
+            address = address.trim(),
+            category = category.trim().ifBlank { "Retail & Grocery" }
         )
         _shop.value = newShop
         storageManager.saveShop(newShop)
