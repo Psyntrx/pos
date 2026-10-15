@@ -5,11 +5,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pos.data.AuthSession
 import com.example.pos.data.CartItem
+import com.example.pos.data.AppNotification
 import com.example.pos.data.CustomerCredit
+import com.example.pos.data.InventoryAlertKind
+import com.example.pos.data.LowStockNotificationManager
 import com.example.pos.data.Employee
 import com.example.pos.data.Expense
 import com.example.pos.data.PosStorageManager
 import com.example.pos.data.Product
+import com.example.pos.data.ProductImageStorage
 import com.example.pos.data.Sale
 import com.example.pos.data.Shop
 import com.example.pos.data.StockInRecord
@@ -18,6 +22,7 @@ import com.example.pos.data.SupabaseService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -58,6 +63,10 @@ class PosViewModel(
     )
     private val _products = MutableStateFlow(storageManager.loadProducts(defaultProducts))
     val products: StateFlow<List<Product>> = _products.asStateFlow()
+    private val _notifications = MutableStateFlow(storageManager.loadNotifications())
+    val notifications: StateFlow<List<AppNotification>> = _notifications.asStateFlow()
+    private val _systemNotificationsEnabled = MutableStateFlow(storageManager.areSystemNotificationsEnabled())
+    val systemNotificationsEnabled: StateFlow<Boolean> = _systemNotificationsEnabled.asStateFlow()
 
     private val _selectedCategory = MutableStateFlow("All")
     val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
@@ -159,9 +168,73 @@ class PosViewModel(
         supabase.onSessionRefreshedListener = { refreshedSession ->
             storageManager.saveAuthSession(refreshedSession)
         }
+        observeInventoryThresholds()
 
         // Asynchronously pull live data from Supabase
         syncWithSupabase()
+    }
+
+    private fun observeInventoryThresholds() {
+        viewModelScope.launch {
+            var previous = _products.value.associateBy { it.id }
+            _products.collect { productsNow ->
+                val current = productsNow.associateBy { it.id }
+                val outOfStock = current.values.filter { product ->
+                    product.stockQuantity <= 0 && (previous[product.id]?.stockQuantity ?: 1) > 0
+                }
+                val lowStock = current.values.filter { product ->
+                    val old = previous[product.id]
+                    product.stockQuantity > 0 && product.stockQuantity <= product.minStock &&
+                        (old == null || old.stockQuantity > old.minStock ||
+                            (old.minStock != product.minStock && old.stockQuantity > product.minStock))
+                }
+
+                createInventoryNotification(InventoryAlertKind.OUT_OF_STOCK, outOfStock)
+                createInventoryNotification(InventoryAlertKind.LOW_STOCK, lowStock)
+                previous = current
+            }
+        }
+    }
+
+    private fun createInventoryNotification(kind: InventoryAlertKind, products: List<Product>) {
+        if (products.isEmpty()) return
+        val isOut = kind == InventoryAlertKind.OUT_OF_STOCK
+        val title = when {
+            isOut && products.size == 1 -> "${products.first().name} is out of stock"
+            isOut -> "${products.size} products are out of stock"
+            products.size == 1 -> "${products.first().name} is low on stock"
+            else -> "${products.size} products are low on stock"
+        }
+        val names = products.take(4).joinToString(", ") { it.name } +
+            if (products.size > 4) " and ${products.size - 4} more" else ""
+        val message = if (isOut) "$names. Restock these items." else "$names. Check your inventory and restock soon."
+        val notification = AppNotification(
+            id = "${kind.storageValue}_${System.currentTimeMillis()}",
+            kind = kind,
+            title = title,
+            message = message,
+            productIds = products.map { it.id }
+        )
+        _notifications.update { (listOf(notification) + it).take(100) }
+        storageManager.saveNotifications(_notifications.value)
+        if (_systemNotificationsEnabled.value) {
+            LowStockNotificationManager.show(getApplication(), notification)
+        }
+    }
+
+    fun setSystemNotificationsEnabled(enabled: Boolean) {
+        _systemNotificationsEnabled.value = enabled
+        storageManager.setSystemNotificationsEnabled(enabled)
+    }
+
+    fun markAllNotificationsRead() {
+        _notifications.update { items -> items.map { it.copy(isRead = true) } }
+        storageManager.saveNotifications(_notifications.value)
+    }
+
+    fun clearNotifications() {
+        _notifications.value = emptyList()
+        storageManager.saveNotifications(emptyList())
     }
 
     // Guard against race conditions when local product updates are in flight
@@ -187,12 +260,16 @@ class PosViewModel(
                 if (remoteProducts.isNotEmpty()) {
                     _products.update { currentList ->
                         val currentMap = currentList.associateBy { it.id }
-                        remoteProducts.map { remote ->
+                        val remoteIds = remoteProducts.mapTo(mutableSetOf()) { it.id }
+                        val refreshed = remoteProducts.map { remote ->
                             if (pendingProductUpdates.contains(remote.id)) {
                                 currentMap[remote.id] ?: remote
                             } else {
-                                remote
+                                remote.copy(imageUri = currentMap[remote.id]?.imageUri)
                             }
+                        }
+                        refreshed + currentList.filter {
+                            pendingProductUpdates.contains(it.id) && it.id !in remoteIds
                         }
                     }
                     storageManager.saveProducts(_products.value)
@@ -434,7 +511,8 @@ class PosViewModel(
     // Add Product
     fun addProduct(
         name: String, category: String, sku: String, unit: String,
-        buyingPrice: Double, sellingPrice: Double, quantity: Int, minStock: Int, supplier: String
+        buyingPrice: Double, sellingPrice: Double, quantity: Int, minStock: Int, supplier: String,
+        imageUri: String? = null
     ): Boolean {
         val normalizedName = name.trim()
         val normalizedCategory = category.trim()
@@ -457,16 +535,27 @@ class PosViewModel(
             stockQuantity = quantity,
             minStock = minStock,
             supplier = supplier.trim(),
-            iconType = normalizedCategory.lowercase()
+            iconType = normalizedCategory.lowercase(),
+            imageUri = imageUri
         )
         _products.update { listOf(newProduct) + it }
+        storageManager.saveProducts(_products.value)
+        pendingProductUpdates.add(newProduct.id)
+        viewModelScope.launch {
+            try {
+                supabase.upsertProduct(newProduct)
+            } finally {
+                pendingProductUpdates.remove(newProduct.id)
+            }
+        }
         return true
     }
 
     fun updateProduct(
         productId: String,
         name: String, category: String, sku: String, unit: String,
-        buyingPrice: Double, sellingPrice: Double, quantity: Int, minStock: Int, supplier: String
+        buyingPrice: Double, sellingPrice: Double, quantity: Int, minStock: Int, supplier: String,
+        imageUri: String? = currentProductImageUri(productId)
     ): Boolean {
         val currentProduct = _products.value.find { it.id == productId } ?: return false
         val normalizedName = name.trim()
@@ -489,14 +578,18 @@ class PosViewModel(
             stockQuantity = quantity,
             minStock = minStock,
             supplier = supplier.trim(),
-            iconType = normalizedCategory.lowercase()
+            iconType = normalizedCategory.lowercase(),
+            imageUri = imageUri
         )
         _products.update { products -> products.map { if (it.id == productId) updatedProduct else it } }
         storageManager.saveProducts(_products.value)
+        if (currentProduct.imageUri != updatedProduct.imageUri) {
+            ProductImageStorage.deleteIfOwned(getApplication(), currentProduct.imageUri)
+        }
 
         // Asynchronously update product in Supabase while safeguarding local state
+        pendingProductUpdates.add(productId)
         viewModelScope.launch {
-            pendingProductUpdates.add(productId)
             try {
                 supabase.upsertProduct(updatedProduct)
             } finally {
@@ -505,6 +598,9 @@ class PosViewModel(
         }
         return true
     }
+
+    private fun currentProductImageUri(productId: String): String? =
+        _products.value.firstOrNull { it.id == productId }?.imageUri
 
     // Stock In / Restocking
     fun recordStockIn(

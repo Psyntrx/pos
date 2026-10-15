@@ -19,6 +19,8 @@ class PosStorageManager(context: Context? = null) {
         private const val KEY_AUTH_SESSION = "key_auth_session"
         private const val KEY_REMEMBERED_EMAIL = "key_remembered_email"
         private const val KEY_REMEMBER_ME = "key_remember_me"
+        private const val KEY_NOTIFICATIONS = "key_notifications"
+        private const val KEY_SYSTEM_NOTIFICATIONS_ENABLED = "key_system_notifications_enabled"
     }
 
     fun saveProducts(products: List<Product>) {
@@ -40,6 +42,46 @@ class PosStorageManager(context: Context? = null) {
         } catch (e: Exception) {
             defaultProducts
         }
+    }
+
+    fun saveNotifications(notifications: List<AppNotification>) {
+        val json = JSONArray()
+        notifications.forEach { notification ->
+            json.put(JSONObject().apply {
+                put("id", notification.id)
+                put("kind", notification.kind.storageValue)
+                put("title", notification.title)
+                put("message", notification.message)
+                put("productIds", JSONArray(notification.productIds))
+                put("createdAt", notification.createdAt)
+                put("isRead", notification.isRead)
+            })
+        }
+        prefs.edit().putString(KEY_NOTIFICATIONS, json.toString()).apply()
+    }
+
+    fun loadNotifications(): List<AppNotification> = runCatching {
+        val json = JSONArray(prefs.getString(KEY_NOTIFICATIONS, "[]"))
+        (0 until json.length()).map { index ->
+            val item = json.getJSONObject(index)
+            val ids = item.optJSONArray("productIds") ?: JSONArray()
+            AppNotification(
+                id = item.getString("id"),
+                kind = InventoryAlertKind.fromStorage(item.optString("kind")),
+                title = item.optString("title"),
+                message = item.optString("message"),
+                productIds = (0 until ids.length()).map { ids.getString(it) },
+                createdAt = item.optLong("createdAt", System.currentTimeMillis()),
+                isRead = item.optBoolean("isRead", false)
+            )
+        }
+    }.getOrDefault(emptyList())
+
+    fun areSystemNotificationsEnabled(): Boolean =
+        prefs.getBoolean(KEY_SYSTEM_NOTIFICATIONS_ENABLED, false)
+
+    fun setSystemNotificationsEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_SYSTEM_NOTIFICATIONS_ENABLED, enabled).apply()
     }
 
     fun saveSales(sales: List<Sale>) {
@@ -251,6 +293,7 @@ fun Product.toJson(): JSONObject {
         put("minStock", minStock)
         put("supplier", supplier)
         put("iconType", iconType)
+        put("imageUri", imageUri)
     }
 }
 
@@ -266,7 +309,8 @@ fun JSONObject.toProduct(): Product {
         stockQuantity = getInt("stockQuantity"),
         minStock = optInt("minStock", 10),
         supplier = optString("supplier", ""),
-        iconType = optString("iconType", "box")
+        iconType = optString("iconType", "box"),
+        imageUri = optString("imageUri", "").takeIf { it.isNotBlank() && it != "null" }
     )
 }
 

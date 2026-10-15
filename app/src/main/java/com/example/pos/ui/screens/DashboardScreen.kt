@@ -79,7 +79,9 @@ fun DashboardScreen(
     onNavigateToTab: (Int) -> Unit,
     onOpenStockIn: (String?) -> Unit,
     onOpenCreditSales: () -> Unit,
-    onOpenExpenses: () -> Unit
+    onOpenExpenses: () -> Unit,
+    onOpenNotifications: () -> Unit,
+    hasUnreadNotifications: Boolean
 ) {
     val shop by viewModel.shop.collectAsState()
     val products by viewModel.products.collectAsState()
@@ -148,8 +150,9 @@ fun DashboardScreen(
             shopName = shop.name,
             ownerName = shop.ownerName,
             profilePhotoUri = profilePhotoUri,
-            onNotificationClick = { },
-            onProfileClick = { onNavigateToTab(4) }
+            onNotificationClick = onOpenNotifications,
+            onProfileClick = { onNavigateToTab(4) },
+            hasUnreadNotifications = hasUnreadNotifications
         )
 
         Column(

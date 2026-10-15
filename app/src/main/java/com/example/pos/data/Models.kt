@@ -22,10 +22,31 @@ data class Product(
     val stockQuantity: Int,
     val minStock: Int = 10,
     val supplier: String = "",
-    val iconType: String = "box"
+    val iconType: String = "box",
+    val imageUri: String? = null
 ) {
     val isLowStock: Boolean get() = stockQuantity <= minStock
 }
+
+enum class InventoryAlertKind(val storageValue: String, val label: String) {
+    LOW_STOCK("low_stock", "Low stock"),
+    OUT_OF_STOCK("out_of_stock", "Out of stock");
+
+    companion object {
+        fun fromStorage(value: String?): InventoryAlertKind =
+            entries.firstOrNull { it.storageValue == value } ?: LOW_STOCK
+    }
+}
+
+data class AppNotification(
+    val id: String,
+    val kind: InventoryAlertKind,
+    val title: String,
+    val message: String,
+    val productIds: List<String>,
+    val createdAt: Long = System.currentTimeMillis(),
+    val isRead: Boolean = false
+)
 
 data class CartItem(
     val product: Product,
