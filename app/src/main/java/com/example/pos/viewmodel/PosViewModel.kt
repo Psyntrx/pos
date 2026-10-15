@@ -177,6 +177,14 @@ class PosViewModel(
     private fun observeInventoryThresholds() {
         viewModelScope.launch {
             var previous = _products.value.associateBy { it.id }
+            // If there are no saved notifications yet, populate initial alerts for any current low or out of stock products
+            if (_notifications.value.isEmpty()) {
+                val current = _products.value
+                val initialOut = current.filter { it.stockQuantity <= 0 }
+                val initialLow = current.filter { it.stockQuantity > 0 && it.stockQuantity <= it.minStock }
+                createInventoryNotification(InventoryAlertKind.OUT_OF_STOCK, initialOut)
+                createInventoryNotification(InventoryAlertKind.LOW_STOCK, initialLow)
+            }
             _products.collect { productsNow ->
                 val current = productsNow.associateBy { it.id }
                 val outOfStock = current.values.filter { product ->
@@ -230,6 +238,33 @@ class PosViewModel(
     fun markAllNotificationsRead() {
         _notifications.update { items -> items.map { it.copy(isRead = true) } }
         storageManager.saveNotifications(_notifications.value)
+    }
+
+    fun markNotificationAsRead(notificationId: String) {
+        _notifications.update { items ->
+            items.map { if (it.id == notificationId) it.copy(isRead = true) else it }
+        }
+        storageManager.saveNotifications(_notifications.value)
+    }
+
+    fun deleteNotification(notificationId: String) {
+        _notifications.update { items -> items.filterNot { it.id == notificationId } }
+        storageManager.saveNotifications(_notifications.value)
+    }
+
+    fun triggerTestNotification() {
+        val lowStockProducts = _products.value.filter { it.isLowStock }
+        val sampleProducts = if (lowStockProducts.isNotEmpty()) {
+            lowStockProducts
+        } else {
+            _products.value.take(2)
+        }
+        val kind = if (sampleProducts.any { it.stockQuantity <= 0 }) {
+            InventoryAlertKind.OUT_OF_STOCK
+        } else {
+            InventoryAlertKind.LOW_STOCK
+        }
+        createInventoryNotification(kind, sampleProducts)
     }
 
     fun clearNotifications() {
