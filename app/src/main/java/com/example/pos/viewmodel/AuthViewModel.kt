@@ -176,7 +176,12 @@ class AuthViewModel(
             return
         }
 
+        val initialUserId = supabase.getUserId() ?: ""
+        val targetShopId = initialUserId.takeIf { it.isNotBlank() }
+            ?: "shop_${state.email.substringBefore('@').ifBlank { "main" }}"
+
         val createdShop = Shop(
+            id = targetShopId,
             name = state.shopName.trim(),
             ownerName = state.ownerName.trim(),
             email = state.email.trim(),
@@ -198,13 +203,21 @@ class AuthViewModel(
         viewModelScope.launch {
             val result = supabase.signUp(state.email.trim(), state.password, metadata)
             result.fold(
-                onSuccess = {
+                onSuccess = { responseBody ->
+                    val resolvedUserId = supabase.getUserId()
+                        ?.takeIf { it.isNotBlank() }
+                        ?: supabase.extractUserId(responseBody).takeIf { it.isNotBlank() }
+                    val finalShop = if (!resolvedUserId.isNullOrBlank()) {
+                        createdShop.copy(id = resolvedUserId)
+                    } else {
+                        createdShop
+                    }
                     // Ensure the shop is persisted in Supabase shops table
-                    supabase.saveShop(createdShop)
+                    supabase.saveShop(finalShop)
                     _registerState.update {
                         it.copy(isLoading = false, isRegisteredSuccessfully = true)
                     }
-                    onSuccess(createdShop)
+                    onSuccess(finalShop)
                 },
                 onFailure = { error ->
                     _registerState.update {

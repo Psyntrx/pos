@@ -23,12 +23,18 @@ class SupabaseService(
     @Volatile
     private var tokenExpiresAt: Long = 0L
 
+    @Volatile
+    private var currentUserId: String? = null
+
     var onSessionRefreshedListener: ((AuthSession) -> Unit)? = null
 
-    fun setTokens(access: String?, refresh: String? = null, expiresAt: Long = 0L) {
+    fun setTokens(access: String?, refresh: String? = null, expiresAt: Long = 0L, userId: String? = null) {
         this.accessToken = access
         this.refreshToken = refresh
         this.tokenExpiresAt = expiresAt
+        if (!userId.isNullOrBlank()) {
+            this.currentUserId = userId
+        }
     }
 
     fun setAccessToken(token: String?) {
@@ -40,6 +46,20 @@ class SupabaseService(
     fun getRefreshToken(): String? = refreshToken
 
     fun getTokenExpiresAt(): Long = tokenExpiresAt
+
+    fun getUserId(): String? = currentUserId
+
+    fun extractUserId(responseBody: String): String {
+        return try {
+            val obj = JSONObject(responseBody)
+            val userObj = obj.optJSONObject("user")
+            userObj?.optString("id")?.takeIf { it.isNotBlank() }
+                ?: obj.optString("id").takeIf { it.isNotBlank() }
+                ?: ""
+        } catch (e: Exception) {
+            ""
+        }
+    }
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -82,12 +102,15 @@ class SupabaseService(
         return try {
             val obj = JSONObject(responseBody)
             val token = obj.optString("access_token")
-            if (token.isBlank()) return null
             val refresh = obj.optString("refresh_token")
             val expiresIn = obj.optLong("expires_in", 3600L)
             val userObj = obj.optJSONObject("user")
-            val email = userObj?.optString("email").orEmpty()
-            val userId = userObj?.optString("id").orEmpty()
+            val email = userObj?.optString("email") ?: obj.optString("email", "")
+            val userId = userObj?.optString("id") ?: obj.optString("id", "")
+            if (userId.isNotBlank()) {
+                currentUserId = userId
+            }
+            if (token.isBlank()) return null
             val expiresAt = System.currentTimeMillis() + (expiresIn * 1000L)
 
             AuthSession(
@@ -132,9 +155,13 @@ class SupabaseService(
             client.newCall(request).execute().use { response ->
                 val body = response.body?.string().orEmpty()
                 if (response.isSuccessful) {
+                    val uid = extractUserId(body)
+                    if (uid.isNotBlank()) {
+                        currentUserId = uid
+                    }
                     val session = parseAuthSession(body, true)
                     if (session != null) {
-                        setTokens(session.accessToken, session.refreshToken, session.tokenExpiresAt)
+                        setTokens(session.accessToken, session.refreshToken, session.tokenExpiresAt, session.userId)
                     } else {
                         accessToken = JSONObject(body).optString("access_token").takeIf { it.isNotBlank() }
                     }
@@ -165,7 +192,7 @@ class SupabaseService(
                 if (response.isSuccessful) {
                     val session = parseAuthSession(body, true)
                     if (session != null) {
-                        setTokens(session.accessToken, session.refreshToken, session.tokenExpiresAt)
+                        setTokens(session.accessToken, session.refreshToken, session.tokenExpiresAt, session.userId)
                     } else {
                         accessToken = JSONObject(body).optString("access_token").takeIf { it.isNotBlank() }
                     }
@@ -283,7 +310,7 @@ class SupabaseService(
 
     private fun parseShopJson(obj: JSONObject): Shop {
         return Shop(
-            id = obj.optString("id", "shop_1"),
+            id = obj.optString("id", ""),
             name = obj.optString("name", ""),
             ownerName = obj.optString("owner_name", ""),
             email = obj.optString("email", ""),
@@ -296,8 +323,15 @@ class SupabaseService(
 
     suspend fun saveShop(shop: Shop): Result<Unit> = withContext(Dispatchers.IO) {
         try {
+            // First check if a shop with this email already exists
+            val existing = if (shop.email.isNotBlank()) getShop(shop.email).getOrNull() else null
+            val targetId = existing?.id?.takeIf { it.isNotBlank() && it != "shop_1" }
+                ?: shop.id.takeIf { it.isNotBlank() && it != "shop_1" }
+                ?: currentUserId?.takeIf { it.isNotBlank() }
+                ?: "shop_${shop.email.substringBefore('@').ifBlank { "main" }}"
+
             val json = JSONObject().apply {
-                if (shop.id.isNotBlank()) put("id", shop.id)
+                put("id", targetId)
                 put("name", shop.name)
                 put("owner_name", shop.ownerName)
                 put("email", shop.email)
@@ -306,6 +340,19 @@ class SupabaseService(
                 put("address", shop.address)
                 put("currency", shop.currency)
             }
+
+            if (existing != null) {
+                // Update the existing row so no duplicate row is ever inserted
+                val patchReq = buildRequest(
+                    path = "/rest/v1/shops?id=eq.${existing.id}",
+                    method = "PATCH",
+                    bodyString = json.toString()
+                )
+                client.newCall(patchReq).execute().use { patchResp ->
+                    if (patchResp.isSuccessful) return@withContext Result.success(Unit)
+                }
+            }
+
             val req = buildRequest(
                 path = "/rest/v1/shops",
                 method = "POST",
@@ -315,11 +362,11 @@ class SupabaseService(
             client.newCall(req).execute().use { resp ->
                 if (resp.isSuccessful) return@withContext Result.success(Unit)
             }
-            // If POST fails (e.g. unique constraint on email or existing ID), attempt PATCH
+
             val patchPath = if (shop.email.isNotBlank()) {
                 "/rest/v1/shops?email=eq.${shop.email}"
             } else {
-                "/rest/v1/shops?id=eq.${shop.id}"
+                "/rest/v1/shops?id=eq.$targetId"
             }
             val patchReq = buildRequest(
                 path = patchPath,

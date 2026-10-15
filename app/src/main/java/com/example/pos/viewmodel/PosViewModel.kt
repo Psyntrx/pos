@@ -350,8 +350,13 @@ class PosViewModel(
     }
 
     fun registerShop(shopName: String, ownerName: String, email: String, phone: String, address: String, category: String) {
+        val existingShopId = _shop.value.id.takeIf { it.isNotBlank() && it != "shop_1" }
+        val targetShopId = supabase.getUserId()
+            ?: existingShopId
+            ?: "shop_${email.substringBefore('@').ifBlank { "main" }}"
+
         val newShop = Shop(
-            id = "shop_${System.currentTimeMillis()}",
+            id = targetShopId,
             name = shopName.trim().ifBlank { "My Shop" },
             ownerName = ownerName.trim().ifBlank { "Owner" },
             email = email.trim(),

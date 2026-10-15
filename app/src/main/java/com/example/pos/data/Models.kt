@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class Shop(
-    val id: String = "shop_1",
+    val id: String = "",
     val name: String = "",
     val ownerName: String = "",
     val email: String = "",

@@ -482,7 +482,7 @@ fun Shop.toJson(): JSONObject {
 
 fun JSONObject.toShop(): Shop {
     return Shop(
-        id = optString("id", "shop_1"),
+        id = optString("id", ""),
         name = optString("name", ""),
         ownerName = optString("ownerName", ""),
         email = optString("email", ""),
