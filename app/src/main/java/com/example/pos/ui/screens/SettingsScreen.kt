@@ -6,9 +6,12 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -34,10 +37,15 @@ import androidx.compose.material.icons.filled.Store
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -64,7 +72,11 @@ import kotlin.math.roundToInt
 fun SettingsScreen(
     viewModel: PosViewModel,
     themeMode: ThemeMode,
+    colorTheme: AppColorTheme,
+    customAccentColor: Color,
     onThemeModeChange: (ThemeMode) -> Unit,
+    onColorThemeChange: (AppColorTheme) -> Unit,
+    onCustomAccentColorChange: (Color) -> Unit,
     profilePhotoUri: String?,
     onProfilePhotoChange: (String?) -> Unit,
     onOpenEmployees: () -> Unit,
@@ -136,7 +148,11 @@ fun SettingsScreen(
 
         AppearanceSettingsCard(
             selectedMode = themeMode,
-            onModeSelected = onThemeModeChange
+            onModeSelected = onThemeModeChange,
+            selectedColorTheme = colorTheme,
+            customAccentColor = customAccentColor,
+            onColorThemeSelected = onColorThemeChange,
+            onCustomAccentColorSelected = onCustomAccentColorChange
         )
 
         Spacer(modifier = Modifier.height(22.dp))
@@ -582,8 +598,13 @@ private fun ShopInfoField(label: String, value: String, onValueChange: (String) 
 @Composable
 private fun AppearanceSettingsCard(
     selectedMode: ThemeMode,
-    onModeSelected: (ThemeMode) -> Unit
+    onModeSelected: (ThemeMode) -> Unit,
+    selectedColorTheme: AppColorTheme,
+    customAccentColor: Color,
+    onColorThemeSelected: (AppColorTheme) -> Unit,
+    onCustomAccentColorSelected: (Color) -> Unit
 ) {
+    var showCustomColorPicker by remember { mutableStateOf(false) }
     SurfaceCard(
         modifier = Modifier.fillMaxWidth(),
         backgroundColor = SurfaceDark,
@@ -657,9 +678,264 @@ private fun AppearanceSettingsCard(
                 color = TextMuted,
                 fontSize = 11.sp
             )
+
+            Spacer(Modifier.height(18.dp))
+            Text("Color theme", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text("Choose an accent color for the app.", color = TextMuted, fontSize = 11.sp)
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                AppColorTheme.entries.filter { it != AppColorTheme.CUSTOM }.forEach { colorTheme ->
+                    val isSelected = colorTheme == selectedColorTheme
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .selectable(
+                                selected = isSelected,
+                                role = Role.RadioButton,
+                                onClick = { onColorThemeSelected(colorTheme) }
+                            )
+                            .padding(vertical = 8.dp, horizontal = 2.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(27.dp)
+                                .clip(CircleShape)
+                                .background(colorTheme.colors.swatch)
+                                .then(
+                                    if (isSelected) Modifier.border(2.dp, EmeraldBright, CircleShape)
+                                    else Modifier
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isSelected) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(7.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.White)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(5.dp))
+                        Text(
+                            text = colorTheme.label,
+                            color = if (isSelected) EmeraldPrimary else TextSecondary,
+                            fontSize = 10.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+            SurfaceCard(
+                modifier = Modifier.fillMaxWidth(),
+                backgroundColor = SurfaceDarkVariant,
+                borderColor = if (selectedColorTheme == AppColorTheme.CUSTOM) EmeraldBright else SurfaceBorder,
+                cornerRadius = 14.dp,
+                onClick = { showCustomColorPicker = true }
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clip(CircleShape)
+                            .background(customAccentColor)
+                            .then(
+                                if (selectedColorTheme == AppColorTheme.CUSTOM) {
+                                    Modifier.border(2.dp, EmeraldBright, CircleShape)
+                                } else Modifier
+                            )
+                    )
+                    Spacer(Modifier.width(11.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Choose any color", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            text = if (selectedColorTheme == AppColorTheme.CUSTOM) {
+                                "Custom accent selected · ${customAccentColor.toHexString()}"
+                            } else {
+                                "Create a custom accent color"
+                            },
+                            color = TextMuted,
+                            fontSize = 10.sp
+                        )
+                    }
+                    Text("›", color = EmeraldBright, fontSize = 22.sp, fontWeight = FontWeight.Medium)
+                }
+            }
         }
     }
+
+    if (showCustomColorPicker) {
+        CustomAccentColorDialog(
+            initialColor = customAccentColor,
+            onDismiss = { showCustomColorPicker = false },
+            onApply = { selectedColor ->
+                onCustomAccentColorSelected(selectedColor)
+                showCustomColorPicker = false
+            }
+        )
+    }
 }
+
+@Composable
+private fun CustomAccentColorDialog(
+    initialColor: Color,
+    onDismiss: () -> Unit,
+    onApply: (Color) -> Unit
+) {
+    val initialHsv = remember(initialColor) {
+        FloatArray(3).also { android.graphics.Color.colorToHSV(initialColor.toArgb(), it) }
+    }
+    var hue by remember(initialColor) { mutableStateOf(initialHsv[0]) }
+    var saturation by remember(initialColor) { mutableStateOf(initialHsv[1]) }
+    var brightness by remember(initialColor) { mutableStateOf(initialHsv[2]) }
+    val selectedColor = Color.hsv(hue, saturation, brightness)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Choose any color", color = TextPrimary, fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(selectedColor)
+                            .border(2.dp, SurfaceBorder, CircleShape)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text("#${selectedColor.toHexString()}", color = TextSecondary, fontSize = 13.sp)
+                }
+                Spacer(Modifier.height(14.dp))
+                Text("Hue", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(6.dp))
+                HueSpectrumPicker(hue = hue, onHueChange = { hue = it })
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    "Shade and brightness",
+                    color = TextPrimary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(6.dp))
+                SaturationBrightnessPicker(
+                    hue = hue,
+                    saturation = saturation,
+                    brightness = brightness,
+                    onSelectionChange = { newSaturation, newBrightness ->
+                        saturation = newSaturation
+                        brightness = newBrightness
+                    }
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Tap or drag anywhere in the color field to choose a shade.",
+                    color = TextMuted,
+                    fontSize = 11.sp
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onApply(selectedColor) }) {
+                Text("Apply", color = EmeraldBright, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel", color = TextSecondary) }
+        },
+        containerColor = SurfaceDark,
+        titleContentColor = TextPrimary,
+        textContentColor = TextSecondary
+    )
+}
+
+@Composable
+private fun HueSpectrumPicker(hue: Float, onHueChange: (Float) -> Unit) {
+    val spectrum = listOf(
+        Color(0xFFFF0000), Color(0xFFFFFF00), Color(0xFF00FF00),
+        Color(0xFF00FFFF), Color(0xFF0000FF), Color(0xFFFF00FF), Color(0xFFFF0000)
+    )
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(32.dp)
+            .clip(RoundedCornerShape(50))
+            .pointerInput(Unit) {
+                detectTapGestures { position ->
+                    onHueChange((position.x / size.width * 360f).coerceIn(0f, 360f))
+                }
+            }
+            .pointerInput(Unit) {
+                detectDragGestures { change, _ ->
+                    change.consume()
+                    onHueChange((change.position.x / size.width * 360f).coerceIn(0f, 360f))
+                }
+            }
+    ) {
+        drawRoundRect(
+            brush = Brush.horizontalGradient(spectrum),
+            cornerRadius = CornerRadius(size.height / 2f)
+        )
+        val markerX = (hue / 360f).coerceIn(0f, 1f) * size.width
+        val marker = Offset(markerX, size.height / 2f)
+        drawCircle(Color.Black, radius = 10.dp.toPx(), center = marker)
+        drawCircle(Color.White, radius = 7.dp.toPx(), center = marker)
+    }
+}
+
+@Composable
+private fun SaturationBrightnessPicker(
+    hue: Float,
+    saturation: Float,
+    brightness: Float,
+    onSelectionChange: (Float, Float) -> Unit
+) {
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(190.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .pointerInput(hue) {
+                detectTapGestures { position ->
+                    onSelectionChange(
+                        (position.x / size.width).coerceIn(0f, 1f),
+                        (1f - position.y / size.height).coerceIn(0f, 1f)
+                    )
+                }
+            }
+            .pointerInput(hue) {
+                detectDragGestures { change, _ ->
+                    change.consume()
+                    onSelectionChange(
+                        (change.position.x / size.width).coerceIn(0f, 1f),
+                        (1f - change.position.y / size.height).coerceIn(0f, 1f)
+                    )
+                }
+            }
+            .border(1.dp, SurfaceBorder, RoundedCornerShape(14.dp))
+    ) {
+        drawRect(brush = Brush.horizontalGradient(listOf(Color.White, Color.hsv(hue, 1f, 1f))))
+        drawRect(brush = Brush.verticalGradient(listOf(Color.Transparent, Color.Black)))
+
+        val selector = Offset(
+            saturation.coerceIn(0f, 1f) * size.width,
+            (1f - brightness.coerceIn(0f, 1f)) * size.height
+        )
+        drawCircle(Color.Black, radius = 11.dp.toPx(), center = selector, style = Stroke(3.dp.toPx()))
+        drawCircle(Color.White, radius = 8.dp.toPx(), center = selector, style = Stroke(2.dp.toPx()))
+    }
+}
+
+private fun Color.toHexString(): String =
+    Integer.toHexString(toArgb()).takeLast(6).uppercase()
 
 @Composable
 fun SettingsMenuItem(

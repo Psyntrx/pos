@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import com.example.pos.ui.components.CustomBottomNavBar
 import com.example.pos.ui.theme.BgDark
+import com.example.pos.ui.theme.AppColorTheme
 import com.example.pos.ui.theme.ThemeMode
 import com.example.pos.viewmodel.PosViewModel
 
@@ -15,7 +17,11 @@ import com.example.pos.viewmodel.PosViewModel
 fun MainContainerScreen(
     viewModel: PosViewModel,
     themeMode: ThemeMode,
+    colorTheme: AppColorTheme,
+    customAccentColor: Color,
     onThemeModeChange: (ThemeMode) -> Unit,
+    onColorThemeChange: (AppColorTheme) -> Unit,
+    onCustomAccentColorChange: (Color) -> Unit,
     profilePhotoUri: String?,
     onProfilePhotoChange: (String?) -> Unit
 ) {
@@ -139,7 +145,11 @@ fun MainContainerScreen(
                     4 -> SettingsScreen(
                         viewModel = viewModel,
                         themeMode = themeMode,
+                        colorTheme = colorTheme,
+                        customAccentColor = customAccentColor,
                         onThemeModeChange = onThemeModeChange,
+                        onColorThemeChange = onColorThemeChange,
+                        onCustomAccentColorChange = onCustomAccentColorChange,
                         profilePhotoUri = profilePhotoUri,
                         onProfilePhotoChange = onProfilePhotoChange,
                         onOpenEmployees = { activeModal = "employees" },
