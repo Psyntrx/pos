@@ -2,6 +2,7 @@ package com.example.pos.viewmodel
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.pos.data.CartItem
 import com.example.pos.data.CustomerCredit
 import com.example.pos.data.Employee
@@ -11,10 +12,12 @@ import com.example.pos.data.Product
 import com.example.pos.data.Sale
 import com.example.pos.data.Shop
 import com.example.pos.data.StockInRecord
+import com.example.pos.data.SupabaseClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 class PosViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -119,7 +122,7 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
     val stockInRecords: StateFlow<List<StockInRecord>> = _stockInRecords.asStateFlow()
 
     init {
-        // Save initial defaults if not already stored
+        // Save initial defaults locally if not already stored
         storageManager.saveProducts(_products.value)
         storageManager.saveSales(_salesHistory.value)
         storageManager.saveExpenses(_expenses.value)
@@ -127,6 +130,31 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
         storageManager.saveEmployees(_employees.value)
         storageManager.saveStockInRecords(_stockInRecords.value)
         storageManager.saveShop(_shop.value)
+
+        // Sync from Supabase on startup
+        syncFromSupabase()
+    }
+
+    fun syncFromSupabase() {
+        viewModelScope.launch {
+            val remoteProducts = SupabaseClient.service.getProducts().getOrNull()
+            if (!remoteProducts.isNullOrEmpty()) {
+                _products.value = remoteProducts
+                storageManager.saveProducts(remoteProducts)
+            }
+
+            val remoteSales = SupabaseClient.service.getSales().getOrNull()
+            if (!remoteSales.isNullOrEmpty()) {
+                _salesHistory.value = remoteSales
+                storageManager.saveSales(remoteSales)
+            }
+
+            val remoteCredits = SupabaseClient.service.getCustomerCredits().getOrNull()
+            if (!remoteCredits.isNullOrEmpty()) {
+                _customerCredits.value = remoteCredits
+                storageManager.saveCustomerCredits(remoteCredits)
+            }
+        }
     }
 
     // Navigation & Auth actions
@@ -156,10 +184,18 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
         storageManager.saveShop(newShop)
         _isLoggedIn.value = true
         _currentScreen.value = "main"
+
+        viewModelScope.launch {
+            SupabaseClient.service.saveShop(newShop)
+        }
     }
 
     fun updateShopInformation(shop: Shop) {
         _shop.value = shop
+        storageManager.saveShop(shop)
+        viewModelScope.launch {
+            SupabaseClient.service.saveShop(shop)
+        }
     }
 
     fun logout() {
@@ -214,11 +250,18 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Process Sale & Automatic Stock Deduction
-    fun completeSale(paymentMethod: String, customerName: String = "", isCredit: Boolean = false, paidAmount: Double = 0.0, dueDate: String = ""): Sale {
+    fun completeSale(
+        paymentMethod: String,
+        customerName: String = "",
+        customerPhone: String = "",
+        isCredit: Boolean = false,
+        paidAmount: Double = 0.0,
+        dueDate: String = ""
+    ): Sale {
         val currentCartItems = _cart.value
         val total = currentCartItems.sumOf { it.totalPrice }
 
-        // Deduct inventory
+        // Deduct inventory locally
         _products.update { currentList ->
             currentList.map { product ->
                 val cartItem = currentCartItems.find { it.product.id == product.id }
@@ -249,19 +292,36 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
         _salesHistory.update { listOf(newSale) + it }
         storageManager.saveSales(_salesHistory.value)
 
+        var creditRecord: CustomerCredit? = null
         if (isCredit) {
-            val creditRecord = CustomerCredit(
+            val calcBalance = (total - paidAmount).coerceAtLeast(0.0)
+            creditRecord = CustomerCredit(
                 id = "c_${System.currentTimeMillis()}",
                 customerName = customerName.ifBlank { "Credit Customer" },
-                customerPhone = "+254 700 000 000",
+                customerPhone = customerPhone.ifBlank { "+254 700 000 000" },
                 totalOutstanding = total,
                 productsSummary = "${currentCartItems.size} Items | ${currentCartItems.joinToString { it.product.name }}",
                 amountPaid = paidAmount,
-                balance = total - paidAmount,
-                dueDate = dueDate.ifBlank { "In 14 Days" }
+                balance = calcBalance,
+                dueDate = dueDate.ifBlank { "In 14 Days" },
+                status = "Pending"
             )
             _customerCredits.update { listOf(creditRecord) + it }
             storageManager.saveCustomerCredits(_customerCredits.value)
+        }
+
+        // Asynchronous cloud sync to Supabase
+        viewModelScope.launch {
+            currentCartItems.forEach { cartItem ->
+                val updatedProd = _products.value.find { it.id == cartItem.product.id }
+                if (updatedProd != null) {
+                    SupabaseClient.service.updateProductStock(updatedProd.id, updatedProd.stockQuantity)
+                }
+            }
+            SupabaseClient.service.insertSale(newSale)
+            if (creditRecord != null) {
+                SupabaseClient.service.upsertCustomerCredit(creditRecord)
+            }
         }
 
         _completedSale.value = newSale
@@ -283,9 +343,15 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
             productsSummary = productsSummary.ifBlank { "1 Item | Product" },
             amountPaid = amountPaid,
             balance = balance,
-            dueDate = dueDate.ifBlank { "Sep 30, 2026" }
+            dueDate = dueDate.ifBlank { "In 14 Days" },
+            status = "Pending"
         )
         _customerCredits.update { listOf(creditRecord) + it }
+        storageManager.saveCustomerCredits(_customerCredits.value)
+
+        viewModelScope.launch {
+            SupabaseClient.service.upsertCustomerCredit(creditRecord)
+        }
     }
 
     // Add Product
@@ -317,6 +383,11 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
             iconType = normalizedCategory.lowercase()
         )
         _products.update { listOf(newProduct) + it }
+        storageManager.saveProducts(_products.value)
+
+        viewModelScope.launch {
+            SupabaseClient.service.upsertProduct(newProduct)
+        }
         return true
     }
 
@@ -349,6 +420,11 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
             iconType = normalizedCategory.lowercase()
         )
         _products.update { products -> products.map { if (it.id == productId) updatedProduct else it } }
+        storageManager.saveProducts(_products.value)
+
+        viewModelScope.launch {
+            SupabaseClient.service.upsertProduct(updatedProduct)
+        }
         return true
     }
 
@@ -388,6 +464,14 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
         )
         _stockInRecords.update { listOf(record) + it }
         storageManager.saveStockInRecords(_stockInRecords.value)
+
+        viewModelScope.launch {
+            val updatedProd = _products.value.find { it.id == productId }
+            if (updatedProd != null) {
+                SupabaseClient.service.updateProductStock(updatedProd.id, updatedProd.stockQuantity)
+            }
+            SupabaseClient.service.insertStockInRecord(record)
+        }
     }
 
     // Expenses
@@ -402,6 +486,10 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
         )
         _expenses.update { listOf(newExpense) + it }
         storageManager.saveExpenses(_expenses.value)
+
+        viewModelScope.launch {
+            SupabaseClient.service.insertExpense(newExpense)
+        }
     }
 
     // Add Employee
@@ -415,5 +503,9 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
         )
         _employees.update { it + emp }
         storageManager.saveEmployees(_employees.value)
+
+        viewModelScope.launch {
+            SupabaseClient.service.upsertEmployee(emp)
+        }
     }
 }

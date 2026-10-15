@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.pos.ui.screens.ForgotPasswordScreen
 import com.example.pos.ui.screens.LoginScreen
 import com.example.pos.ui.screens.MainContainerScreen
@@ -44,7 +45,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = BgDark
                 ) {
-                    val posViewModel = remember { PosViewModel() }
+                    val posViewModel: PosViewModel = viewModel()
                     val authViewModel = remember { AuthViewModel() }
                     val currentScreen by posViewModel.currentScreen.collectAsState()
 
