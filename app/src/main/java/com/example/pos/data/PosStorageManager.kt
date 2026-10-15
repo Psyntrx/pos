@@ -166,6 +166,7 @@ fun Product.toJson(): JSONObject {
         put("minStock", minStock)
         put("supplier", supplier)
         put("iconType", iconType)
+        put("imageUri", imageUri)
     }
 }
 
@@ -181,7 +182,8 @@ fun JSONObject.toProduct(): Product {
         stockQuantity = getInt("stockQuantity"),
         minStock = optInt("minStock", 10),
         supplier = optString("supplier", ""),
-        iconType = optString("iconType", "box")
+        iconType = optString("iconType", "box"),
+        imageUri = optString("imageUri", "").takeIf { it.isNotBlank() && it != "null" }
     )
 }
 

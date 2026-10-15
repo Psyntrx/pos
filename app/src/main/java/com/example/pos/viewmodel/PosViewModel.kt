@@ -9,6 +9,7 @@ import com.example.pos.data.Employee
 import com.example.pos.data.Expense
 import com.example.pos.data.PosStorageManager
 import com.example.pos.data.Product
+import com.example.pos.data.ProductImageStorage
 import com.example.pos.data.Sale
 import com.example.pos.data.Shop
 import com.example.pos.data.StockInRecord
@@ -159,12 +160,16 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
                 if (remoteProducts.isNotEmpty()) {
                     _products.update { currentList ->
                         val currentMap = currentList.associateBy { it.id }
-                        remoteProducts.map { remote ->
+                        val remoteIds = remoteProducts.mapTo(mutableSetOf()) { it.id }
+                        val refreshed = remoteProducts.map { remote ->
                             if (pendingProductUpdates.contains(remote.id)) {
                                 currentMap[remote.id] ?: remote
                             } else {
-                                remote
+                                remote.copy(imageUri = currentMap[remote.id]?.imageUri)
                             }
+                        }
+                        refreshed + currentList.filter {
+                            pendingProductUpdates.contains(it.id) && it.id !in remoteIds
                         }
                     }
                     storageManager.saveProducts(_products.value)
@@ -363,7 +368,8 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
     // Add Product
     fun addProduct(
         name: String, category: String, sku: String, unit: String,
-        buyingPrice: Double, sellingPrice: Double, quantity: Int, minStock: Int, supplier: String
+        buyingPrice: Double, sellingPrice: Double, quantity: Int, minStock: Int, supplier: String,
+        imageUri: String? = null
     ): Boolean {
         val normalizedName = name.trim()
         val normalizedCategory = category.trim()
@@ -386,16 +392,27 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
             stockQuantity = quantity,
             minStock = minStock,
             supplier = supplier.trim(),
-            iconType = normalizedCategory.lowercase()
+            iconType = normalizedCategory.lowercase(),
+            imageUri = imageUri
         )
         _products.update { listOf(newProduct) + it }
+        storageManager.saveProducts(_products.value)
+        pendingProductUpdates.add(newProduct.id)
+        viewModelScope.launch {
+            try {
+                supabase.upsertProduct(newProduct)
+            } finally {
+                pendingProductUpdates.remove(newProduct.id)
+            }
+        }
         return true
     }
 
     fun updateProduct(
         productId: String,
         name: String, category: String, sku: String, unit: String,
-        buyingPrice: Double, sellingPrice: Double, quantity: Int, minStock: Int, supplier: String
+        buyingPrice: Double, sellingPrice: Double, quantity: Int, minStock: Int, supplier: String,
+        imageUri: String? = currentProductImageUri(productId)
     ): Boolean {
         val currentProduct = _products.value.find { it.id == productId } ?: return false
         val normalizedName = name.trim()
@@ -418,14 +435,18 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
             stockQuantity = quantity,
             minStock = minStock,
             supplier = supplier.trim(),
-            iconType = normalizedCategory.lowercase()
+            iconType = normalizedCategory.lowercase(),
+            imageUri = imageUri
         )
         _products.update { products -> products.map { if (it.id == productId) updatedProduct else it } }
         storageManager.saveProducts(_products.value)
+        if (currentProduct.imageUri != updatedProduct.imageUri) {
+            ProductImageStorage.deleteIfOwned(getApplication(), currentProduct.imageUri)
+        }
 
         // Asynchronously update product in Supabase while safeguarding local state
+        pendingProductUpdates.add(productId)
         viewModelScope.launch {
-            pendingProductUpdates.add(productId)
             try {
                 supabase.upsertProduct(updatedProduct)
             } finally {
@@ -434,6 +455,9 @@ class PosViewModel(application: Application) : AndroidViewModel(application) {
         }
         return true
     }
+
+    private fun currentProductImageUri(productId: String): String? =
+        _products.value.firstOrNull { it.id == productId }?.imageUri
 
     // Stock In / Restocking
     fun recordStockIn(

@@ -22,7 +22,8 @@ data class Product(
     val stockQuantity: Int,
     val minStock: Int = 10,
     val supplier: String = "",
-    val iconType: String = "box"
+    val iconType: String = "box",
+    val imageUri: String? = null
 ) {
     val isLowStock: Boolean get() = stockQuantity <= minStock
 }
