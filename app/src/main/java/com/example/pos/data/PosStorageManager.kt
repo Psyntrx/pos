@@ -23,11 +23,17 @@ class PosStorageManager(context: Context? = null) {
         private const val KEY_SYSTEM_NOTIFICATIONS_ENABLED = "key_system_notifications_enabled"
     }
 
+    private inline fun editPrefs(action: SharedPreferences.Editor.() -> Unit) {
+        val p = prefs ?: return
+        val editor = p.edit()
+        editor.action()
+        editor.apply()
+    }
+
     fun saveProducts(products: List<Product>) {
-        if (prefs == null) return
         val jsonArray = JSONArray()
         products.forEach { jsonArray.put(it.toJson()) }
-        prefs.edit().putString(KEY_PRODUCTS, jsonArray.toString()).apply()
+        editPrefs { putString(KEY_PRODUCTS, jsonArray.toString()) }
     }
 
     fun loadProducts(defaultProducts: List<Product>): List<Product> {
@@ -57,11 +63,12 @@ class PosStorageManager(context: Context? = null) {
                 put("isRead", notification.isRead)
             })
         }
-        prefs.edit().putString(KEY_NOTIFICATIONS, json.toString()).apply()
+        editPrefs { putString(KEY_NOTIFICATIONS, json.toString()) }
     }
 
     fun loadNotifications(): List<AppNotification> = runCatching {
-        val json = JSONArray(prefs.getString(KEY_NOTIFICATIONS, "[]"))
+        val jsonString = prefs?.getString(KEY_NOTIFICATIONS, "[]") ?: "[]"
+        val json = JSONArray(jsonString)
         (0 until json.length()).map { index ->
             val item = json.getJSONObject(index)
             val ids = item.optJSONArray("productIds") ?: JSONArray()
@@ -78,17 +85,16 @@ class PosStorageManager(context: Context? = null) {
     }.getOrDefault(emptyList())
 
     fun areSystemNotificationsEnabled(): Boolean =
-        prefs.getBoolean(KEY_SYSTEM_NOTIFICATIONS_ENABLED, false)
+        prefs?.getBoolean(KEY_SYSTEM_NOTIFICATIONS_ENABLED, false) ?: false
 
     fun setSystemNotificationsEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_SYSTEM_NOTIFICATIONS_ENABLED, enabled).apply()
+        editPrefs { putBoolean(KEY_SYSTEM_NOTIFICATIONS_ENABLED, enabled) }
     }
 
     fun saveSales(sales: List<Sale>) {
-        if (prefs == null) return
         val jsonArray = JSONArray()
         sales.forEach { jsonArray.put(it.toJson()) }
-        prefs.edit().putString(KEY_SALES, jsonArray.toString()).apply()
+        editPrefs { putString(KEY_SALES, jsonArray.toString()) }
     }
 
     fun loadSales(defaultSales: List<Sale>): List<Sale> {
@@ -106,10 +112,9 @@ class PosStorageManager(context: Context? = null) {
     }
 
     fun saveExpenses(expenses: List<Expense>) {
-        if (prefs == null) return
         val jsonArray = JSONArray()
         expenses.forEach { jsonArray.put(it.toJson()) }
-        prefs.edit().putString(KEY_EXPENSES, jsonArray.toString()).apply()
+        editPrefs { putString(KEY_EXPENSES, jsonArray.toString()) }
     }
 
     fun loadExpenses(defaultExpenses: List<Expense>): List<Expense> {
@@ -127,10 +132,9 @@ class PosStorageManager(context: Context? = null) {
     }
 
     fun saveCustomerCredits(credits: List<CustomerCredit>) {
-        if (prefs == null) return
         val jsonArray = JSONArray()
         credits.forEach { jsonArray.put(it.toJson()) }
-        prefs.edit().putString(KEY_CUSTOMER_CREDITS, jsonArray.toString()).apply()
+        editPrefs { putString(KEY_CUSTOMER_CREDITS, jsonArray.toString()) }
     }
 
     fun loadCustomerCredits(defaultCredits: List<CustomerCredit>): List<CustomerCredit> {
@@ -148,10 +152,9 @@ class PosStorageManager(context: Context? = null) {
     }
 
     fun saveEmployees(employees: List<Employee>) {
-        if (prefs == null) return
         val jsonArray = JSONArray()
         employees.forEach { jsonArray.put(it.toJson()) }
-        prefs.edit().putString(KEY_EMPLOYEES, jsonArray.toString()).apply()
+        editPrefs { putString(KEY_EMPLOYEES, jsonArray.toString()) }
     }
 
     fun loadEmployees(defaultEmployees: List<Employee>): List<Employee> {
@@ -169,10 +172,9 @@ class PosStorageManager(context: Context? = null) {
     }
 
     fun saveStockInRecords(records: List<StockInRecord>) {
-        if (prefs == null) return
         val jsonArray = JSONArray()
         records.forEach { jsonArray.put(it.toJson()) }
-        prefs.edit().putString(KEY_STOCK_IN, jsonArray.toString()).apply()
+        editPrefs { putString(KEY_STOCK_IN, jsonArray.toString()) }
     }
 
     fun loadStockInRecords(defaultRecords: List<StockInRecord>): List<StockInRecord> {
@@ -190,8 +192,7 @@ class PosStorageManager(context: Context? = null) {
     }
 
     fun saveShop(shop: Shop) {
-        if (prefs == null) return
-        prefs.edit().putString(KEY_SHOP, shop.toJson().toString()).apply()
+        editPrefs { putString(KEY_SHOP, shop.toJson().toString()) }
     }
 
     fun loadShop(defaultShop: Shop): Shop {
@@ -207,7 +208,6 @@ class PosStorageManager(context: Context? = null) {
     // AUTH SESSION & REMEMBER ME
     // ==========================================
     fun saveAuthSession(session: AuthSession) {
-        if (prefs == null) return
         val json = JSONObject().apply {
             put("accessToken", session.accessToken)
             put("refreshToken", session.refreshToken)
@@ -217,7 +217,7 @@ class PosStorageManager(context: Context? = null) {
             put("rememberMe", session.rememberMe)
             put("loginTimestamp", session.loginTimestamp)
         }
-        prefs.edit().putString(KEY_AUTH_SESSION, json.toString()).apply()
+        editPrefs { putString(KEY_AUTH_SESSION, json.toString()) }
     }
 
     fun loadAuthSession(): AuthSession? {
@@ -250,7 +250,7 @@ class PosStorageManager(context: Context? = null) {
     }
 
     fun clearAuthSession() {
-        prefs?.edit()?.remove(KEY_AUTH_SESSION)?.apply()
+        editPrefs { remove(KEY_AUTH_SESSION) }
     }
 
     fun isSessionValid(): Boolean {
@@ -259,7 +259,7 @@ class PosStorageManager(context: Context? = null) {
     }
 
     fun saveRememberedEmail(email: String) {
-        prefs?.edit()?.putString(KEY_REMEMBERED_EMAIL, email)?.apply()
+        editPrefs { putString(KEY_REMEMBERED_EMAIL, email) }
     }
 
     fun loadRememberedEmail(): String? {
@@ -267,11 +267,11 @@ class PosStorageManager(context: Context? = null) {
     }
 
     fun clearRememberedEmail() {
-        prefs?.edit()?.remove(KEY_REMEMBERED_EMAIL)?.apply()
+        editPrefs { remove(KEY_REMEMBERED_EMAIL) }
     }
 
     fun saveRememberMePreference(enabled: Boolean) {
-        prefs?.edit()?.putBoolean(KEY_REMEMBER_ME, enabled)?.apply()
+        editPrefs { putBoolean(KEY_REMEMBER_ME, enabled) }
     }
 
     fun loadRememberMePreference(): Boolean {

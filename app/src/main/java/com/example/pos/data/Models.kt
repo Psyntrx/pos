@@ -52,6 +52,7 @@ data class AppNotification(
     val isRead: Boolean = false
 )
 
+@Serializable
 data class CartItem(
     val product: Product,
     val quantity: Int
