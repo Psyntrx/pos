@@ -247,6 +247,13 @@ class PosViewModel(
         storageManager.saveNotifications(_notifications.value)
     }
 
+    fun markNotificationAsUnread(notificationId: String) {
+        _notifications.update { items ->
+            items.map { if (it.id == notificationId) it.copy(isRead = false) else it }
+        }
+        storageManager.saveNotifications(_notifications.value)
+    }
+
     fun deleteNotification(notificationId: String) {
         _notifications.update { items -> items.filterNot { it.id == notificationId } }
         storageManager.saveNotifications(_notifications.value)
