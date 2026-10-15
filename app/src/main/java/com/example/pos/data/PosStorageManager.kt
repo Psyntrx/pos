@@ -57,11 +57,11 @@ class PosStorageManager(context: Context? = null) {
                 put("isRead", notification.isRead)
             })
         }
-        prefs.edit().putString(KEY_NOTIFICATIONS, json.toString()).apply()
+        prefs?.edit()?.putString(KEY_NOTIFICATIONS, json.toString())?.apply()
     }
 
     fun loadNotifications(): List<AppNotification> = runCatching {
-        val json = JSONArray(prefs.getString(KEY_NOTIFICATIONS, "[]"))
+        val json = JSONArray(prefs?.getString(KEY_NOTIFICATIONS, "[]") ?: "[]")
         (0 until json.length()).map { index ->
             val item = json.getJSONObject(index)
             val ids = item.optJSONArray("productIds") ?: JSONArray()
@@ -78,10 +78,10 @@ class PosStorageManager(context: Context? = null) {
     }.getOrDefault(emptyList())
 
     fun areSystemNotificationsEnabled(): Boolean =
-        prefs.getBoolean(KEY_SYSTEM_NOTIFICATIONS_ENABLED, false)
+        prefs?.getBoolean(KEY_SYSTEM_NOTIFICATIONS_ENABLED, false) ?: false
 
     fun setSystemNotificationsEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_SYSTEM_NOTIFICATIONS_ENABLED, enabled).apply()
+        prefs?.edit()?.putBoolean(KEY_SYSTEM_NOTIFICATIONS_ENABLED, enabled)?.apply()
     }
 
     fun saveSales(sales: List<Sale>) {

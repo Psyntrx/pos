@@ -27,7 +27,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class PosViewModel(
-    application: Application? = null,
+    private val application: Application? = null,
     private val storageManager: PosStorageManager = PosStorageManager(application),
     private val supabase: SupabaseService = SupabaseClient.service
 ) : ViewModel() {
@@ -218,7 +218,7 @@ class PosViewModel(
         _notifications.update { (listOf(notification) + it).take(100) }
         storageManager.saveNotifications(_notifications.value)
         if (_systemNotificationsEnabled.value) {
-            LowStockNotificationManager.show(getApplication(), notification)
+            application?.let { LowStockNotificationManager.show(it, notification) }
         }
     }
 
@@ -622,7 +622,7 @@ class PosViewModel(
         _products.update { products -> products.map { if (it.id == productId) updatedProduct else it } }
         storageManager.saveProducts(_products.value)
         if (currentProduct.imageUri != updatedProduct.imageUri) {
-            ProductImageStorage.deleteIfOwned(getApplication(), currentProduct.imageUri)
+            application?.let { ProductImageStorage.deleteIfOwned(it, currentProduct.imageUri) }
         }
 
         // Asynchronously update product in Supabase while safeguarding local state
