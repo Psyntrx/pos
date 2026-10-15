@@ -138,7 +138,7 @@ class PosViewModel(
     val stockInRecords: StateFlow<List<StockInRecord>> = _stockInRecords.asStateFlow()
 
     init {
-        // Save initial defaults if not already stored
+        // Save initial defaults locally if not already stored
         storageManager.saveProducts(_products.value)
         storageManager.saveSales(_salesHistory.value)
         storageManager.saveExpenses(_expenses.value)
@@ -374,10 +374,18 @@ class PosViewModel(
 
         _isLoggedIn.value = true
         _currentScreen.value = "main"
+
+        viewModelScope.launch {
+            SupabaseClient.service.saveShop(newShop)
+        }
     }
 
     fun updateShopInformation(shop: Shop) {
         _shop.value = shop
+        storageManager.saveShop(shop)
+        viewModelScope.launch {
+            SupabaseClient.service.saveShop(shop)
+        }
     }
 
     fun logout() {
@@ -434,11 +442,18 @@ class PosViewModel(
     }
 
     // Process Sale & Automatic Stock Deduction
-    fun completeSale(paymentMethod: String, customerName: String = "", isCredit: Boolean = false, paidAmount: Double = 0.0, dueDate: String = ""): Sale {
+    fun completeSale(
+        paymentMethod: String,
+        customerName: String = "",
+        customerPhone: String = "",
+        isCredit: Boolean = false,
+        paidAmount: Double = 0.0,
+        dueDate: String = ""
+    ): Sale {
         val currentCartItems = _cart.value
         val total = currentCartItems.sumOf { it.totalPrice }
 
-        // Deduct inventory
+        // Deduct inventory locally
         _products.update { currentList ->
             currentList.map { product ->
                 val cartItem = currentCartItems.find { it.product.id == product.id }
@@ -469,19 +484,36 @@ class PosViewModel(
         _salesHistory.update { listOf(newSale) + it }
         storageManager.saveSales(_salesHistory.value)
 
+        var creditRecord: CustomerCredit? = null
         if (isCredit) {
-            val creditRecord = CustomerCredit(
+            val calcBalance = (total - paidAmount).coerceAtLeast(0.0)
+            creditRecord = CustomerCredit(
                 id = "c_${System.currentTimeMillis()}",
                 customerName = customerName.ifBlank { "Credit Customer" },
-                customerPhone = "+254 700 000 000",
+                customerPhone = customerPhone.ifBlank { "+254 700 000 000" },
                 totalOutstanding = total,
                 productsSummary = "${currentCartItems.size} Items | ${currentCartItems.joinToString { it.product.name }}",
                 amountPaid = paidAmount,
-                balance = total - paidAmount,
-                dueDate = dueDate.ifBlank { "In 14 Days" }
+                balance = calcBalance,
+                dueDate = dueDate.ifBlank { "In 14 Days" },
+                status = "Pending"
             )
             _customerCredits.update { listOf(creditRecord) + it }
             storageManager.saveCustomerCredits(_customerCredits.value)
+        }
+
+        // Asynchronous cloud sync to Supabase
+        viewModelScope.launch {
+            currentCartItems.forEach { cartItem ->
+                val updatedProd = _products.value.find { it.id == cartItem.product.id }
+                if (updatedProd != null) {
+                    SupabaseClient.service.updateProductStock(updatedProd.id, updatedProd.stockQuantity)
+                }
+            }
+            SupabaseClient.service.insertSale(newSale)
+            if (creditRecord != null) {
+                SupabaseClient.service.upsertCustomerCredit(creditRecord)
+            }
         }
 
         _completedSale.value = newSale
@@ -503,9 +535,15 @@ class PosViewModel(
             productsSummary = productsSummary.ifBlank { "1 Item | Product" },
             amountPaid = amountPaid,
             balance = balance,
-            dueDate = dueDate.ifBlank { "Sep 30, 2026" }
+            dueDate = dueDate.ifBlank { "In 14 Days" },
+            status = "Pending"
         )
         _customerCredits.update { listOf(creditRecord) + it }
+        storageManager.saveCustomerCredits(_customerCredits.value)
+
+        viewModelScope.launch {
+            SupabaseClient.service.upsertCustomerCredit(creditRecord)
+        }
     }
 
     // Add Product
@@ -666,6 +704,10 @@ class PosViewModel(
         )
         _expenses.update { listOf(newExpense) + it }
         storageManager.saveExpenses(_expenses.value)
+
+        viewModelScope.launch {
+            SupabaseClient.service.insertExpense(newExpense)
+        }
     }
 
     // Add Employee
@@ -679,5 +721,9 @@ class PosViewModel(
         )
         _employees.update { it + emp }
         storageManager.saveEmployees(_employees.value)
+
+        viewModelScope.launch {
+            SupabaseClient.service.upsertEmployee(emp)
+        }
     }
 }

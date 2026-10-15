@@ -1,5 +1,8 @@
 package com.example.pos.data
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class Shop(
     val id: String = "shop_1",
     val name: String = "Faith's Store",
@@ -11,6 +14,7 @@ data class Shop(
     val currency: String = "KSh"
 )
 
+@Serializable
 data class Product(
     val id: String,
     val name: String,
@@ -55,11 +59,12 @@ data class CartItem(
     val totalPrice: Double get() = product.sellingPrice * quantity
 }
 
+@Serializable
 data class Sale(
     val id: String,
     val items: List<CartItem>,
     val totalAmount: Double,
-    val paymentMethod: String, // Cash, M-Pesa, Card, Other
+    val paymentMethod: String,
     val customerName: String = "",
     val dateFormatted: String = "Today, 10:42 AM",
     val timestamp: Long = System.currentTimeMillis(),
@@ -70,6 +75,7 @@ data class Sale(
     val dueDate: String = ""
 )
 
+@Serializable
 data class StockInRecord(
     val id: String,
     val productId: String,
@@ -81,6 +87,7 @@ data class StockInRecord(
     val employeeName: String
 )
 
+@Serializable
 data class Expense(
     val id: String,
     val title: String,
@@ -90,6 +97,7 @@ data class Expense(
     val iconType: String = "receipt"
 )
 
+@Serializable
 data class CustomerCredit(
     val id: String,
     val customerName: String,
@@ -102,10 +110,11 @@ data class CustomerCredit(
     val status: String = "Pending"
 )
 
+@Serializable
 data class Employee(
     val id: String,
     val name: String,
-    val role: String, // Owner, Manager, Sales Clerk
+    val role: String,
     val phone: String,
     val email: String,
     val isOwner: Boolean = false
