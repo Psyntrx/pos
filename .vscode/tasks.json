@@ -1,84 +1,60 @@
 {
   "version": "2.0.0",
+  "options": {
+    "env": {
+      "PATH": "${env:PATH};C:\\Users\\Aimron001\\AppData\\Local\\Android\\Sdk\\platform-tools"
+    }
+  },
   "tasks": [
     {
       "label": "Build Debug APK",
       "type": "shell",
-      "command": "./gradlew assembleDebug",
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      },
-      "problemMatcher": ["$gradle"],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "Run App (Install & Launch)",
-      "type": "shell",
-      "command": "./gradlew installDebug && $ANDROID_HOME/platform-tools/adb shell am start -n com.example.pos/.MainActivity",
-      "group": {
-        "kind": "test",
-        "isDefault": true
-      },
-      "problemMatcher": ["$gradle"],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
+      "command": ".\\gradlew.bat assembleDebug",
+      "group": "build",
+      "problemMatcher": ["$gradle"]
     },
     {
       "label": "Install Debug APK",
       "type": "shell",
-      "command": "./gradlew installDebug",
-      "group": "build",
-      "problemMatcher": ["$gradle"],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
+      "command": ".\\gradlew.bat installDebug",
+      "problemMatcher": ["$gradle"]
     },
     {
       "label": "Launch App on Device",
       "type": "shell",
-      "command": "$ANDROID_HOME/platform-tools/adb shell am start -n com.example.pos/.MainActivity",
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
+      "command": "adb shell am start -n com.example.pos/com.example.pos.MainActivity"
     },
     {
-      "label": "View Logcat",
+      "label": "Install & Run (Connected Device / Emulator)",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Install Debug APK",
+        "Launch App on Device"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$gradle"]
+    },
+    {
+      "label": "Run Clean Build",
       "type": "shell",
-      "command": "$ANDROID_HOME/platform-tools/adb logcat -v time com.example.pos:V *:S",
-      "problemMatcher": [],
+      "command": ".\\gradlew.bat clean",
+      "problemMatcher": ["$gradle"]
+    },
+    {
+      "label": "ADB: Check Connected Devices",
+      "type": "shell",
+      "command": "adb devices"
+    },
+    {
+      "label": "ADB: Follow App Logcat",
+      "type": "shell",
+      "command": "adb logcat | Select-String \"com.example.pos\"",
       "presentation": {
         "reveal": "always",
         "panel": "new"
-      }
-    },
-    {
-      "label": "Run Unit Tests",
-      "type": "shell",
-      "command": "./gradlew test",
-      "group": "test",
-      "problemMatcher": ["$gradle"],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "Clean Project",
-      "type": "shell",
-      "command": "./gradlew clean",
-      "problemMatcher": ["$gradle"],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
       }
     }
   ]
