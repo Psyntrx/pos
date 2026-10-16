@@ -553,6 +553,77 @@ class SupabaseService(
         }
     }
 
+    suspend fun upsertSale(sale: Sale, shopId: String? = null): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val resolvedShopId = shopId
+            val itemsJson = JSONArray()
+            for (ci in sale.items) {
+                val itemObj = JSONObject().apply {
+                    put("quantity", ci.quantity)
+                    put("product", JSONObject().apply {
+                        put("id", ci.product.id)
+                        put("name", ci.product.name)
+                        put("category", ci.product.category)
+                        put("sku", ci.product.sku)
+                        put("unit", ci.product.unit)
+                        put("buying_price", ci.product.buyingPrice)
+                        put("selling_price", ci.product.sellingPrice)
+                        put("stock_quantity", ci.product.stockQuantity)
+                        put("min_stock", ci.product.minStock)
+                        put("supplier", ci.product.supplier)
+                        put("icon_type", ci.product.iconType)
+                    })
+                }
+                itemsJson.put(itemObj)
+            }
+
+            val json = JSONObject().apply {
+                put("id", sale.id)
+                put("total_amount", sale.totalAmount)
+                put("payment_method", sale.paymentMethod)
+                put("customer_name", sale.customerName)
+                put("date_formatted", sale.dateFormatted)
+                put("timestamp", sale.timestamp)
+                put("employee_name", sale.employeeName)
+                put("is_credit_sale", sale.isCreditSale)
+                put("paid_amount", sale.paidAmount)
+                put("balance", sale.balance)
+                put("due_date", sale.dueDate)
+                put("items", itemsJson)
+                if (!resolvedShopId.isNullOrBlank()) {
+                    put("shop_id", resolvedShopId)
+                }
+            }
+            val req = buildRequest(
+                path = "/rest/v1/sales",
+                method = "POST",
+                bodyString = json.toString(),
+                extraHeaders = mapOf("Prefer" to "resolution=merge-duplicates")
+            )
+            client.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) Result.success(Unit)
+                else Result.failure(Exception("Failed to upsert sale (${resp.code})"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteSale(saleId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val req = buildRequest(
+                path = "/rest/v1/sales?id=eq.$saleId",
+                method = "DELETE"
+            )
+            client.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) Result.success(Unit)
+                else Result.failure(Exception("Failed to delete sale (${resp.code})"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     // ==========================================
     // STOCK IN RECORDS
     // ==========================================
