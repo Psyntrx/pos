@@ -69,6 +69,16 @@ data class Expense(
     val iconType: String = "receipt"
 )
 
+data class CreditPayment(
+    val id: String,
+    val amount: Double,
+    val method: String,
+    val timestamp: Long = System.currentTimeMillis(),
+    val balanceAfterPayment: Double = 0.0,
+    val referenceCode: String = "",
+    val notes: String = ""
+)
+
 data class CustomerCredit(
     val id: String,
     val customerName: String,
@@ -78,7 +88,10 @@ data class CustomerCredit(
     val amountPaid: Double,
     val balance: Double,
     val dueDate: String,
-    val status: String = "Pending"
+    val status: String = "Pending",
+    val paymentHistory: List<CreditPayment> = emptyList(),
+    val createdAt: Long = System.currentTimeMillis(),
+    val settledAt: String? = null
 )
 
 data class Employee(

@@ -4,82 +4,138 @@
     {
       "label": "Build Debug APK",
       "type": "shell",
-      "command": "./gradlew assembleDebug",
+      "command": ".\\gradlew.bat",
+      "args": [
+        "assembleDebug",
+        "--console",
+        "plain"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
       "group": {
         "kind": "build",
         "isDefault": true
       },
-      "problemMatcher": ["$gradle"],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "Run App (Install & Launch)",
-      "type": "shell",
-      "command": "./gradlew installDebug && $ANDROID_HOME/platform-tools/adb shell am start -n com.example.pos/.MainActivity",
-      "group": {
-        "kind": "test",
-        "isDefault": true
-      },
-      "problemMatcher": ["$gradle"],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "Install Debug APK",
-      "type": "shell",
-      "command": "./gradlew installDebug",
-      "group": "build",
-      "problemMatcher": ["$gradle"],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "Launch App on Device",
-      "type": "shell",
-      "command": "$ANDROID_HOME/platform-tools/adb shell am start -n com.example.pos/.MainActivity",
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "View Logcat",
-      "type": "shell",
-      "command": "$ANDROID_HOME/platform-tools/adb logcat -v time com.example.pos:V *:S",
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "new"
-      }
+      "problemMatcher": []
     },
     {
       "label": "Run Unit Tests",
       "type": "shell",
-      "command": "./gradlew test",
+      "command": ".\\gradlew.bat",
+      "args": [
+        "testDebugUnitTest",
+        "--console",
+        "plain"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
       "group": "test",
-      "problemMatcher": ["$gradle"],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
+      "problemMatcher": []
     },
     {
-      "label": "Clean Project",
+      "label": "Verify Auth and Product Tests (Robolectric)",
       "type": "shell",
-      "command": "./gradlew clean",
-      "problemMatcher": ["$gradle"],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
+      "command": ".\\gradlew.bat",
+      "args": [
+        "testDebugUnitTest",
+        "--tests",
+        "com.example.pos.AuthViewModelTest",
+        "--tests",
+        "com.example.pos.PosViewModelProductTest",
+        "--console",
+        "plain"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Clean Build",
+      "type": "shell",
+      "command": ".\\gradlew.bat",
+      "args": [
+        "clean",
+        "assembleDebug",
+        "--console",
+        "plain"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Install Debug APK",
+      "type": "shell",
+      "command": "adb",
+      "args": [
+        "install",
+        "-r",
+        "${workspaceFolder}\\app\\build\\outputs\\apk\\debug\\app-debug.apk"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Git Status",
+      "type": "shell",
+      "command": "git",
+      "args": [
+        "status",
+        "--short",
+        "--branch"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Git Diff Check",
+      "type": "shell",
+      "command": "git",
+      "args": [
+        "diff",
+        "--check"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Git Staged Diff Check",
+      "type": "shell",
+      "command": "git",
+      "args": [
+        "diff",
+        "--cached",
+        "--check"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Git Remote + Fetch Check",
+      "type": "shell",
+      "command": "git",
+      "args": [
+        "fetch",
+        "--all",
+        "--prune"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
     }
   ]
 }

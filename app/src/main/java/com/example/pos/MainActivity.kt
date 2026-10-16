@@ -44,7 +44,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = BgDark
                 ) {
-                    val posViewModel = remember { PosViewModel() }
+                    val posViewModel = remember { PosViewModel(application) }
                     val authViewModel = remember { AuthViewModel() }
                     val currentScreen by posViewModel.currentScreen.collectAsState()
 
@@ -54,7 +54,7 @@ class MainActivity : ComponentActivity() {
                         )
                         "login" -> LoginScreen(
                             authViewModel = authViewModel,
-                            onLoginSuccess = { email, pass ->
+                            onLoginSuccess = { email: String, pass: String ->
                                 posViewModel.login(email, pass)
                             },
                             onNavigateToRegisterStep1 = {

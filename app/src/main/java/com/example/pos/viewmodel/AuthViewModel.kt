@@ -3,6 +3,7 @@ package com.example.pos.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pos.data.SupabaseClient
+import com.example.pos.data.SupabaseService
 import com.example.pos.data.Shop
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -79,9 +80,9 @@ data class ForgotPasswordUiState(
     val canSubmit: Boolean get() = isEmailValid && !isLoading
 }
 
-class AuthViewModel : ViewModel() {
-
-    private val supabase = SupabaseClient.service
+class AuthViewModel(
+    private val supabase: SupabaseService? = SupabaseClient.service
+) : ViewModel() {
 
     private val _registerState = MutableStateFlow(RegisterUiState())
     val registerState: StateFlow<RegisterUiState> = _registerState.asStateFlow()
@@ -167,6 +168,12 @@ class AuthViewModel : ViewModel() {
             category = state.category.trim()
         )
 
+        if (supabase == null) {
+            _registerState.update { it.copy(isLoading = false, isRegisteredSuccessfully = true) }
+            onSuccess(createdShop)
+            return
+        }
+
         _registerState.update { it.copy(isLoading = true, errorMessage = null) }
         viewModelScope.launch {
             val result = supabase.signUp(state.email.trim(), state.password)
@@ -208,6 +215,12 @@ class AuthViewModel : ViewModel() {
             return
         }
 
+        if (supabase == null) {
+            _loginState.update { it.copy(isLoading = false) }
+            onSuccess(state.email, state.password)
+            return
+        }
+
         _loginState.update { it.copy(isLoading = true, errorMessage = null) }
         viewModelScope.launch {
             val result = supabase.signIn(state.email.trim(), state.password)
@@ -240,6 +253,11 @@ class AuthViewModel : ViewModel() {
             _forgotPasswordState.update {
                 it.copy(errorMessage = "Please enter a valid email address.")
             }
+            return
+        }
+
+        if (supabase == null) {
+            _forgotPasswordState.update { it.copy(isLoading = false, isResetSent = true) }
             return
         }
 

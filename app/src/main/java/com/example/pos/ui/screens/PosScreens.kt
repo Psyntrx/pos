@@ -6,13 +6,18 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.LocalGroceryStore
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
@@ -23,10 +28,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.pos.data.CartItem
+import com.example.pos.data.CreditLedgerUtils
 import com.example.pos.data.Product
 import com.example.pos.ui.components.PrimaryGreenButton
 import com.example.pos.ui.components.SecondaryDarkButton
@@ -43,8 +50,11 @@ fun NewSaleScreen(
     val cart by viewModel.cart.collectAsState()
     var search by remember { mutableStateOf("") }
 
-    val filteredProducts = products.filter {
-        search.isBlank() || it.name.contains(search, ignoreCase = true) || it.sku.contains(search, ignoreCase = true)
+    val filteredProducts = remember(products, search) {
+        if (search.isBlank()) products
+        else products.filter {
+            it.name.contains(search, ignoreCase = true) || it.sku.contains(search, ignoreCase = true)
+        }
     }
 
     val subtotal = cart.sumOf { it.totalPrice }
@@ -112,7 +122,7 @@ fun NewSaleScreen(
                     .fillMaxWidth()
                     .weight(1f)
             ) {
-                items(filteredProducts) { product ->
+                items(filteredProducts, key = { it.id }) { product ->
                     val cartItem = cart.find { it.product.id == product.id }
                     val quantityInCart = cartItem?.quantity ?: 0
 
@@ -203,8 +213,13 @@ fun PosProductItemRow(
     onAdd: () -> Unit,
     onRemove: () -> Unit
 ) {
+    val isOutOfStock = product.stockQuantity <= 0
+    val canAddMore = !isOutOfStock && quantityInCart < product.stockQuantity
+
     SurfaceCard(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = canAddMore) { onAdd() },
         backgroundColor = SurfaceDark,
         borderColor = if (quantityInCart > 0) EmeraldBright.copy(alpha = 0.5f) else SurfaceBorder,
         cornerRadius = 18.dp
@@ -214,18 +229,21 @@ fun PosProductItemRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
                 Box(
                     modifier = Modifier
                         .size(44.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(SurfaceDarkVariant),
+                        .background(if (isOutOfStock) SurfaceDarkVariant.copy(alpha = 0.5f) else SurfaceDarkVariant),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.LocalGroceryStore,
                         contentDescription = null,
-                        tint = EmeraldBright,
+                        tint = if (isOutOfStock) TextMuted else EmeraldBright,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -238,14 +256,16 @@ fun PosProductItemRow(
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
-                            color = TextPrimary
+                            color = if (isOutOfStock) TextSecondary else TextPrimary
                         )
                     )
+                    val stockText = if (isOutOfStock) "Out of Stock" else "Stock: ${product.stockQuantity}"
+                    val stockColor = if (isOutOfStock) ErrorRed else TextSecondary
                     Text(
-                        text = "KSh ${String.format("%,.0f", product.sellingPrice)} • Stock: ${product.stockQuantity}",
+                        text = "KSh ${String.format("%,.0f", product.sellingPrice)} • $stockText",
                         style = MaterialTheme.typography.bodyMedium.copy(
                             fontSize = 12.sp,
-                            color = TextSecondary
+                            color = stockColor
                         )
                     )
                 }
@@ -280,11 +300,16 @@ fun PosProductItemRow(
                         modifier = Modifier
                             .size(32.dp)
                             .clip(CircleShape)
-                            .background(EmeraldContainer)
-                            .clickable { onAdd() },
+                            .background(if (canAddMore) EmeraldContainer else SurfaceDarkVariant)
+                            .clickable(enabled = canAddMore) { onAdd() },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("+", style = MaterialTheme.typography.titleMedium.copy(color = EmeraldBright))
+                        Text(
+                            "+",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                color = if (canAddMore) EmeraldBright else TextMuted
+                            )
+                        )
                     }
                 }
             } else {
@@ -292,11 +317,16 @@ fun PosProductItemRow(
                     modifier = Modifier
                         .size(36.dp)
                         .clip(CircleShape)
-                        .background(EmeraldContainer)
-                        .clickable { onAdd() },
+                        .background(if (canAddMore) EmeraldContainer else SurfaceDarkVariant)
+                        .clickable(enabled = canAddMore) { onAdd() },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("+", style = MaterialTheme.typography.titleLarge.copy(color = EmeraldBright))
+                    Text(
+                        "+",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            color = if (canAddMore) EmeraldBright else TextMuted
+                        )
+                    )
                 }
             }
         }
@@ -312,8 +342,25 @@ fun PaymentScreen(
     val totalAmount = cart.sumOf { it.totalPrice }
 
     var selectedPaymentMethod by remember { mutableStateOf("M-Pesa") }
+    val isCreditSale = selectedPaymentMethod == "Credit"
+
+    // Walk-in / non-credit customer
     var customerInput by remember { mutableStateOf("") }
-    var isCreditSale by remember { mutableStateOf(false) }
+
+    // Credit-specific fields
+    var creditCustomerName by remember { mutableStateOf("") }
+    var creditCustomerPhone by remember { mutableStateOf("") }
+    var creditCustomerNameError by remember { mutableStateOf<String?>(null) }
+    var creditCustomerPhoneError by remember { mutableStateOf<String?>(null) }
+
+    var creditDurationDays by remember { mutableStateOf(viewModel.getCreditDurationDays()) }
+    var creditDueDate by remember { mutableStateOf(viewModel.defaultCreditDueDate()) }
+
+    var creditDepositInput by remember { mutableStateOf("") }
+    var creditDepositError by remember { mutableStateOf<String?>(null) }
+
+    val parsedDeposit = if (creditDepositInput.isBlank()) 0.0 else creditDepositInput.toDoubleOrNull() ?: 0.0
+    val remainingBalance = CreditLedgerUtils.calculateOutstandingBalance(totalAmount, parsedDeposit) ?: totalAmount
 
     Box(
         modifier = Modifier
@@ -322,7 +369,9 @@ fun PaymentScreen(
             .padding(20.dp)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
@@ -360,7 +409,7 @@ fun PaymentScreen(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "KSh ${String.format("%,.0f", if (totalAmount > 0) totalAmount else 1010.0)}",
+                        text = "KSh ${String.format("%,.0f", totalAmount)}",
                         style = MaterialTheme.typography.headlineLarge.copy(
                             fontSize = 34.sp,
                             fontWeight = FontWeight.ExtraBold,
@@ -382,7 +431,7 @@ fun PaymentScreen(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                val methods = listOf("Cash", "M-Pesa", "Card", "Other")
+                val methods = listOf("Cash", "M-Pesa", "Credit")
 
                 SurfaceCard(
                     modifier = Modifier.fillMaxWidth(),
@@ -394,13 +443,23 @@ fun PaymentScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { selectedPaymentMethod = method }
+                                .clickable {
+                                    selectedPaymentMethod = method
+                                    creditCustomerNameError = null
+                                    creditCustomerPhoneError = null
+                                    creditDepositError = null
+                                }
                                 .padding(vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
                                 selected = selectedPaymentMethod == method,
-                                onClick = { selectedPaymentMethod = method },
+                                onClick = {
+                                    selectedPaymentMethod = method
+                                    creditCustomerNameError = null
+                                    creditCustomerPhoneError = null
+                                    creditDepositError = null
+                                },
                                 colors = RadioButtonDefaults.colors(
                                     selectedColor = EmeraldBright,
                                     unselectedColor = TextMuted
@@ -408,7 +467,7 @@ fun PaymentScreen(
                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             Text(
-                                text = method,
+                                text = if (method == "Credit") "Credit Sale" else method,
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.SemiBold,
                                     color = TextPrimary
@@ -420,30 +479,180 @@ fun PaymentScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Customer (Optional) Input
-                OutlinedTextField(
-                    value = customerInput,
-                    onValueChange = { customerInput = it },
-                    label = { Text("Customer (Optional)") },
-                    placeholder = { Text("Name or phone number", color = TextMuted) },
-                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = EmeraldBright) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    textStyle = LocalTextStyle.current.copy(color = TextPrimary),
-                    colors = com.example.pos.ui.components.posTextFieldColors(),
-                    singleLine = true
-                )
+                if (isCreditSale) {
+                    // Credit Customer Name (Mandatory)
+                    OutlinedTextField(
+                        value = creditCustomerName,
+                        onValueChange = {
+                            creditCustomerName = it
+                            if (creditCustomerNameError != null) creditCustomerNameError = null
+                        },
+                        label = { Text("Customer Name *") },
+                        placeholder = { Text("Enter customer name", color = TextMuted) },
+                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = EmeraldBright) },
+                        isError = creditCustomerNameError != null,
+                        supportingText = {
+                            if (creditCustomerNameError != null) {
+                                Text(creditCustomerNameError!!, color = ErrorRed)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                        colors = com.example.pos.ui.components.posTextFieldColors(),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Credit Customer Phone (Mandatory)
+                    OutlinedTextField(
+                        value = creditCustomerPhone,
+                        onValueChange = {
+                            creditCustomerPhone = it
+                            if (creditCustomerPhoneError != null) creditCustomerPhoneError = null
+                        },
+                        label = { Text("Customer Phone *") },
+                        placeholder = { Text("e.g. 0712345678 or +254...", color = TextMuted) },
+                        leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = EmeraldBright) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        isError = creditCustomerPhoneError != null,
+                        supportingText = {
+                            if (creditCustomerPhoneError != null) {
+                                Text(creditCustomerPhoneError!!, color = ErrorRed)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                        colors = com.example.pos.ui.components.posTextFieldColors(),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Credit Duration
+                    Text(
+                        text = "Credit Duration",
+                        style = MaterialTheme.typography.titleSmall.copy(color = TextSecondary)
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(7, 14, 30, 60).forEach { days ->
+                            FilterChip(
+                                selected = creditDurationDays == days,
+                                onClick = {
+                                    creditDurationDays = days
+                                    creditDueDate = CreditLedgerUtils.calculateDueDate(days)
+                                },
+                                label = { Text("${days}d") }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Due Date display
+                    OutlinedTextField(
+                        value = creditDueDate,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Due Date", color = TextSecondary) },
+                        leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, tint = EmeraldBright) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                        colors = com.example.pos.ui.components.posTextFieldColors(),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Deposit / Initial Payment (Optional)
+                    OutlinedTextField(
+                        value = creditDepositInput,
+                        onValueChange = {
+                            creditDepositInput = it
+                            if (creditDepositError != null) creditDepositError = null
+                        },
+                        label = { Text("Initial Deposit (Optional)") },
+                        placeholder = { Text("0.00", color = TextMuted) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        isError = creditDepositError != null,
+                        supportingText = {
+                            if (creditDepositError != null) {
+                                Text(creditDepositError!!, color = ErrorRed)
+                            } else {
+                                Text("Remaining balance: KSh ${String.format("%,.0f", remainingBalance)}", color = WarningYellow)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                        colors = com.example.pos.ui.components.posTextFieldColors(),
+                        singleLine = true
+                    )
+                } else {
+                    // Customer (Optional) Input for Cash / M-Pesa
+                    OutlinedTextField(
+                        value = customerInput,
+                        onValueChange = { customerInput = it },
+                        label = { Text("Customer (Optional)") },
+                        placeholder = { Text("Name or phone number", color = TextMuted) },
+                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = EmeraldBright) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                        colors = com.example.pos.ui.components.posTextFieldColors(),
+                        singleLine = true
+                    )
+                }
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
 
             // Complete Sale Button
             PrimaryGreenButton(
-                text = "Complete Sale",
+                text = if (isCreditSale) "Save Credit Sale" else "Complete Sale",
                 onClick = {
-                    viewModel.completeSale(
-                        paymentMethod = selectedPaymentMethod,
-                        customerName = customerInput,
-                        isCredit = isCreditSale
-                    )
+                    if (isCreditSale) {
+                        val trimmedName = creditCustomerName.trim()
+                        var hasError = false
+                        if (trimmedName.isBlank()) {
+                            creditCustomerNameError = "Customer name is required"
+                            hasError = true
+                        }
+                        val normalizedPhone = CreditLedgerUtils.normalizePhoneNumber(creditCustomerPhone)
+                        if (normalizedPhone == null) {
+                            creditCustomerPhoneError = "Valid phone number is required (e.g. 0712345678 or +254...)"
+                            hasError = true
+                        }
+                        val deposit = creditDepositInput.toDoubleOrNull() ?: 0.0
+                        if (deposit < 0.0 || deposit > totalAmount) {
+                            creditDepositError = "Deposit cannot exceed total amount"
+                            hasError = true
+                        }
+                        if (hasError) return@PrimaryGreenButton
+
+                        viewModel.completeSale(
+                            paymentMethod = "Credit",
+                            customerName = trimmedName,
+                            customerPhone = normalizedPhone!!,
+                            isCredit = true,
+                            paidAmount = deposit,
+                            dueDate = creditDueDate
+                        )
+                    } else {
+                        viewModel.completeSale(
+                            paymentMethod = selectedPaymentMethod,
+                            customerName = customerInput,
+                            customerPhone = "",
+                            isCredit = false
+                        )
+                    }
                 },
                 modifier = Modifier.padding(bottom = 16.dp)
             )

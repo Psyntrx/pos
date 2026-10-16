@@ -1,6 +1,11 @@
 package com.example.pos
 
 import com.example.pos.viewmodel.AuthViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
+import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -11,7 +16,13 @@ class AuthViewModelTest {
 
     @Before
     fun setUp() {
-        viewModel = AuthViewModel()
+        Dispatchers.setMain(StandardTestDispatcher())
+        viewModel = AuthViewModel(supabase = null)
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
     }
 
     @Test
