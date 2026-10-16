@@ -525,6 +525,27 @@ class PosViewModel(
         _completedSale.value = null
     }
 
+    fun deleteSale(saleId: String) {
+        _salesHistory.update { list -> list.filterNot { it.id == saleId } }
+        storageManager.saveSales(_salesHistory.value)
+
+        viewModelScope.launch {
+            SupabaseClient.service.deleteSale(saleId)
+        }
+    }
+
+    fun updateSale(updatedSale: Sale) {
+        _salesHistory.update { list ->
+            list.map { if (it.id == updatedSale.id) updatedSale else it }
+        }
+        storageManager.saveSales(_salesHistory.value)
+
+        viewModelScope.launch {
+            val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+            SupabaseClient.service.upsertSale(updatedSale, activeShopId)
+        }
+    }
+
     fun addCustomerCredit(customerName: String, phone: String, productsSummary: String, amountPaid: Double, balance: Double, dueDate: String) {
         val total = amountPaid + balance
         val creditRecord = CustomerCredit(

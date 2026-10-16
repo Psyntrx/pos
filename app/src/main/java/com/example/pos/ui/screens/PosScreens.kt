@@ -13,12 +13,16 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocalGroceryStore
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
@@ -34,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.pos.data.CartItem
 import com.example.pos.data.Product
+import com.example.pos.data.Sale
 import com.example.pos.ui.components.PrimaryGreenButton
 import com.example.pos.ui.components.SecondaryDarkButton
 import com.example.pos.ui.components.SurfaceCard
@@ -47,104 +52,235 @@ fun NewSaleScreen(
 ) {
     val products by viewModel.products.collectAsState()
     val cart by viewModel.cart.collectAsState()
+    val salesHistory by viewModel.salesHistory.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
 
-    val categories = listOf("All", "Groceries", "Household", "Beverages", "Snacks")
+    var isAddingNewSale by remember { mutableStateOf(false) }
+    var selectedMethodFilter by remember { mutableStateOf("All") }
+    var saleToDelete by remember { mutableStateOf<Sale?>(null) }
+    var saleToEdit by remember { mutableStateOf<Sale?>(null) }
 
-    val filteredProducts = products.filter { product ->
-        val matchesCategory = (selectedCategory == "All") || product.category.equals(selectedCategory, ignoreCase = true)
-        val matchesSearch = product.name.contains(searchQuery, ignoreCase = true) ||
-                product.sku.contains(searchQuery, ignoreCase = true)
-        matchesCategory && matchesSearch
+    // If cart has items, automatically switch to product selection
+    LaunchedEffect(cart) {
+        if (cart.isNotEmpty()) {
+            isAddingNewSale = true
+        }
     }
 
-    val totalCartAmount = cart.sumOf { it.totalPrice }
-    val totalCartItems = cart.sumOf { it.quantity }
+    if (isAddingNewSale) {
+        // Product Selection View (Catalog view with Category Filters)
+        val categories = listOf("All", "Groceries", "Household", "Beverages", "Snacks")
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(BgDark)
-            .padding(16.dp)
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // Search Input
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { viewModel.updateSearchQuery(it) },
-                placeholder = { Text("Search product name or SKU...", color = TextMuted) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = EmeraldBright) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = com.example.pos.ui.components.posTextFieldColors(),
-                singleLine = true
-            )
+        val filteredProducts = products.filter { product ->
+            val matchesCategory = (selectedCategory == "All") || product.category.equals(selectedCategory, ignoreCase = true)
+            val matchesSearch = product.name.contains(searchQuery, ignoreCase = true) ||
+                    product.sku.contains(searchQuery, ignoreCase = true)
+            matchesCategory && matchesSearch
+        }
 
-            Spacer(modifier = Modifier.height(14.dp))
+        val totalCartAmount = cart.sumOf { it.totalPrice }
+        val totalCartItems = cart.sumOf { it.quantity }
 
-            // Categories Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                categories.forEach { category ->
-                    val isSelected = selectedCategory == category
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { viewModel.selectCategory(category) },
-                        label = {
-                            Text(
-                                text = category,
-                                color = if (isSelected) BgDark else TextPrimary,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                            )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            containerColor = SurfaceDark,
-                            selectedContainerColor = EmeraldBright
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            enabled = true,
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(BgDark)
+                .padding(16.dp)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Header with Back button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { isAddingNewSale = false }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Select Products for Sale",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Search Input
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { viewModel.updateSearchQuery(it) },
+                    placeholder = { Text("Search product name or SKU...", color = TextMuted) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = EmeraldBright) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = com.example.pos.ui.components.posTextFieldColors(),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Categories Row (Same as Inventory)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    categories.forEach { category ->
+                        val isSelected = selectedCategory == category
+                        FilterChip(
                             selected = isSelected,
-                            borderColor = SurfaceBorder,
-                            selectedBorderColor = EmeraldBright
-                        ),
-                        shape = RoundedCornerShape(20.dp)
-                    )
+                            onClick = { viewModel.selectCategory(category) },
+                            label = {
+                                Text(
+                                    text = category,
+                                    color = if (isSelected) BgDark else TextPrimary,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = SurfaceDark,
+                                selectedContainerColor = EmeraldBright
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = isSelected,
+                                borderColor = SurfaceBorder,
+                                selectedBorderColor = EmeraldBright
+                            ),
+                            shape = RoundedCornerShape(20.dp)
+                        )
+                    }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-            // Products Grid / List
-            LazyColumn(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(filteredProducts) { product ->
-                    val cartItem = cart.find { it.product.id == product.id }
-                    val qtyInCart = cartItem?.quantity ?: 0
-
-                    ProductItemCard(
-                        product = product,
-                        quantityInCart = qtyInCart,
-                        onAdd = { viewModel.addToCart(product) },
-                        onRemove = { viewModel.removeFromCart(product.id) }
-                    )
-                }
-            }
-
-            // Checkout Floating Bar
-            if (cart.isNotEmpty()) {
-                SurfaceCard(
+                // Products Grid / List
+                LazyColumn(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(filteredProducts) { product ->
+                        val cartItem = cart.find { it.product.id == product.id }
+                        val qtyInCart = cartItem?.quantity ?: 0
+
+                        ProductItemCard(
+                            product = product,
+                            quantityInCart = qtyInCart,
+                            onAdd = { viewModel.addToCart(product) },
+                            onRemove = { viewModel.removeFromCart(product.id) }
+                        )
+                    }
+                }
+
+                // Checkout Floating Bar
+                if (cart.isNotEmpty()) {
+                    SurfaceCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        backgroundColor = SurfaceDark,
+                        borderColor = EmeraldBright,
+                        cornerRadius = 20.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "$totalCartItems items in cart",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
+                                )
+                                Text(
+                                    text = "KSh ${String.format("%,.0f", totalCartAmount)}",
+                                    style = MaterialTheme.typography.titleLarge.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = EmeraldBright
+                                    )
+                                )
+                            }
+
+                            Button(
+                                onClick = onProceedToPayment,
+                                colors = ButtonDefaults.buttonColors(containerColor = EmeraldBright),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Text("Charge", color = BgDark, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        // Sales History View (Recent Transactions sorted by date)
+        val sortedSales = remember(salesHistory, searchQuery, selectedMethodFilter) {
+            salesHistory
+                .filter { sale ->
+                    val matchesSearch = searchQuery.isBlank() ||
+                            sale.id.contains(searchQuery, ignoreCase = true) ||
+                            sale.customerName.contains(searchQuery, ignoreCase = true)
+                    val matchesMethod = selectedMethodFilter == "All" ||
+                            sale.paymentMethod.equals(selectedMethodFilter, ignoreCase = true)
+                    matchesSearch && matchesMethod
+                }
+                .sortedByDescending { it.timestamp }
+        }
+
+        val totalRevenue = salesHistory.sumOf { it.totalAmount }
+        val totalCount = salesHistory.size
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(BgDark)
+                .padding(16.dp)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Header with "New Sale" action button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Sales Transactions",
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                        )
+                        Text(
+                            text = "$totalCount total sales recorded",
+                            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
+                        )
+                    }
+
+                    Button(
+                        onClick = { isAddingNewSale = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = EmeraldBright),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = BgDark)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("New Sale", color = BgDark, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Stats Banner Card
+                SurfaceCard(
+                    modifier = Modifier.fillMaxWidth(),
                     backgroundColor = SurfaceDark,
-                    borderColor = EmeraldBright,
+                    borderColor = SurfaceBorder,
                     cornerRadius = 20.dp
                 ) {
                     Row(
@@ -153,30 +289,363 @@ fun NewSaleScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
+                            Text("Total Revenue", style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary))
                             Text(
-                                text = "$totalCartItems items in cart",
-                                style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
-                            )
-                            Text(
-                                text = "KSh ${String.format("%,.0f", totalCartAmount)}",
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.Bold,
+                                "KSh ${String.format("%,.0f", totalRevenue)}",
+                                style = MaterialTheme.typography.headlineSmall.copy(
+                                    fontWeight = FontWeight.ExtraBold,
                                     color = EmeraldBright
                                 )
                             )
                         }
 
-                        Button(
-                            onClick = onProceedToPayment,
-                            colors = ButtonDefaults.buttonColors(containerColor = EmeraldBright),
-                            shape = RoundedCornerShape(14.dp)
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(EmeraldContainer),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text("Charge", color = BgDark, fontWeight = FontWeight.Bold)
+                            Icon(Icons.Default.ReceiptLong, contentDescription = null, tint = EmeraldBright)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Search Bar
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { viewModel.updateSearchQuery(it) },
+                    placeholder = { Text("Search receipt ID or customer...", color = TextMuted) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = EmeraldBright) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = com.example.pos.ui.components.posTextFieldColors(),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Payment Method Filter Chips
+                val methodFilters = listOf("All", "Cash", "M-Pesa", "Credit")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    methodFilters.forEach { filter ->
+                        val isSelected = selectedMethodFilter == filter
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { selectedMethodFilter = filter },
+                            label = {
+                                Text(
+                                    text = filter,
+                                    color = if (isSelected) BgDark else TextPrimary,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = SurfaceDark,
+                                selectedContainerColor = EmeraldBright
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = isSelected,
+                                borderColor = SurfaceBorder,
+                                selectedBorderColor = EmeraldBright
+                            ),
+                            shape = RoundedCornerShape(20.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Sales List
+                if (sortedSales.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No sales records found",
+                            color = TextMuted,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(sortedSales) { sale ->
+                            SaleItemCard(
+                                sale = sale,
+                                onEdit = { saleToEdit = sale },
+                                onDelete = { saleToDelete = sale }
+                            )
                         }
                     }
                 }
             }
         }
+    }
+
+    // Delete Sale Confirmation Dialog
+    if (saleToDelete != null) {
+        val target = saleToDelete!!
+        AlertDialog(
+            onDismissRequest = { saleToDelete = null },
+            containerColor = SurfaceDark,
+            title = {
+                Text("Delete Sale", color = TextPrimary, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    "Are you sure you want to delete sale #${target.id}? This will remove it permanently.",
+                    color = TextSecondary
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteSale(target.id)
+                        saleToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444))
+                ) {
+                    Text("Delete", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { saleToDelete = null }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            }
+        )
+    }
+
+    // Edit Sale Dialog
+    if (saleToEdit != null) {
+        val target = saleToEdit!!
+        var editedCustomerName by remember { mutableStateOf(target.customerName) }
+        var editedPaymentMethod by remember { mutableStateOf(target.paymentMethod) }
+        var editedPaidAmountInput by remember { mutableStateOf(if (target.isCreditSale) target.paidAmount.toString() else "") }
+        var editedItems by remember { mutableStateOf(target.items) }
+
+        val recalculatedTotal = editedItems.sumOf { it.totalPrice }
+        val isCredit = editedPaymentMethod == "Credit"
+        val paidAmountNum = if (isCredit) {
+            editedPaidAmountInput.toDoubleOrNull() ?: recalculatedTotal
+        } else recalculatedTotal
+        val calculatedBalance = (recalculatedTotal - paidAmountNum).coerceAtLeast(0.0)
+
+        AlertDialog(
+            onDismissRequest = { saleToEdit = null },
+            containerColor = SurfaceDark,
+            title = {
+                Text("Edit Sale #${target.id}", color = TextPrimary, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    // Customer Name
+                    OutlinedTextField(
+                        value = editedCustomerName,
+                        onValueChange = { editedCustomerName = it },
+                        label = { Text("Customer Name", color = TextSecondary) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = com.example.pos.ui.components.posTextFieldColors(),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Payment Method
+                    Text("Payment Method", style = MaterialTheme.typography.labelMedium.copy(color = TextSecondary))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf("Cash", "M-Pesa", "Credit").forEach { method ->
+                            FilterChip(
+                                selected = editedPaymentMethod == method,
+                                onClick = { editedPaymentMethod = method },
+                                label = { Text(method, color = if (editedPaymentMethod == method) BgDark else TextPrimary) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    containerColor = SurfaceDarkVariant,
+                                    selectedContainerColor = EmeraldBright
+                                )
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Items & Quantities Editor
+                    Text("Products & Quantities", style = MaterialTheme.typography.labelMedium.copy(color = TextSecondary, fontWeight = FontWeight.Bold))
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    if (editedItems.isEmpty()) {
+                        Text("No items selected in sale", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                    } else {
+                        editedItems.forEachIndexed { index, cartItem ->
+                            SurfaceCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                backgroundColor = SurfaceDarkVariant,
+                                borderColor = SurfaceBorder,
+                                cornerRadius = 12.dp
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = cartItem.product.name,
+                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
+                                        )
+                                        Text(
+                                            text = "KSh ${String.format("%,.0f", cartItem.product.sellingPrice)} / ${cartItem.product.unit}",
+                                            style = MaterialTheme.typography.bodySmall.copy(color = EmeraldBright)
+                                        )
+                                    }
+
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        // Decrease quantity button
+                                        Box(
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .clip(CircleShape)
+                                                .background(SurfaceDark)
+                                                .clickable {
+                                                    val updatedList = editedItems.toMutableList()
+                                                    if (cartItem.quantity > 1) {
+                                                        updatedList[index] = cartItem.copy(quantity = cartItem.quantity - 1)
+                                                    } else {
+                                                        updatedList.removeAt(index)
+                                                    }
+                                                    editedItems = updatedList
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text("-", color = EmeraldBright, fontWeight = FontWeight.Bold)
+                                        }
+
+                                        Text("${cartItem.quantity}", color = TextPrimary, fontWeight = FontWeight.Bold)
+
+                                        // Increase quantity button
+                                        Box(
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .clip(CircleShape)
+                                                .background(EmeraldContainer)
+                                                .clickable {
+                                                    val updatedList = editedItems.toMutableList()
+                                                    updatedList[index] = cartItem.copy(quantity = cartItem.quantity + 1)
+                                                    editedItems = updatedList
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text("+", color = EmeraldBright, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Recalculated Total
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Total Amount:", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+                        Text(
+                            "KSh ${String.format("%,.0f", recalculatedTotal)}",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = EmeraldBright)
+                        )
+                    }
+
+                    if (isCredit) {
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Amount Paid Input (for partial payment adjustment)
+                        OutlinedTextField(
+                            value = editedPaidAmountInput,
+                            onValueChange = { editedPaidAmountInput = it },
+                            label = { Text("Partial Amount Paid (KSh)", color = TextSecondary) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = com.example.pos.ui.components.posTextFieldColors(),
+                            singleLine = true
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Credit Balance:", style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary))
+                            Text(
+                                "KSh ${String.format("%,.0f", calculatedBalance)}",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = WarningYellow)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val finalTotal = recalculatedTotal
+                        val finalPaid = if (isCredit) paidAmountNum else finalTotal
+                        val finalBalance = if (isCredit) calculatedBalance else 0.0
+
+                        viewModel.updateSale(
+                            target.copy(
+                                customerName = editedCustomerName.trim(),
+                                paymentMethod = editedPaymentMethod,
+                                items = editedItems,
+                                totalAmount = finalTotal,
+                                isCreditSale = isCredit,
+                                paidAmount = finalPaid,
+                                balance = finalBalance
+                            )
+                        )
+                        saleToEdit = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = EmeraldBright)
+                ) {
+                    Text("Save Changes", color = BgDark, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { saleToEdit = null }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            }
+        )
     }
 }
 
@@ -277,12 +746,112 @@ fun ProductItemCard(
 }
 
 @Composable
+fun SaleItemCard(
+    sale: Sale,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    SurfaceCard(
+        modifier = Modifier.fillMaxWidth(),
+        backgroundColor = SurfaceDark,
+        borderColor = SurfaceBorder,
+        cornerRadius = 16.dp
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Receipt #${sale.id}",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                    )
+                    Text(
+                        text = sale.dateFormatted,
+                        style = MaterialTheme.typography.bodySmall.copy(color = TextMuted)
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        color = if (sale.paymentMethod == "Credit") WarningYellow.copy(alpha = 0.2f) else EmeraldContainer,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = sale.paymentMethod,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = if (sale.paymentMethod == "Credit") WarningYellow else EmeraldBright
+                            ),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit", tint = TextSecondary, modifier = Modifier.size(18.dp))
+                    }
+
+                    IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Customer: ${sale.customerName.ifBlank { "Walk-in Customer" }}",
+                style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
+            )
+
+            if (sale.items.isNotEmpty()) {
+                Text(
+                    text = sale.items.joinToString { "${it.product.name} x${it.quantity}" },
+                    style = MaterialTheme.typography.bodySmall.copy(color = TextMuted),
+                    maxLines = 2
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Total Amount",
+                    style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
+                )
+
+                Text(
+                    text = "KSh ${String.format("%,.0f", sale.totalAmount)}",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = EmeraldBright
+                    )
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun PaymentScreen(
     viewModel: PosViewModel,
     onBack: () -> Unit
 ) {
     val cart by viewModel.cart.collectAsState()
-    val totalAmount = cart.sumOf { it.totalPrice }
+    val cartTotal = cart.sumOf { it.totalPrice }
+    val initialTotalAmount = remember { cartTotal }
+    val totalAmount = if (cartTotal > 0) cartTotal else initialTotalAmount
 
     var selectedPaymentMethod by remember { mutableStateOf("M-Pesa") }
 
@@ -348,7 +917,7 @@ fun PaymentScreen(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "KSh ${String.format("%,.0f", if (totalAmount > 0) totalAmount else 1010.0)}",
+                        text = "KSh ${String.format("%,.0f", totalAmount)}",
                         style = MaterialTheme.typography.headlineLarge.copy(
                             fontSize = 34.sp,
                             fontWeight = FontWeight.ExtraBold,
