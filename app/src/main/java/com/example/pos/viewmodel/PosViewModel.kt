@@ -540,9 +540,36 @@ class PosViewModel(
         }
         storageManager.saveSales(_salesHistory.value)
 
+        var matchedCredit: CustomerCredit? = null
+        if (updatedSale.isCreditSale) {
+            _customerCredits.update { list ->
+                val existing = list.find { it.customerName.equals(updatedSale.customerName, ignoreCase = true) }
+                if (existing != null) {
+                    list.map {
+                        if (it.id == existing.id) {
+                            val updated = it.copy(
+                                customerName = updatedSale.customerName,
+                                totalOutstanding = updatedSale.totalAmount,
+                                amountPaid = updatedSale.paidAmount,
+                                balance = updatedSale.balance,
+                                dueDate = updatedSale.dueDate,
+                                productsSummary = "${updatedSale.items.size} Items | ${updatedSale.items.joinToString { item -> item.product.name }}"
+                            )
+                            matchedCredit = updated
+                            updated
+                        } else it
+                    }
+                } else list
+            }
+            storageManager.saveCustomerCredits(_customerCredits.value)
+        }
+
         viewModelScope.launch {
             val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
             SupabaseClient.service.upsertSale(updatedSale, activeShopId)
+            if (matchedCredit != null) {
+                SupabaseClient.service.upsertCustomerCredit(matchedCredit!!)
+            }
         }
     }
 

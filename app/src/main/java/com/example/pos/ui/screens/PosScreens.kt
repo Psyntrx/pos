@@ -46,6 +46,71 @@ import com.example.pos.ui.theme.*
 import com.example.pos.viewmodel.PosViewModel
 
 @Composable
+fun DueDateSelector(
+    selectedDueDate: String,
+    onDueDateSelected: (String) -> Unit
+) {
+    val dueDateOptions = listOf("In 3 Days", "In 7 Days", "In 10 Days", "In 14 Days")
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text("Payment Due Date (Max 14 Days)", style = MaterialTheme.typography.labelMedium.copy(color = TextSecondary))
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Quick Selection Chips
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            dueDateOptions.forEach { option ->
+                val isSelected = selectedDueDate.equals(option, ignoreCase = true)
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { onDueDateSelected(option) },
+                    label = {
+                        Text(
+                            text = option,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = if (isSelected) BgDark else TextPrimary,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                            )
+                        )
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = SurfaceDarkVariant,
+                        selectedContainerColor = EmeraldBright
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Editable Input field for Custom Due Date (Capped at 14 days max)
+        OutlinedTextField(
+            value = selectedDueDate,
+            onValueChange = { input ->
+                val digitsOnly = input.filter { it.isDigit() }
+                if (digitsOnly.isNotEmpty()) {
+                    val daysNum = digitsOnly.toIntOrNull() ?: 14
+                    val cappedDays = daysNum.coerceIn(1, 14)
+                    onDueDateSelected("In $cappedDays Days")
+                } else {
+                    onDueDateSelected(input)
+                }
+            },
+            label = { Text("Custom Due Date", color = TextSecondary) },
+            leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, tint = EmeraldBright) },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+            colors = com.example.pos.ui.components.posTextFieldColors(),
+            singleLine = true
+        )
+    }
+}
+
+@Composable
 fun NewSaleScreen(
     viewModel: PosViewModel,
     onProceedToPayment: () -> Unit
@@ -436,6 +501,7 @@ fun NewSaleScreen(
         var editedCustomerName by remember { mutableStateOf(target.customerName) }
         var editedPaymentMethod by remember { mutableStateOf(target.paymentMethod) }
         var editedPaidAmountInput by remember { mutableStateOf(if (target.isCreditSale) target.paidAmount.toString() else "") }
+        var editedDueDate by remember { mutableStateOf(if (target.dueDate.isNotBlank()) target.dueDate else "In 14 Days") }
         var editedItems by remember { mutableStateOf(target.items) }
 
         val recalculatedTotal = editedItems.sumOf { it.totalPrice }
@@ -612,6 +678,14 @@ fun NewSaleScreen(
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = WarningYellow)
                             )
                         }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Due Date Selector (Max 14 Days)
+                        DueDateSelector(
+                            selectedDueDate = editedDueDate,
+                            onDueDateSelected = { editedDueDate = it }
+                        )
                     }
                 }
             },
@@ -630,7 +704,8 @@ fun NewSaleScreen(
                                 totalAmount = finalTotal,
                                 isCreditSale = isCredit,
                                 paidAmount = finalPaid,
-                                balance = finalBalance
+                                balance = finalBalance,
+                                dueDate = if (isCredit) editedDueDate else target.dueDate
                             )
                         )
                         saleToEdit = null
@@ -647,6 +722,71 @@ fun NewSaleScreen(
             }
         )
     }
+
+@Composable
+fun DueDateSelector(
+    selectedDueDate: String,
+    onDueDateSelected: (String) -> Unit
+) {
+    val dueDateOptions = listOf("In 3 Days", "In 7 Days", "In 10 Days", "In 14 Days")
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text("Payment Due Date (Max 14 Days)", style = MaterialTheme.typography.labelMedium.copy(color = TextSecondary))
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Quick Selection Chips
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            dueDateOptions.forEach { option ->
+                val isSelected = selectedDueDate.equals(option, ignoreCase = true)
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { onDueDateSelected(option) },
+                    label = {
+                        Text(
+                            text = option,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = if (isSelected) BgDark else TextPrimary,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                            )
+                        )
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = SurfaceDarkVariant,
+                        selectedContainerColor = EmeraldBright
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Editable Input field for Custom Due Date (Capped at 14 days)
+        OutlinedTextField(
+            value = selectedDueDate,
+            onValueChange = { input ->
+                val digitsOnly = input.filter { it.isDigit() }
+                if (digitsOnly.isNotEmpty()) {
+                    val daysNum = digitsOnly.toIntOrNull() ?: 14
+                    val cappedDays = daysNum.coerceIn(1, 14)
+                    onDueDateSelected("In $cappedDays Days")
+                } else {
+                    onDueDateSelected(input)
+                }
+            },
+            label = { Text("Custom Due Date", color = TextSecondary) },
+            leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, tint = EmeraldBright) },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+            colors = com.example.pos.ui.components.posTextFieldColors(),
+            singleLine = true
+        )
+    }
+}
 }
 
 @Composable
@@ -1091,17 +1231,10 @@ fun PaymentScreen(
 
                             Spacer(modifier = Modifier.height(12.dp))
 
-                            // Due Date Field
-                            OutlinedTextField(
-                                value = creditDueDate,
-                                onValueChange = { creditDueDate = it },
-                                label = { Text("Payment Due Date", color = TextSecondary) },
-                                leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, tint = EmeraldBright) },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(14.dp),
-                                textStyle = LocalTextStyle.current.copy(color = TextPrimary),
-                                colors = com.example.pos.ui.components.posTextFieldColors(),
-                                singleLine = true
+                            // Due Date Field (Max 14 Days)
+                            DueDateSelector(
+                                selectedDueDate = creditDueDate,
+                                onDueDateSelected = { creditDueDate = it }
                             )
                         }
                     }
