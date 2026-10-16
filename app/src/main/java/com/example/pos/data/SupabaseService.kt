@@ -244,12 +244,17 @@ class SupabaseService(
     // ==========================================
     // SHOP
     // ==========================================
-    suspend fun getShop(email: String? = null): Result<Shop?> = withContext(Dispatchers.IO) {
+    suspend fun getShop(
+        userEmail: String? = null,
+        shopId: String? = null,
+        email: String? = null
+    ): Result<Shop?> = withContext(Dispatchers.IO) {
         try {
-            val queryPath = if (!email.isNullOrBlank()) {
-                "/rest/v1/shops?email=eq.$email&select=*&limit=1"
-            } else {
-                "/rest/v1/shops?select=*&order=created_at.desc&limit=1"
+            val resolvedEmail = userEmail?.takeIf { it.isNotBlank() } ?: email?.takeIf { it.isNotBlank() }
+            val queryPath = when {
+                !shopId.isNullOrBlank() -> "/rest/v1/shops?id=eq.$shopId&select=*&limit=1"
+                !resolvedEmail.isNullOrBlank() -> "/rest/v1/shops?email=eq.$resolvedEmail&select=*&limit=1"
+                else -> "/rest/v1/shops?select=*&order=created_at.desc&limit=1"
             }
             val req = buildRequest(queryPath)
             client.newCall(req).execute().use { resp ->
@@ -257,20 +262,6 @@ class SupabaseService(
                 if (!resp.isSuccessful) return@withContext Result.failure(Exception("Failed to fetch shop: ${resp.code}"))
                 val arr = JSONArray(str)
                 if (arr.length() == 0) {
-                    if (!email.isNullOrBlank()) {
-                        // Fallback: Check if any shop exists
-                        val fallbackReq = buildRequest("/rest/v1/shops?select=*&order=created_at.desc&limit=1")
-                        client.newCall(fallbackReq).execute().use { fbResp ->
-                            val fbStr = fbResp.body?.string().orEmpty()
-                            if (fbResp.isSuccessful) {
-                                val fbArr = JSONArray(fbStr)
-                                if (fbArr.length() > 0) {
-                                    val obj = fbArr.getJSONObject(0)
-                                    return@withContext Result.success(parseShopJson(obj))
-                                }
-                            }
-                        }
-                    }
                     return@withContext Result.success(null)
                 }
                 val obj = arr.getJSONObject(0)
