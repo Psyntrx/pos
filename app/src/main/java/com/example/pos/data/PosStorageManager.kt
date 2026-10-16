@@ -277,6 +277,18 @@ class PosStorageManager(context: Context? = null) {
     fun loadRememberMePreference(): Boolean {
         return prefs?.getBoolean(KEY_REMEMBER_ME, true) ?: true
     }
+
+    fun clearShopData() {
+        editPrefs {
+            remove(KEY_SALES)
+            remove(KEY_EXPENSES)
+            remove(KEY_CUSTOMER_CREDITS)
+            remove(KEY_STOCK_IN)
+            remove(KEY_EMPLOYEES)
+            remove(KEY_PRODUCTS)
+            remove(KEY_SHOP)
+        }
+    }
 }
 
 // Extension JSON Converters
@@ -294,6 +306,7 @@ fun Product.toJson(): JSONObject {
         put("supplier", supplier)
         put("iconType", iconType)
         put("imageUri", imageUri)
+        put("shopId", shopId)
     }
 }
 
@@ -310,7 +323,8 @@ fun JSONObject.toProduct(): Product {
         minStock = optInt("minStock", 10),
         supplier = optString("supplier", ""),
         iconType = optString("iconType", "box"),
-        imageUri = optString("imageUri", "").takeIf { it.isNotBlank() && it != "null" }
+        imageUri = optString("imageUri", "").takeIf { it.isNotBlank() && it != "null" },
+        shopId = optString("shopId", "").takeIf { it.isNotBlank() }
     )
 }
 
@@ -344,6 +358,7 @@ fun Sale.toJson(): JSONObject {
         put("paidAmount", paidAmount)
         put("balance", balance)
         put("dueDate", dueDate)
+        put("shopId", shopId)
     }
 }
 
@@ -361,11 +376,12 @@ fun JSONObject.toSale(): Sale {
         customerName = optString("customerName", ""),
         dateFormatted = optString("dateFormatted", "Today"),
         timestamp = optLong("timestamp", System.currentTimeMillis()),
-        employeeName = optString("employeeName", "Faith"),
+        employeeName = optString("employeeName", "Store Owner"),
         isCreditSale = optBoolean("isCreditSale", false),
         paidAmount = optDouble("paidAmount", getDouble("totalAmount")),
         balance = optDouble("balance", 0.0),
-        dueDate = optString("dueDate", "")
+        dueDate = optString("dueDate", ""),
+        shopId = optString("shopId", "").takeIf { it.isNotBlank() }
     )
 }
 
@@ -379,6 +395,7 @@ fun StockInRecord.toJson(): JSONObject {
         put("supplier", supplier)
         put("dateFormatted", dateFormatted)
         put("employeeName", employeeName)
+        put("shopId", shopId)
     }
 }
 
@@ -391,7 +408,8 @@ fun JSONObject.toStockInRecord(): StockInRecord {
         buyingPrice = getDouble("buyingPrice"),
         supplier = optString("supplier", ""),
         dateFormatted = optString("dateFormatted", ""),
-        employeeName = optString("employeeName", "")
+        employeeName = optString("employeeName", ""),
+        shopId = optString("shopId", "").takeIf { it.isNotBlank() }
     )
 }
 
@@ -403,6 +421,7 @@ fun Expense.toJson(): JSONObject {
         put("amount", amount)
         put("dateFormatted", dateFormatted)
         put("iconType", iconType)
+        put("shopId", shopId)
     }
 }
 
@@ -413,7 +432,8 @@ fun JSONObject.toExpense(): Expense {
         category = getString("category"),
         amount = getDouble("amount"),
         dateFormatted = optString("dateFormatted", ""),
-        iconType = optString("iconType", "receipt")
+        iconType = optString("iconType", "receipt"),
+        shopId = optString("shopId", "").takeIf { it.isNotBlank() }
     )
 }
 
@@ -428,6 +448,7 @@ fun CustomerCredit.toJson(): JSONObject {
         put("balance", balance)
         put("dueDate", dueDate)
         put("status", status)
+        put("shopId", shopId)
     }
 }
 
@@ -441,7 +462,8 @@ fun JSONObject.toCustomerCredit(): CustomerCredit {
         amountPaid = optDouble("amountPaid", 0.0),
         balance = getDouble("balance"),
         dueDate = optString("dueDate", ""),
-        status = optString("status", "Pending")
+        status = optString("status", "Pending"),
+        shopId = optString("shopId", "").takeIf { it.isNotBlank() }
     )
 }
 
@@ -453,6 +475,7 @@ fun Employee.toJson(): JSONObject {
         put("phone", phone)
         put("email", email)
         put("isOwner", isOwner)
+        put("shopId", shopId)
     }
 }
 
@@ -463,7 +486,8 @@ fun JSONObject.toEmployee(): Employee {
         role = getString("role"),
         phone = optString("phone", ""),
         email = optString("email", ""),
-        isOwner = optBoolean("isOwner", false)
+        isOwner = optBoolean("isOwner", false),
+        shopId = optString("shopId", "").takeIf { it.isNotBlank() }
     )
 }
 
@@ -482,13 +506,13 @@ fun Shop.toJson(): JSONObject {
 
 fun JSONObject.toShop(): Shop {
     return Shop(
-        id = optString("id", "shop_1"),
-        name = optString("name", "Faith's Store"),
-        ownerName = optString("ownerName", "Faith"),
-        email = optString("email", "faith@store.com"),
-        phone = optString("phone", "+254 712 345 678"),
+        id = optString("id", "shop_default"),
+        name = optString("name", "My Store"),
+        ownerName = optString("ownerName", "Store Owner"),
+        email = optString("email", ""),
+        phone = optString("phone", ""),
         category = optString("category", "Retail & Grocery"),
-        address = optString("address", "Plot 42, Biashara Street, Nairobi"),
+        address = optString("address", "Nairobi, Kenya"),
         currency = optString("currency", "KSh")
     )
 }

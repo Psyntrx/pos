@@ -89,21 +89,25 @@ fun DashboardScreen(
     val salesHistory by viewModel.salesHistory.collectAsState()
     val expenses by viewModel.expenses.collectAsState()
 
-    val totalSalesToday = if (salesHistory.isNotEmpty()) {
-        salesHistory.filter { it.dateFormatted.contains("Today") || it.dateFormatted.contains("Just now") }
-            .sumOf { it.totalAmount }
-            .let { if (it > 0) it else 24580.0 }
-    } else 24580.0
+    val totalSalesToday = salesHistory
+        .filter { it.dateFormatted.contains("Today", ignoreCase = true) || it.dateFormatted.contains("Just now", ignoreCase = true) }
+        .sumOf { it.totalAmount }
 
-    val grossProfit = 18320.0
+    val cogsToday = salesHistory
+        .filter { it.dateFormatted.contains("Today", ignoreCase = true) || it.dateFormatted.contains("Just now", ignoreCase = true) }
+        .sumOf { sale ->
+            sale.items.sumOf { (if (it.product.buyingPrice > 0) it.product.buyingPrice else it.product.sellingPrice * 0.7) * it.quantity }
+        }
+
+    val grossProfit = (totalSalesToday - cogsToday).coerceAtLeast(0.0)
     val totalExpenses = expenses.sumOf { it.amount }
     val netProfit = (grossProfit - totalExpenses).coerceAtLeast(0.0)
-    val totalTransactions = salesHistory.size + 9
+    val totalTransactions = salesHistory.size
     val lowStockProducts = products.filter { it.isLowStock }
 
     // Target Progress Calculation
     val dailyTarget = 30000.0
-    val targetRatio = (totalSalesToday / dailyTarget).toFloat().coerceIn(0f, 1f)
+    val targetRatio = if (dailyTarget > 0) (totalSalesToday / dailyTarget).toFloat().coerceIn(0f, 1f) else 0f
 
     // Animated target progress
     var animationTrigger by remember { mutableStateOf(false) }
@@ -117,29 +121,56 @@ fun DashboardScreen(
         label = "targetProgress"
     )
 
-    // Category Doughnut Data
-    val categoriesData = remember {
-        listOf(
-            CategorySalesData("Groceries", 0.58f, 14250.0, Color(0xFF10B981)),
-            CategorySalesData("Beverages", 0.24f, 5900.0, Color(0xFF8B5CF6)),
-            CategorySalesData("Snacks", 0.18f, 4430.0, Color(0xFFF59E0B))
-        )
+    // Category Doughnut Data (calculated from real sales or products)
+    val categoriesData = remember(salesHistory, products) {
+        val catMap = mutableMapOf<String, Double>()
+        salesHistory.forEach { sale ->
+            sale.items.forEach { item ->
+                val cat = item.product.category.ifBlank { "General" }
+                catMap[cat] = (catMap[cat] ?: 0.0) + item.totalPrice
+            }
+        }
+        val totalRevenue = catMap.values.sum()
+        if (totalRevenue > 0) {
+            val palette = listOf(Color(0xFF10B981), Color(0xFF8B5CF6), Color(0xFFF59E0B), Color(0xFF3B82F6), Color(0xFFEC4899))
+            catMap.entries.toList().mapIndexed { i, entry ->
+                CategorySalesData(
+                    name = entry.key,
+                    percentage = (entry.value / totalRevenue).toFloat(),
+                    amount = entry.value,
+                    color = palette[i % palette.size]
+                )
+            }
+        } else {
+            emptyList()
+        }
     }
     var selectedCategoryIndex by remember { mutableStateOf<Int?>(null) }
 
-    // Weekly Sales Trend Data
-    val weeklyData = remember {
-        listOf(
-            DailySalesBarData("Mon", 14200.0),
-            DailySalesBarData("Tue", 18500.0),
-            DailySalesBarData("Wed", 24580.0, isToday = true),
-            DailySalesBarData("Thu", 9400.0),
-            DailySalesBarData("Fri", 21300.0),
-            DailySalesBarData("Sat", 26800.0),
-            DailySalesBarData("Sun", 16400.0)
-        )
+    // Weekly Sales Trend Data (computed from real sales by day of week)
+    val weeklyData = remember(salesHistory) {
+        val days = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+        val currentDayOfWeek = java.time.LocalDate.now().dayOfWeek.value // 1 (Mon) to 7 (Sun)
+        val dayMap = mutableMapOf<Int, Double>()
+        salesHistory.forEach { sale ->
+            val instant = java.time.Instant.ofEpochMilli(sale.timestamp)
+            val date = java.time.LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault()).toLocalDate()
+            val dayVal = date.dayOfWeek.value
+            dayMap[dayVal] = (dayMap[dayVal] ?: 0.0) + sale.totalAmount
+        }
+        days.mapIndexed { index, label ->
+            val dayIndex = index + 1
+            DailySalesBarData(
+                dayLabel = label,
+                amount = dayMap[dayIndex] ?: 0.0,
+                isToday = dayIndex == currentDayOfWeek
+            )
+        }
     }
-    var selectedDayIndex by remember { mutableStateOf<Int?>(2) } // Default to Wed (Today)
+    var selectedDayIndex by remember {
+        val todayIdx = (java.time.LocalDate.now().dayOfWeek.value - 1).coerceIn(0, 6)
+        mutableStateOf<Int?>(todayIdx)
+    }
 
     Column(
         modifier = Modifier
@@ -555,7 +586,7 @@ fun DashboardScreen(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     // Bars Container
-                    val maxWeeklySales = remember { weeklyData.maxOf { it.amount } }
+                    val maxWeeklySales = remember(weeklyData) { weeklyData.maxOfOrNull { it.amount } ?: 0.0 }
 
                     Row(
                         modifier = Modifier
@@ -566,7 +597,11 @@ fun DashboardScreen(
                     ) {
                         weeklyData.forEachIndexed { index, dayData ->
                             val isSelected = selectedDayIndex == index
-                            val barRatio = (dayData.amount / maxWeeklySales).toFloat().coerceIn(0.12f, 1f)
+                            val barRatio = if (maxWeeklySales > 0.0) {
+                                (dayData.amount / maxWeeklySales).toFloat().coerceIn(0.12f, 1f)
+                            } else {
+                                0.12f
+                            }
 
                             val animatedBarHeight by animateFloatAsState(
                                 targetValue = if (animationTrigger) barRatio else 0.05f,

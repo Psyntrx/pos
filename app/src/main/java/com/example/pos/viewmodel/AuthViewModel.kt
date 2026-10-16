@@ -19,12 +19,12 @@ import kotlinx.coroutines.launch
  */
 data class RegisterUiState(
     // Step 1 Fields
-    val shopName: String = "Faith's Store",
-    val ownerName: String = "Faith",
-    val phone: String = "+254 712 345 678",
-    val email: String = "faith@store.com",
+    val shopName: String = "",
+    val ownerName: String = "",
+    val phone: String = "",
+    val email: String = "",
     val category: String = "Groceries & Retail",
-    val address: String = "Plot 42, Biashara Street, Nairobi",
+    val address: String = "",
 
     // Step 2 Fields
     val password: String = "",
@@ -62,8 +62,8 @@ data class RegisterUiState(
 }
 
 data class LoginUiState(
-    val email: String = "faith@store.com",
-    val password: String = "password123",
+    val email: String = "",
+    val password: String = "",
     val passwordVisible: Boolean = false,
     val rememberMe: Boolean = true,
     val isLoading: Boolean = false,

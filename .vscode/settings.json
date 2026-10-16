@@ -1,4 +1,9 @@
 {
-  "gradle.wrapper.enabled": true,
-  "kotlin.compiler.jvm.target": "11"
+  "files.associations": {
+    "*.gradle.kts": "kotlin",
+    "*.kt": "kotlin"
+  },
+  "editor.formatOnSave": true,
+  "editor.tabSize": 4,
+  "terminal.integrated.defaultProfile.windows": "PowerShell"
 }
