@@ -355,10 +355,11 @@ private fun EditProductDialog(
     onDismiss: () -> Unit
 ) {
     val products by viewModel.products.collectAsState()
+    val initialSku = product.sku.ifBlank { suggestedProductSku(products) }
     var name by remember(product.id) { mutableStateOf(product.name) }
     var category by remember(product.id) { mutableStateOf(product.category) }
-    var sku by remember(product.id) { mutableStateOf(product.sku) }
-    var unit by remember(product.id) { mutableStateOf(product.unit) }
+    var sku by remember(product.id) { mutableStateOf(initialSku) }
+    var unit by remember(product.id) { mutableStateOf(product.unit.ifBlank { "pcs" }) }
     var buyingPrice by remember(product.id) { mutableStateOf(product.buyingPrice.toString()) }
     var sellingPrice by remember(product.id) { mutableStateOf(product.sellingPrice.toString()) }
     var quantity by remember(product.id) { mutableStateOf(product.stockQuantity.toString()) }
@@ -372,10 +373,11 @@ private fun EditProductDialog(
     val parsedSellingPrice = sellingPrice.toDoubleOrNull()
     val parsedQuantity = quantity.toIntOrNull()
     val parsedMinStock = minStock.toIntOrNull()
-    val duplicateSku = sku.isNotBlank() && products.any {
-        it.id != product.id && it.sku.equals(sku.trim(), ignoreCase = true)
+    val effectiveSku = sku.trim().ifBlank { initialSku }
+    val duplicateSku = effectiveSku.isNotBlank() && products.any {
+        it.id != product.id && it.sku.isNotBlank() && it.sku.equals(effectiveSku, ignoreCase = true)
     }
-    val valid = name.isNotBlank() && category.isNotBlank() && sku.isNotBlank() && !duplicateSku &&
+    val valid = name.isNotBlank() && category.isNotBlank() && !duplicateSku &&
         unit.isNotBlank() && parsedBuyingPrice != null && parsedBuyingPrice.isFinite() && parsedBuyingPrice >= 0 &&
         parsedSellingPrice != null && parsedSellingPrice.isFinite() && parsedSellingPrice > 0 &&
         parsedQuantity != null && parsedQuantity >= 0 && parsedMinStock != null && parsedMinStock >= 0
@@ -420,7 +422,7 @@ private fun EditProductDialog(
                         productId = product.id,
                         name = name,
                         category = category,
-                        sku = sku,
+                        sku = effectiveSku,
                         unit = unit,
                         buyingPrice = parsedBuyingPrice!!,
                         sellingPrice = parsedSellingPrice!!,
@@ -493,7 +495,7 @@ fun AddProductScreen(
     val products by viewModel.products.collectAsState()
     var name by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
-    var sku by remember { mutableStateOf("") }
+    var sku by remember { mutableStateOf(suggestedProductSku(products)) }
     var unit by remember { mutableStateOf("") }
     var buyingPrice by remember { mutableStateOf("") }
     var sellingPrice by remember { mutableStateOf("") }

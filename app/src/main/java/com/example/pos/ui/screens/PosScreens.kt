@@ -187,8 +187,49 @@ fun NewSaleScreen(
                     )
                 }
             }
+
+            // Checkout Floating Bar
+            if (cart.isNotEmpty()) {
+                SurfaceCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    backgroundColor = SurfaceDark,
+                    borderColor = EmeraldBright,
+                    cornerRadius = 20.dp
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "$totalCartItems items in cart",
+                                style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
+                            )
+                            Text(
+                                text = "KSh ${String.format("%,.0f", totalCartAmount)}",
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = EmeraldBright
+                                )
+                            )
+                        }
+
+                        Button(
+                            onClick = onProceedToPayment,
+                            colors = ButtonDefaults.buttonColors(containerColor = EmeraldBright),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Text("Charge", color = BgDark, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
         }
-    } else {
+    }
+} else {
         // Sales History View (Recent Transactions sorted by date)
         val sortedSales = remember(salesHistory, searchQuery, selectedMethodFilter) {
             salesHistory
