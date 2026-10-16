@@ -368,6 +368,7 @@ class PosViewModel(
         _stockInRecords.value = emptyList()
         _customerCredits.value = emptyList()
         _cart.value = emptyList()
+        _notifications.value = emptyList()
 
         // Fetch shop for this specific user immediately upon login
         viewModelScope.launch {
@@ -427,6 +428,7 @@ class PosViewModel(
         _stockInRecords.value = emptyList()
         _customerCredits.value = emptyList()
         _cart.value = emptyList()
+        _notifications.value = emptyList()
 
         viewModelScope.launch {
             SupabaseClient.service.saveShop(newShop)
@@ -442,6 +444,11 @@ class PosViewModel(
         }
     }
 
+    fun updateDailyTarget(target: Double) {
+        val updated = _shop.value.copy(dailyTarget = target)
+        updateShopInformation(updated)
+    }
+
     fun logout() {
         storageManager.clearAuthSession()
         storageManager.clearShopData()
@@ -455,6 +462,7 @@ class PosViewModel(
         _stockInRecords.value = emptyList()
         _customerCredits.value = emptyList()
         _cart.value = emptyList()
+        _notifications.value = emptyList()
     }
 
     // Category & Search

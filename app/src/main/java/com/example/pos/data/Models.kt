@@ -11,7 +11,8 @@ data class Shop(
     val phone: String = "",
     val category: String = "",
     val address: String = "",
-    val currency: String = "KSh"
+    val currency: String = "KSh",
+    val dailyTarget: Double = 30000.0
 )
 
 @Serializable
