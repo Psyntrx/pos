@@ -10,7 +10,10 @@
       "label": "Build Debug APK",
       "type": "shell",
       "command": ".\\gradlew.bat assembleDebug",
-      "group": "build",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
       "problemMatcher": ["$gradle"]
     },
     {
@@ -44,6 +47,20 @@
       "problemMatcher": ["$gradle"]
     },
     {
+      "label": "Run Unit Tests",
+      "type": "shell",
+      "command": ".\\gradlew.bat testDebugUnitTest --console plain",
+      "group": "test",
+      "problemMatcher": ["$gradle"]
+    },
+    {
+      "label": "Verify Auth and Product Tests (Robolectric)",
+      "type": "shell",
+      "command": ".\\gradlew.bat testDebugUnitTest --tests com.example.pos.AuthViewModelTest --tests com.example.pos.PosViewModelProductTest --console plain",
+      "group": "test",
+      "problemMatcher": ["$gradle"]
+    },
+    {
       "label": "ADB: Check Connected Devices",
       "type": "shell",
       "command": "adb devices"
@@ -56,6 +73,30 @@
         "reveal": "always",
         "panel": "new"
       }
+    },
+    {
+      "label": "Git Status",
+      "type": "shell",
+      "command": "git status --short --branch",
+      "problemMatcher": []
+    },
+    {
+      "label": "Git Diff Check",
+      "type": "shell",
+      "command": "git diff --check",
+      "problemMatcher": []
+    },
+    {
+      "label": "Git Staged Diff Check",
+      "type": "shell",
+      "command": "git diff --cached --check",
+      "problemMatcher": []
+    },
+    {
+      "label": "Git Remote + Fetch Check",
+      "type": "shell",
+      "command": "git fetch --all --prune",
+      "problemMatcher": []
     }
   ]
 }

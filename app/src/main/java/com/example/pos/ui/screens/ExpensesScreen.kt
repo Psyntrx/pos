@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.pos.data.CreditLedgerUtils
 import com.example.pos.data.Expense
 import com.example.pos.ui.components.FilterChipItem
 import com.example.pos.ui.components.PrimaryGreenButton
@@ -38,6 +39,9 @@ fun ExpensesScreen(
 ) {
     val expenses by viewModel.expenses.collectAsState()
     var filterPeriod by remember { mutableStateOf("All") }
+    val filteredExpenses = remember(expenses, filterPeriod) {
+        CreditLedgerUtils.filterExpenses(expenses, filterPeriod)
+    }
     var showAddDialog by remember { mutableStateOf(false) }
 
     // Selection mode state
@@ -52,6 +56,7 @@ fun ExpensesScreen(
 
     // Placeholder action message state (for edit/delete feedback)
     var placeholderMessage by remember { mutableStateOf<String?>(null) }
+    var editingExpense by remember { mutableStateOf<Expense?>(null) }
 
     Box(
         modifier = Modifier
@@ -164,14 +169,52 @@ fun ExpensesScreen(
                     .fillMaxWidth()
                     .weight(1f)
             ) {
-                items(expenses) { exp ->
-                    val isSelected = selectedExpenseIds.contains(exp.id)
-                    SurfaceCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .combinedClickable(
-                                onClick = {
-                                    if (isSelectionMode) {
+                if (filteredExpenses.isEmpty()) {
+                    item {
+                        SurfaceCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            backgroundColor = SurfaceDark,
+                            borderColor = SurfaceBorder,
+                            cornerRadius = 18.dp
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(28.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "No expenses found for this period.",
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    items(filteredExpenses) { exp ->
+                        val isSelected = selectedExpenseIds.contains(exp.id)
+                        SurfaceCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .combinedClickable(
+                                    onClick = {
+                                        if (isSelectionMode) {
+                                            selectedExpenseIds = if (isSelected) {
+                                                selectedExpenseIds - exp.id
+                                            } else {
+                                                selectedExpenseIds + exp.id
+                                            }
+                                            if (selectedExpenseIds.isEmpty()) {
+                                                isSelectionMode = false
+                                            }
+                                        } else {
+                                            clickedExpenseForDetails = exp
+                                        }
+                                    },
+                                    onLongClick = {
+                                        if (!isSelectionMode) {
+                                            isSelectionMode = true
+                                        }
                                         selectedExpenseIds = if (isSelected) {
                                             selectedExpenseIds - exp.id
                                         } else {
@@ -180,98 +223,83 @@ fun ExpensesScreen(
                                         if (selectedExpenseIds.isEmpty()) {
                                             isSelectionMode = false
                                         }
-                                    } else {
-                                        clickedExpenseForDetails = exp
                                     }
-                                },
-                                onLongClick = {
-                                    if (!isSelectionMode) {
-                                        isSelectionMode = true
-                                    }
-                                    selectedExpenseIds = if (isSelected) {
-                                        selectedExpenseIds - exp.id
-                                    } else {
-                                        selectedExpenseIds + exp.id
-                                    }
-                                    if (selectedExpenseIds.isEmpty()) {
-                                        isSelectionMode = false
-                                    }
-                                }
-                            ),
-                        backgroundColor = if (isSelected) EmeraldContainer.copy(alpha = 0.4f) else SurfaceDark,
-                        borderColor = if (isSelected) EmeraldBright else SurfaceBorder,
-                        cornerRadius = 18.dp
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                ),
+                            backgroundColor = if (isSelected) EmeraldContainer.copy(alpha = 0.4f) else SurfaceDark,
+                            borderColor = if (isSelected) EmeraldBright else SurfaceBorder,
+                            cornerRadius = 18.dp
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (isSelectionMode) {
-                                    Checkbox(
-                                        checked = isSelected,
-                                        onCheckedChange = { checked ->
-                                            selectedExpenseIds = if (checked) {
-                                                selectedExpenseIds + exp.id
-                                            } else {
-                                                selectedExpenseIds - exp.id
-                                            }
-                                            if (selectedExpenseIds.isEmpty()) {
-                                                isSelectionMode = false
-                                            }
-                                        },
-                                        colors = CheckboxDefaults.colors(
-                                            checkedColor = EmeraldBright,
-                                            uncheckedColor = TextSecondary
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (isSelectionMode) {
+                                        Checkbox(
+                                            checked = isSelected,
+                                            onCheckedChange = { checked ->
+                                                selectedExpenseIds = if (checked) {
+                                                    selectedExpenseIds + exp.id
+                                                } else {
+                                                    selectedExpenseIds - exp.id
+                                                }
+                                                if (selectedExpenseIds.isEmpty()) {
+                                                    isSelectionMode = false
+                                                }
+                                            },
+                                            colors = CheckboxDefaults.colors(
+                                                checkedColor = EmeraldBright,
+                                                uncheckedColor = TextSecondary
+                                            )
                                         )
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(EmeraldContainer),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = getCategoryIcon(exp.iconType),
+                                            contentDescription = null,
+                                            tint = EmeraldBright,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(12.dp))
+
+                                    Column {
+                                        Text(
+                                            text = exp.title,
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = TextPrimary,
+                                                fontSize = 15.sp
+                                            )
+                                        )
+                                        Text(
+                                            text = exp.dateFormatted,
+                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                color = TextSecondary,
+                                                fontSize = 12.sp
+                                            )
+                                        )
+                                    }
                                 }
 
-                                Box(
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .background(EmeraldContainer),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = getCategoryIcon(exp.iconType),
-                                        contentDescription = null,
-                                        tint = EmeraldBright,
-                                        modifier = Modifier.size(22.dp)
+                                Text(
+                                    text = "KSh ${String.format("%,.0f", exp.amount)}",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextPrimary
                                     )
-                                }
-
-                                Spacer(modifier = Modifier.width(12.dp))
-
-                                Column {
-                                    Text(
-                                        text = exp.title,
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = TextPrimary,
-                                            fontSize = 15.sp
-                                        )
-                                    )
-                                    Text(
-                                        text = exp.dateFormatted,
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            color = TextSecondary,
-                                            fontSize = 12.sp
-                                        )
-                                    )
-                                }
-                            }
-
-                            Text(
-                                text = "KSh ${String.format("%,.0f", exp.amount)}",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimary
                                 )
-                            )
+                            }
                         }
                     }
                 }
@@ -409,16 +437,57 @@ fun ExpensesScreen(
                     PrimaryGreenButton(
                         text = "Save Expense",
                         onClick = {
-                            if (title.isNotBlank()) {
-                                viewModel.addExpense(
-                                    title,
-                                    category,
-                                    amount.toDoubleOrNull() ?: 500.0
-                                )
+                            val wasSaved = viewModel.addExpense(
+                                title,
+                                category,
+                                amount.toDoubleOrNull() ?: 0.0
+                            )
+                            if (wasSaved) {
                                 showAddDialog = false
                             }
                         }
                     )
+                }
+            )
+        }
+
+        if (editingExpense != null) {
+            var editTitle by remember { mutableStateOf(editingExpense!!.title) }
+            var editAmount by remember { mutableStateOf(editingExpense!!.amount.toString()) }
+            var editCategory by remember { mutableStateOf(editingExpense!!.category) }
+            var editCategoryMenuExpanded by remember { mutableStateOf(false) }
+            val categories = listOf("Rent", "Electricity", "Transport", "Salaries", "Internet", "Repairs", "Food", "Healthcare", "Education", "Water", "Shopping", "Utility", "Other")
+            AlertDialog(
+                onDismissRequest = { editingExpense = null },
+                containerColor = SurfaceDark,
+                title = { Text("Edit Expense", color = TextPrimary) },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(value = editTitle, onValueChange = { editTitle = it }, label = { Text("Title") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        ExposedDropdownMenuBox(expanded = editCategoryMenuExpanded, onExpandedChange = { editCategoryMenuExpanded = it }) {
+                            OutlinedTextField(value = editCategory, onValueChange = {}, readOnly = true, label = { Text("Category") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = editCategoryMenuExpanded) }, modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable))
+                            ExposedDropdownMenu(expanded = editCategoryMenuExpanded, onDismissRequest = { editCategoryMenuExpanded = false }) {
+                                categories.forEach { option ->
+                                    DropdownMenuItem(text = { Text(option) }, onClick = { editCategory = option; editCategoryMenuExpanded = false })
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(value = editAmount, onValueChange = { editAmount = it }, label = { Text("Amount (KSh)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    }
+                },
+                confirmButton = {
+                    PrimaryGreenButton(text = "Save", onClick = {
+                        val updated = viewModel.updateExpense(editingExpense!!.id, editTitle, editCategory, editAmount.toDoubleOrNull() ?: 0.0)
+                        if (updated) {
+                            editingExpense = null
+                            placeholderMessage = "Expense updated."
+                        }
+                    })
+                },
+                dismissButton = {
+                    TextButton(onClick = { editingExpense = null }) { Text("Cancel", color = TextSecondary) }
                 }
             )
         }
@@ -478,7 +547,7 @@ fun ExpensesScreen(
                         OutlinedButton(
                             onClick = {
                                 clickedExpenseForDetails = null
-                                placeholderMessage = "Edit Expense is a placeholder (UI/UX stage)."
+                                editingExpense = exp
                             },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary)
@@ -488,7 +557,8 @@ fun ExpensesScreen(
                         Button(
                             onClick = {
                                 clickedExpenseForDetails = null
-                                placeholderMessage = "Delete Expense is a placeholder (UI/UX stage)."
+                                viewModel.deleteExpenses(setOf(exp.id))
+                                placeholderMessage = "Expense deleted successfully."
                             },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(containerColor = ErrorRed, contentColor = TextOnPrimary)
@@ -520,8 +590,9 @@ fun ExpensesScreen(
                 confirmButton = {
                     Button(
                         onClick = {
+                            viewModel.deleteExpenses(selectedExpenseIds)
                             showDeleteConfirmation = false
-                            placeholderMessage = "Deleted ${selectedExpenseIds.size} expense(s) (Placeholder)."
+                            placeholderMessage = "Deleted ${selectedExpenseIds.size} expense(s)."
                             isSelectionMode = false
                             selectedExpenseIds = emptySet()
                         },
