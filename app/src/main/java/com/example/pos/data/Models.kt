@@ -11,7 +11,8 @@ data class Shop(
     val phone: String = "",
     val category: String = "",
     val address: String = "",
-    val currency: String = "KSh"
+    val currency: String = "KSh",
+    val dailyTarget: Double = 30000.0
 )
 
 @Serializable
@@ -27,7 +28,8 @@ data class Product(
     val minStock: Int = 10,
     val supplier: String = "",
     val iconType: String = "box",
-    val imageUri: String? = null
+    val imageUri: String? = null,
+    val shopId: String? = null
 ) {
     val isLowStock: Boolean get() = stockQuantity <= minStock
 }
@@ -69,11 +71,12 @@ data class Sale(
     val customerName: String = "",
     val dateFormatted: String = "Today, 10:42 AM",
     val timestamp: Long = System.currentTimeMillis(),
-    val employeeName: String = "Faith",
+    val employeeName: String = "Store Owner",
     val isCreditSale: Boolean = false,
     val paidAmount: Double = totalAmount,
     val balance: Double = 0.0,
-    val dueDate: String = ""
+    val dueDate: String = "",
+    val shopId: String? = null
 )
 
 @Serializable
@@ -85,7 +88,8 @@ data class StockInRecord(
     val buyingPrice: Double,
     val supplier: String,
     val dateFormatted: String,
-    val employeeName: String
+    val employeeName: String,
+    val shopId: String? = null
 )
 
 @Serializable
@@ -95,7 +99,8 @@ data class Expense(
     val category: String,
     val amount: Double,
     val dateFormatted: String,
-    val iconType: String = "receipt"
+    val iconType: String = "receipt",
+    val shopId: String? = null
 )
 
 @Serializable
@@ -108,7 +113,8 @@ data class CustomerCredit(
     val amountPaid: Double,
     val balance: Double,
     val dueDate: String,
-    val status: String = "Pending"
+    val status: String = "Pending",
+    val shopId: String? = null
 )
 
 @Serializable
@@ -118,7 +124,8 @@ data class Employee(
     val role: String,
     val phone: String,
     val email: String,
-    val isOwner: Boolean = false
+    val isOwner: Boolean = false,
+    val shopId: String? = null
 )
 
 data class AuthSession(

@@ -537,6 +537,7 @@ private fun ShopInformationDialog(
     var phone by remember(shop) { mutableStateOf(shop.phone) }
     var address by remember(shop) { mutableStateOf(shop.address) }
     var category by remember(shop) { mutableStateOf(shop.category) }
+    var dailyTargetStr by remember(shop) { mutableStateOf(if (shop.dailyTarget > 0) shop.dailyTarget.toInt().toString() else "30000") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -552,6 +553,7 @@ private fun ShopInformationDialog(
                 ShopInfoField("Phone", phone) { phone = it }
                 ShopInfoField("Business category", category) { category = it }
                 ShopInfoField("Address", address) { address = it }
+                ShopInfoField("Daily Sales Target (KSh)", dailyTargetStr) { dailyTargetStr = it.filter { ch -> ch.isDigit() } }
             }
         },
         confirmButton = {
@@ -564,7 +566,8 @@ private fun ShopInformationDialog(
                             email = email.trim(),
                             phone = phone.trim(),
                             category = category.trim(),
-                            address = address.trim()
+                            address = address.trim(),
+                            dailyTarget = dailyTargetStr.toDoubleOrNull() ?: shop.dailyTarget
                         )
                     )
                 },
