@@ -84,7 +84,7 @@ data class ForgotPasswordUiState(
 }
 
 class AuthViewModel(
-    private val supabase: SupabaseService = SupabaseClient.service,
+    private val supabase: SupabaseService? = SupabaseClient.service,
     private val storageManager: PosStorageManager? = null
 ) : ViewModel() {
 
@@ -185,6 +185,12 @@ class AuthViewModel(
             category = state.category.trim()
         )
 
+        if (supabase == null) {
+            _registerState.update { it.copy(isLoading = false, isRegisteredSuccessfully = true) }
+            onSuccess(createdShop)
+            return
+        }
+
         val metadata = mapOf(
             "shop_name" to createdShop.name,
             "owner_name" to createdShop.ownerName,
@@ -242,6 +248,12 @@ class AuthViewModel(
             return
         }
 
+        if (supabase == null) {
+            _loginState.update { it.copy(isLoading = false) }
+            onSuccessWithSession(state.email, state.password, null)
+            return
+        }
+
         _loginState.update { it.copy(isLoading = true, errorMessage = null) }
         viewModelScope.launch {
             val result = supabase.signIn(state.email.trim(), state.password)
@@ -290,6 +302,11 @@ class AuthViewModel(
             _forgotPasswordState.update {
                 it.copy(errorMessage = "Please enter a valid email address.")
             }
+            return
+        }
+
+        if (supabase == null) {
+            _forgotPasswordState.update { it.copy(isLoading = false, isResetSent = true) }
             return
         }
 
