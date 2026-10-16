@@ -45,68 +45,61 @@ import com.example.pos.ui.components.SurfaceCard
 import com.example.pos.ui.theme.*
 import com.example.pos.viewmodel.PosViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DueDateSelector(
     selectedDueDate: String,
     onDueDateSelected: (String) -> Unit
 ) {
-    val dueDateOptions = listOf("In 3 Days", "In 7 Days", "In 10 Days", "In 14 Days")
+    var expanded by remember { mutableStateOf(false) }
+    val options = remember { (1..14).map { "In $it ${if (it == 1) "Day" else "Days"}" } }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text("Payment Due Date (Max 14 Days)", style = MaterialTheme.typography.labelMedium.copy(color = TextSecondary))
+        Text("Payment Due Date", style = MaterialTheme.typography.labelMedium.copy(color = TextSecondary))
         Spacer(modifier = Modifier.height(6.dp))
 
-        // Quick Selection Chips
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = !expanded },
+            modifier = Modifier.fillMaxWidth()
         ) {
-            dueDateOptions.forEach { option ->
-                val isSelected = selectedDueDate.equals(option, ignoreCase = true)
-                FilterChip(
-                    selected = isSelected,
-                    onClick = { onDueDateSelected(option) },
-                    label = {
-                        Text(
-                            text = option,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = if (isSelected) BgDark else TextPrimary,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+            OutlinedTextField(
+                value = selectedDueDate.ifBlank { "In 14 Days" },
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Due Date (Max 14 Days)", color = TextSecondary) },
+                leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, tint = EmeraldBright) },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                modifier = Modifier
+                    .menuAnchor()
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                colors = com.example.pos.ui.components.posTextFieldColors()
+            )
+
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.background(SurfaceDark)
+            ) {
+                options.forEach { option ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = option,
+                                color = if (selectedDueDate == option) EmeraldBright else TextPrimary,
+                                fontWeight = if (selectedDueDate == option) FontWeight.Bold else FontWeight.Normal
                             )
-                        )
-                    },
-                    colors = FilterChipDefaults.filterChipColors(
-                        containerColor = SurfaceDarkVariant,
-                        selectedContainerColor = EmeraldBright
-                    ),
-                    shape = RoundedCornerShape(16.dp)
-                )
+                        },
+                        onClick = {
+                            onDueDateSelected(option)
+                            expanded = false
+                        }
+                    )
+                }
             }
         }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Editable Input field for Custom Due Date (Capped at 14 days max)
-        OutlinedTextField(
-            value = selectedDueDate,
-            onValueChange = { input ->
-                val digitsOnly = input.filter { it.isDigit() }
-                if (digitsOnly.isNotEmpty()) {
-                    val daysNum = digitsOnly.toIntOrNull() ?: 14
-                    val cappedDays = daysNum.coerceIn(1, 14)
-                    onDueDateSelected("In $cappedDays Days")
-                } else {
-                    onDueDateSelected(input)
-                }
-            },
-            label = { Text("Custom Due Date", color = TextSecondary) },
-            leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, tint = EmeraldBright) },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            textStyle = LocalTextStyle.current.copy(color = TextPrimary),
-            colors = com.example.pos.ui.components.posTextFieldColors(),
-            singleLine = true
-        )
     }
 }
 
@@ -722,71 +715,6 @@ fun NewSaleScreen(
             }
         )
     }
-
-@Composable
-fun DueDateSelector(
-    selectedDueDate: String,
-    onDueDateSelected: (String) -> Unit
-) {
-    val dueDateOptions = listOf("In 3 Days", "In 7 Days", "In 10 Days", "In 14 Days")
-
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text("Payment Due Date (Max 14 Days)", style = MaterialTheme.typography.labelMedium.copy(color = TextSecondary))
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // Quick Selection Chips
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            dueDateOptions.forEach { option ->
-                val isSelected = selectedDueDate.equals(option, ignoreCase = true)
-                FilterChip(
-                    selected = isSelected,
-                    onClick = { onDueDateSelected(option) },
-                    label = {
-                        Text(
-                            text = option,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = if (isSelected) BgDark else TextPrimary,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                            )
-                        )
-                    },
-                    colors = FilterChipDefaults.filterChipColors(
-                        containerColor = SurfaceDarkVariant,
-                        selectedContainerColor = EmeraldBright
-                    ),
-                    shape = RoundedCornerShape(16.dp)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Editable Input field for Custom Due Date (Capped at 14 days)
-        OutlinedTextField(
-            value = selectedDueDate,
-            onValueChange = { input ->
-                val digitsOnly = input.filter { it.isDigit() }
-                if (digitsOnly.isNotEmpty()) {
-                    val daysNum = digitsOnly.toIntOrNull() ?: 14
-                    val cappedDays = daysNum.coerceIn(1, 14)
-                    onDueDateSelected("In $cappedDays Days")
-                } else {
-                    onDueDateSelected(input)
-                }
-            },
-            label = { Text("Custom Due Date", color = TextSecondary) },
-            leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, tint = EmeraldBright) },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            textStyle = LocalTextStyle.current.copy(color = TextPrimary),
-            colors = com.example.pos.ui.components.posTextFieldColors(),
-            singleLine = true
-        )
-    }
-}
 }
 
 @Composable
