@@ -980,7 +980,7 @@ fun StockInScreen(
 
             // 7. Recorded By Employee
             OutlinedTextField(
-                value = "${shop.ownerName.ifBlank { "Faith" }} (Owner)",
+                value = "${shop.ownerName.ifBlank { "Owner" }} (Owner)",
                 onValueChange = {},
                 readOnly = true,
                 label = { Text("Employee") },
@@ -1029,7 +1029,7 @@ fun StockInScreen(
                         buyingPrice = finalBuying,
                         sellingPrice = finalSelling,
                         supplier = finalSupplier,
-                        employeeName = shop.ownerName.ifBlank { "Faith" }
+                        employeeName = shop.ownerName.ifBlank { "Store Owner" }
                     )
 
                     onClose()

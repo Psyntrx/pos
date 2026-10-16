@@ -130,9 +130,12 @@ fun MainContainerScreen(
                             viewModel = viewModel,
                             onClose = { activeModal = null },
                             onViewInventory = {
-                                viewModel.markAllNotificationsRead()
                                 activeModal = null
                                 viewModel.selectTab(2)
+                            },
+                            onOpenStockIn = { productId ->
+                                preselectedStockInProductId = productId
+                                activeModal = "stock_in"
                             }
                         )
                     }

@@ -127,12 +127,12 @@ class AuthViewModelTest {
 
     @Test
     fun testLoginValidation() {
-        viewModel.updateLoginEmail("faith@store.com")
+        viewModel.updateLoginEmail("user@store.com")
         viewModel.updateLoginPassword("password123")
         assertTrue(viewModel.loginState.value.canSubmit)
 
         viewModel.login { email, pass ->
-            assertEquals("faith@store.com", email)
+            assertEquals("user@store.com", email)
             assertEquals("password123", pass)
         }
         testDispatcher.scheduler.advanceUntilIdle()

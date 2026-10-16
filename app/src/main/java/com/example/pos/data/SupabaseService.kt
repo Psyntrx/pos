@@ -338,9 +338,10 @@ class SupabaseService(
     // ==========================================
     // PRODUCTS
     // ==========================================
-    suspend fun getProducts(): Result<List<Product>> = withContext(Dispatchers.IO) {
+    suspend fun getProducts(shopId: String? = null): Result<List<Product>> = withContext(Dispatchers.IO) {
         try {
-            val req = buildRequest("/rest/v1/products?select=*&order=created_at.asc")
+            val filter = if (!shopId.isNullOrBlank()) "shop_id=eq.$shopId&" else ""
+            val req = buildRequest("/rest/v1/products?${filter}select=*&order=created_at.asc")
             client.newCall(req).execute().use { resp ->
                 val str = resp.body?.string().orEmpty()
                 if (!resp.isSuccessful) return@withContext Result.failure(Exception("Failed to fetch products: ${resp.code}"))
@@ -360,7 +361,9 @@ class SupabaseService(
                             stockQuantity = obj.optInt("stock_quantity", 0),
                             minStock = obj.optInt("min_stock", 10),
                             supplier = obj.optString("supplier", ""),
-                            iconType = obj.optString("icon_type", "box")
+                            iconType = obj.optString("icon_type", "box"),
+                            imageUri = obj.optString("image_uri", "").takeIf { it.isNotBlank() && it != "null" },
+                            shopId = obj.optString("shop_id", "").takeIf { it.isNotBlank() }
                         )
                     )
                 }
@@ -371,8 +374,9 @@ class SupabaseService(
         }
     }
 
-    suspend fun upsertProduct(product: Product): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun upsertProduct(product: Product, shopId: String? = null): Result<Unit> = withContext(Dispatchers.IO) {
         try {
+            val resolvedShopId = shopId ?: product.shopId
             val json = JSONObject().apply {
                 put("id", product.id)
                 put("name", product.name)
@@ -385,6 +389,9 @@ class SupabaseService(
                 put("min_stock", product.minStock)
                 put("supplier", product.supplier)
                 put("icon_type", product.iconType)
+                if (!resolvedShopId.isNullOrBlank()) {
+                    put("shop_id", resolvedShopId)
+                }
             }
             val req = buildRequest(
                 path = "/rest/v1/products",
@@ -438,9 +445,10 @@ class SupabaseService(
     // ==========================================
     // SALES
     // ==========================================
-    suspend fun getSales(): Result<List<Sale>> = withContext(Dispatchers.IO) {
+    suspend fun getSales(shopId: String? = null): Result<List<Sale>> = withContext(Dispatchers.IO) {
         try {
-            val req = buildRequest("/rest/v1/sales?select=*&order=created_at.desc")
+            val filter = if (!shopId.isNullOrBlank()) "shop_id=eq.$shopId&" else ""
+            val req = buildRequest("/rest/v1/sales?${filter}select=*&order=created_at.desc")
             client.newCall(req).execute().use { resp ->
                 val str = resp.body?.string().orEmpty()
                 if (!resp.isSuccessful) return@withContext Result.failure(Exception("Failed to fetch sales: ${resp.code}"))
@@ -465,7 +473,8 @@ class SupabaseService(
                                 stockQuantity = prodObj.optInt("stock_quantity", 0),
                                 minStock = prodObj.optInt("min_stock", 10),
                                 supplier = prodObj.optString("supplier", ""),
-                                iconType = prodObj.optString("icon_type", "box")
+                                iconType = prodObj.optString("icon_type", "box"),
+                                shopId = prodObj.optString("shop_id", "").takeIf { it.isNotBlank() }
                             )
                             itemsList.add(CartItem(prod, itemObj.optInt("quantity", 1)))
                         }
@@ -479,11 +488,12 @@ class SupabaseService(
                             customerName = obj.optString("customer_name", ""),
                             dateFormatted = obj.optString("date_formatted", ""),
                             timestamp = obj.optLong("timestamp", System.currentTimeMillis()),
-                            employeeName = obj.optString("employee_name", "Faith"),
+                            employeeName = obj.optString("employee_name", "Store Owner"),
                             isCreditSale = obj.optBoolean("is_credit_sale", false),
                             paidAmount = obj.optDouble("paid_amount", 0.0),
                             balance = obj.optDouble("balance", 0.0),
-                            dueDate = obj.optString("due_date", "")
+                            dueDate = obj.optString("due_date", ""),
+                            shopId = obj.optString("shop_id", "").takeIf { it.isNotBlank() }
                         )
                     )
                 }
@@ -494,8 +504,9 @@ class SupabaseService(
         }
     }
 
-    suspend fun insertSale(sale: Sale): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun insertSale(sale: Sale, shopId: String? = null): Result<Unit> = withContext(Dispatchers.IO) {
         try {
+            val resolvedShopId = shopId ?: sale.shopId
             val itemsJson = JSONArray()
             for (ci in sale.items) {
                 val itemObj = JSONObject().apply {
@@ -512,6 +523,9 @@ class SupabaseService(
                         put("min_stock", ci.product.minStock)
                         put("supplier", ci.product.supplier)
                         put("icon_type", ci.product.iconType)
+                        if (!ci.product.shopId.isNullOrBlank()) {
+                            put("shop_id", ci.product.shopId)
+                        }
                     })
                 }
                 itemsJson.put(itemObj)
@@ -530,6 +544,9 @@ class SupabaseService(
                 put("balance", sale.balance)
                 put("due_date", sale.dueDate)
                 put("items", itemsJson)
+                if (!resolvedShopId.isNullOrBlank()) {
+                    put("shop_id", resolvedShopId)
+                }
             }
             val req = buildRequest(
                 path = "/rest/v1/sales",
@@ -548,9 +565,10 @@ class SupabaseService(
     // ==========================================
     // STOCK IN RECORDS
     // ==========================================
-    suspend fun getStockInRecords(): Result<List<StockInRecord>> = withContext(Dispatchers.IO) {
+    suspend fun getStockInRecords(shopId: String? = null): Result<List<StockInRecord>> = withContext(Dispatchers.IO) {
         try {
-            val req = buildRequest("/rest/v1/stock_in_records?select=*&order=created_at.desc")
+            val filter = if (!shopId.isNullOrBlank()) "shop_id=eq.$shopId&" else ""
+            val req = buildRequest("/rest/v1/stock_in_records?${filter}select=*&order=created_at.desc")
             client.newCall(req).execute().use { resp ->
                 val str = resp.body?.string().orEmpty()
                 if (!resp.isSuccessful) return@withContext Result.failure(Exception("Failed to fetch stock records"))
@@ -567,7 +585,8 @@ class SupabaseService(
                             buyingPrice = obj.optDouble("buying_price"),
                             supplier = obj.optString("supplier"),
                             dateFormatted = obj.optString("date_formatted"),
-                            employeeName = obj.optString("employee_name")
+                            employeeName = obj.optString("employee_name"),
+                            shopId = obj.optString("shop_id", "").takeIf { it.isNotBlank() }
                         )
                     )
                 }
@@ -578,8 +597,9 @@ class SupabaseService(
         }
     }
 
-    suspend fun insertStockInRecord(record: StockInRecord): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun insertStockInRecord(record: StockInRecord, shopId: String? = null): Result<Unit> = withContext(Dispatchers.IO) {
         try {
+            val resolvedShopId = shopId ?: record.shopId
             val json = JSONObject().apply {
                 put("id", record.id)
                 put("product_id", record.productId)
@@ -589,6 +609,9 @@ class SupabaseService(
                 put("supplier", record.supplier)
                 put("date_formatted", record.dateFormatted)
                 put("employee_name", record.employeeName)
+                if (!resolvedShopId.isNullOrBlank()) {
+                    put("shop_id", resolvedShopId)
+                }
             }
             val req = buildRequest(
                 path = "/rest/v1/stock_in_records",
@@ -607,9 +630,10 @@ class SupabaseService(
     // ==========================================
     // EXPENSES
     // ==========================================
-    suspend fun getExpenses(): Result<List<Expense>> = withContext(Dispatchers.IO) {
+    suspend fun getExpenses(shopId: String? = null): Result<List<Expense>> = withContext(Dispatchers.IO) {
         try {
-            val req = buildRequest("/rest/v1/expenses?select=*&order=created_at.desc")
+            val filter = if (!shopId.isNullOrBlank()) "shop_id=eq.$shopId&" else ""
+            val req = buildRequest("/rest/v1/expenses?${filter}select=*&order=created_at.desc")
             client.newCall(req).execute().use { resp ->
                 val str = resp.body?.string().orEmpty()
                 if (!resp.isSuccessful) return@withContext Result.failure(Exception("Failed to fetch expenses"))
@@ -624,7 +648,8 @@ class SupabaseService(
                             category = obj.optString("category"),
                             amount = obj.optDouble("amount"),
                             dateFormatted = obj.optString("date_formatted"),
-                            iconType = obj.optString("icon_type", "receipt")
+                            iconType = obj.optString("icon_type", "receipt"),
+                            shopId = obj.optString("shop_id", "").takeIf { it.isNotBlank() }
                         )
                     )
                 }
@@ -635,8 +660,9 @@ class SupabaseService(
         }
     }
 
-    suspend fun insertExpense(expense: Expense): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun insertExpense(expense: Expense, shopId: String? = null): Result<Unit> = withContext(Dispatchers.IO) {
         try {
+            val resolvedShopId = shopId ?: expense.shopId
             val json = JSONObject().apply {
                 put("id", expense.id)
                 put("title", expense.title)
@@ -644,6 +670,9 @@ class SupabaseService(
                 put("amount", expense.amount)
                 put("date_formatted", expense.dateFormatted)
                 put("icon_type", expense.iconType)
+                if (!resolvedShopId.isNullOrBlank()) {
+                    put("shop_id", resolvedShopId)
+                }
             }
             val req = buildRequest(
                 path = "/rest/v1/expenses",
@@ -662,9 +691,10 @@ class SupabaseService(
     // ==========================================
     // CUSTOMER CREDITS
     // ==========================================
-    suspend fun getCustomerCredits(): Result<List<CustomerCredit>> = withContext(Dispatchers.IO) {
+    suspend fun getCustomerCredits(shopId: String? = null): Result<List<CustomerCredit>> = withContext(Dispatchers.IO) {
         try {
-            val req = buildRequest("/rest/v1/customer_credits?select=*&order=created_at.desc")
+            val filter = if (!shopId.isNullOrBlank()) "shop_id=eq.$shopId&" else ""
+            val req = buildRequest("/rest/v1/customer_credits?${filter}select=*&order=created_at.desc")
             client.newCall(req).execute().use { resp ->
                 val str = resp.body?.string().orEmpty()
                 if (!resp.isSuccessful) return@withContext Result.failure(Exception("Failed to fetch credits"))
@@ -682,7 +712,8 @@ class SupabaseService(
                             amountPaid = obj.optDouble("amount_paid"),
                             balance = obj.optDouble("balance"),
                             dueDate = obj.optString("due_date"),
-                            status = obj.optString("status", "Pending")
+                            status = obj.optString("status", "Pending"),
+                            shopId = obj.optString("shop_id", "").takeIf { it.isNotBlank() }
                         )
                     )
                 }
@@ -693,8 +724,9 @@ class SupabaseService(
         }
     }
 
-    suspend fun upsertCustomerCredit(credit: CustomerCredit): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun upsertCustomerCredit(credit: CustomerCredit, shopId: String? = null): Result<Unit> = withContext(Dispatchers.IO) {
         try {
+            val resolvedShopId = shopId ?: credit.shopId
             val json = JSONObject().apply {
                 put("id", credit.id)
                 put("customer_name", credit.customerName)
@@ -705,6 +737,9 @@ class SupabaseService(
                 put("balance", credit.balance)
                 put("due_date", credit.dueDate)
                 put("status", credit.status)
+                if (!resolvedShopId.isNullOrBlank()) {
+                    put("shop_id", resolvedShopId)
+                }
             }
             val req = buildRequest(
                 path = "/rest/v1/customer_credits",
@@ -724,9 +759,10 @@ class SupabaseService(
     // ==========================================
     // EMPLOYEES
     // ==========================================
-    suspend fun getEmployees(): Result<List<Employee>> = withContext(Dispatchers.IO) {
+    suspend fun getEmployees(shopId: String? = null): Result<List<Employee>> = withContext(Dispatchers.IO) {
         try {
-            val req = buildRequest("/rest/v1/employees?select=*&order=created_at.asc")
+            val filter = if (!shopId.isNullOrBlank()) "shop_id=eq.$shopId&" else ""
+            val req = buildRequest("/rest/v1/employees?${filter}select=*&order=created_at.asc")
             client.newCall(req).execute().use { resp ->
                 val str = resp.body?.string().orEmpty()
                 if (!resp.isSuccessful) return@withContext Result.failure(Exception("Failed to fetch employees"))
@@ -741,7 +777,8 @@ class SupabaseService(
                             role = obj.optString("role"),
                             phone = obj.optString("phone"),
                             email = obj.optString("email"),
-                            isOwner = obj.optBoolean("is_owner", false)
+                            isOwner = obj.optBoolean("is_owner", false),
+                            shopId = obj.optString("shop_id", "").takeIf { it.isNotBlank() }
                         )
                     )
                 }
@@ -752,8 +789,9 @@ class SupabaseService(
         }
     }
 
-    suspend fun upsertEmployee(employee: Employee): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun upsertEmployee(employee: Employee, shopId: String? = null): Result<Unit> = withContext(Dispatchers.IO) {
         try {
+            val resolvedShopId = shopId ?: employee.shopId
             val json = JSONObject().apply {
                 put("id", employee.id)
                 put("name", employee.name)
@@ -761,6 +799,9 @@ class SupabaseService(
                 put("phone", employee.phone)
                 put("email", employee.email)
                 put("is_owner", employee.isOwner)
+                if (!resolvedShopId.isNullOrBlank()) {
+                    put("shop_id", resolvedShopId)
+                }
             }
             val req = buildRequest(
                 path = "/rest/v1/employees",
