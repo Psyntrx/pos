@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddBox
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.LocalGroceryStore
 import androidx.compose.material.icons.filled.PointOfSale
@@ -106,7 +107,8 @@ fun DashboardScreen(
     val lowStockProducts = products.filter { it.isLowStock }
 
     // Target Progress Calculation
-    val dailyTarget = 30000.0
+    val dailyTarget = shop.dailyTarget
+    var showTargetDialog by remember { mutableStateOf(false) }
     val targetRatio = if (dailyTarget > 0) (totalSalesToday / dailyTarget).toFloat().coerceIn(0f, 1f) else 0f
 
     // Animated target progress
@@ -234,13 +236,27 @@ fun DashboardScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Text(
-                                        text = "Target: KSh ${String.format("%,.0f", dailyTarget)}",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            color = TextSecondary,
-                                            fontSize = 11.sp
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .clickable { showTargetDialog = true }
+                                    ) {
+                                        Text(
+                                            text = "Target: KSh ${String.format("%,.0f", dailyTarget)}",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = TextSecondary,
+                                                fontSize = 11.sp
+                                            )
                                         )
-                                    )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Edit target",
+                                            tint = EmeraldBright,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                    }
                                     Text(
                                         text = "${(animatedTargetProgress * 100).toInt()}%",
                                         style = MaterialTheme.typography.labelSmall.copy(
@@ -844,6 +860,17 @@ fun DashboardScreen(
 
             Spacer(modifier = Modifier.height(80.dp))
         }
+
+        if (showTargetDialog) {
+            SetTargetDialog(
+                currentTarget = dailyTarget,
+                onDismiss = { showTargetDialog = false },
+                onSave = { newTarget ->
+                    viewModel.updateDailyTarget(newTarget)
+                    showTargetDialog = false
+                }
+            )
+        }
     }
 }
 
@@ -1160,4 +1187,67 @@ private fun LowStockProductCard(
             }
         }
     }
+}
+
+@Composable
+private fun SetTargetDialog(
+    currentTarget: Double,
+    onDismiss: () -> Unit,
+    onSave: (Double) -> Unit
+) {
+    var targetInput by remember { mutableStateOf(if (currentTarget > 0) currentTarget.toInt().toString() else "30000") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Set Daily Sales Target",
+                color = TextPrimary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp
+            )
+        },
+        text = {
+            Column {
+                Text(
+                    text = "Enter your expected daily sales target in KSh. Your progress bar on the dashboard will update automatically.",
+                    color = TextSecondary,
+                    fontSize = 13.sp
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+                OutlinedTextField(
+                    value = targetInput,
+                    onValueChange = { targetInput = it.filter { ch -> ch.isDigit() } },
+                    label = { Text("Daily Target (KSh)") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = EmeraldBright,
+                        unfocusedBorderColor = SurfaceBorder,
+                        focusedLabelColor = EmeraldBright,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val parsed = targetInput.toDoubleOrNull() ?: currentTarget
+                    onSave(parsed)
+                }
+            ) {
+                Text("Save Target", color = EmeraldBright, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = TextSecondary)
+            }
+        },
+        containerColor = SurfaceDark,
+        shape = RoundedCornerShape(20.dp)
+    )
 }

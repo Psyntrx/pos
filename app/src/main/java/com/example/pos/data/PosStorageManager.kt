@@ -287,6 +287,7 @@ class PosStorageManager(context: Context? = null) {
             remove(KEY_EMPLOYEES)
             remove(KEY_PRODUCTS)
             remove(KEY_SHOP)
+            remove(KEY_NOTIFICATIONS)
         }
     }
 }
@@ -501,6 +502,7 @@ fun Shop.toJson(): JSONObject {
         put("category", category)
         put("address", address)
         put("currency", currency)
+        put("dailyTarget", dailyTarget)
     }
 }
 
@@ -513,6 +515,7 @@ fun JSONObject.toShop(): Shop {
         phone = optString("phone", ""),
         category = optString("category", "Retail & Grocery"),
         address = optString("address", "Nairobi, Kenya"),
-        currency = optString("currency", "KSh")
+        currency = optString("currency", "KSh"),
+        dailyTarget = optDouble("dailyTarget", 30000.0)
     )
 }

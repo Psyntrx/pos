@@ -10,6 +10,17 @@ class PosViewModelProductTest {
     @Test
     fun addProductRejectsDuplicateSku() {
         val viewModel = PosViewModel()
+        viewModel.addProduct(
+            name = "Existing Product",
+            category = "Groceries",
+            sku = "UG001",
+            unit = "pcs",
+            buyingPrice = 100.0,
+            sellingPrice = 150.0,
+            quantity = 10,
+            minStock = 2,
+            supplier = ""
+        )
         val initialCount = viewModel.products.value.size
 
         val saved = viewModel.addProduct(
@@ -31,6 +42,7 @@ class PosViewModelProductTest {
     @Test
     fun addProductRejectsInvalidPriceAndStock() {
         val viewModel = PosViewModel()
+        val initialCount = viewModel.products.value.size
 
         val saved = viewModel.addProduct(
             name = "New product",
@@ -45,7 +57,7 @@ class PosViewModelProductTest {
         )
 
         assertFalse(saved)
-        assertEquals(8, viewModel.products.value.size)
+        assertEquals(initialCount, viewModel.products.value.size)
     }
 
     @Test
