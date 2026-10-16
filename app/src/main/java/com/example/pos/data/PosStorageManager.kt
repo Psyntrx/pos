@@ -441,18 +441,22 @@ fun Expense.toJson(): JSONObject {
         put("dateFormatted", dateFormatted)
         put("iconType", iconType)
         put("shopId", shopId)
+        put("timestamp", timestamp)
     }
 }
 
 fun JSONObject.toExpense(): Expense {
+    val recordId = getString("id")
+    val defaultTimestamp = recordId.removePrefix("exp_").toLongOrNull() ?: System.currentTimeMillis()
     return Expense(
-        id = getString("id"),
+        id = recordId,
         title = getString("title"),
         category = getString("category"),
         amount = getDouble("amount"),
         dateFormatted = optString("dateFormatted", ""),
         iconType = optString("iconType", "receipt"),
-        shopId = optString("shopId", "").takeIf { it.isNotBlank() }
+        shopId = optString("shopId", "").takeIf { it.isNotBlank() },
+        timestamp = optLong("timestamp", defaultTimestamp)
     )
 }
 
@@ -497,10 +501,13 @@ fun CustomerCredit.toJson(): JSONObject {
         put("settledAt", settledAt ?: "")
         put("paymentHistory", paymentHistoryArray)
         put("shopId", shopId)
+        put("timestamp", timestamp)
     }
 }
 
 fun JSONObject.toCustomerCredit(): CustomerCredit {
+    val recordId = getString("id")
+    val defaultTimestamp = recordId.removePrefix("c_").toLongOrNull() ?: System.currentTimeMillis()
     val paymentHistoryArray = optJSONArray("paymentHistory")
     val paymentHistory = mutableListOf<CreditPayment>()
     if (paymentHistoryArray != null) {
@@ -509,8 +516,10 @@ fun JSONObject.toCustomerCredit(): CustomerCredit {
         }
     }
 
+    val createdAtVal = if (has("createdAt")) optLong("createdAt", defaultTimestamp) else defaultTimestamp
+
     return CustomerCredit(
-        id = getString("id"),
+        id = recordId,
         customerName = getString("customerName"),
         customerPhone = optString("customerPhone", ""),
         totalOutstanding = getDouble("totalOutstanding"),
@@ -520,9 +529,10 @@ fun JSONObject.toCustomerCredit(): CustomerCredit {
         dueDate = optString("dueDate", ""),
         status = optString("status", "Pending"),
         paymentHistory = paymentHistory,
-        createdAt = if (has("createdAt")) optLong("createdAt", 0L) else 0L,
+        createdAt = createdAtVal,
         settledAt = if (has("settledAt")) optString("settledAt", "").takeIf { it.isNotBlank() } else null,
-        shopId = optString("shopId", "").takeIf { it.isNotBlank() }
+        shopId = optString("shopId", "").takeIf { it.isNotBlank() },
+        timestamp = optLong("timestamp", createdAtVal)
     )
 }
 
