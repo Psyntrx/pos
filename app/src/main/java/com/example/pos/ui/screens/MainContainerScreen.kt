@@ -28,7 +28,8 @@ fun MainContainerScreen(
 ) {
     val selectedTab by viewModel.selectedTab.collectAsState()
     val notifications by viewModel.notifications.collectAsState()
-    val hasUnreadNotifications = notifications.any { !it.isRead }
+    val unreadNotificationsCount = notifications.count { !it.isRead }
+    val hasUnreadNotifications = unreadNotificationsCount > 0
     var activeModal by remember {
         mutableStateOf(if (notificationNavigationRequest > 0) "notifications" else null)
     } // "payment", "add_product", "stock_in", "credit_sales", "expenses", "employees", "notifications"
@@ -129,9 +130,12 @@ fun MainContainerScreen(
                             viewModel = viewModel,
                             onClose = { activeModal = null },
                             onViewInventory = {
-                                viewModel.markAllNotificationsRead()
                                 activeModal = null
                                 viewModel.selectTab(2)
+                            },
+                            onOpenStockIn = { productId ->
+                                preselectedStockInProductId = productId
+                                activeModal = "stock_in"
                             }
                         )
                     }
@@ -149,7 +153,8 @@ fun MainContainerScreen(
                         onOpenCreditSales = { activeModal = "credit_sales" },
                         onOpenExpenses = { activeModal = "expenses" },
                         onOpenNotifications = { activeModal = "notifications" },
-                        hasUnreadNotifications = hasUnreadNotifications
+                        hasUnreadNotifications = hasUnreadNotifications,
+                        unreadNotificationsCount = unreadNotificationsCount
                     )
                     1 -> NewSaleScreen(
                         viewModel = viewModel,

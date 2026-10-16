@@ -149,6 +149,29 @@ fun RegisterShopStep1Screen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
+                val shopCategories = remember {
+                    listOf(
+                        "Retail & Grocery",
+                        "Supermarket / Minimart",
+                        "Electronics & Tech",
+                        "Fashion, Clothes & Apparel",
+                        "Pharmacy & Chemist",
+                        "Hardware & Building Materials",
+                        "Beauty, Cosmetics & Salon",
+                        "Restaurant, Cafe & Eatery",
+                        "Wholesale & Distribution",
+                        "General Store & Kiosk",
+                        "Bakery & Pastries",
+                        "Butchery & Fresh Meat",
+                        "Wines, Spirits & Beverages",
+                        "Bookshop & Stationery",
+                        "Automotive & Spare Parts",
+                        "Agrovet & Farming Inputs",
+                        "Other / Services"
+                    )
+                }
+                var categoryExpanded by remember { mutableStateOf(false) }
+
                 // Shop Name
                 OutlinedTextField(
                     value = registerState.shopName,
@@ -159,7 +182,7 @@ fun RegisterShopStep1Screen(
                         )
                     },
                     label = { Text("Shop Name") },
-                    placeholder = { Text("Enter shop name") },
+                    placeholder = { Text("e.g. Acme Supermarket") },
                     leadingIcon = {
                         Icon(Icons.Outlined.Storefront, contentDescription = null, tint = EmeraldBright)
                     },
@@ -182,7 +205,7 @@ fun RegisterShopStep1Screen(
                         )
                     },
                     label = { Text("Full Name / Owner") },
-                    placeholder = { Text("Enter full name") },
+                    placeholder = { Text("e.g. John Doe") },
                     leadingIcon = {
                         Icon(Icons.Outlined.Person, contentDescription = null, tint = EmeraldBright)
                     },
@@ -205,7 +228,7 @@ fun RegisterShopStep1Screen(
                         )
                     },
                     label = { Text("Email Address") },
-                    placeholder = { Text("Enter email address") },
+                    placeholder = { Text("e.g. contact@myshop.com") },
                     leadingIcon = {
                         Icon(Icons.Outlined.Email, contentDescription = null, tint = EmeraldBright)
                     },
@@ -234,7 +257,7 @@ fun RegisterShopStep1Screen(
                         )
                     },
                     label = { Text("Phone Number") },
-                    placeholder = { Text("Enter phone number") },
+                    placeholder = { Text("e.g. +254 712 345 678") },
                     leadingIcon = {
                         Icon(Icons.Outlined.Phone, contentDescription = null, tint = EmeraldBright)
                     },
@@ -248,24 +271,59 @@ fun RegisterShopStep1Screen(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // Category
-                OutlinedTextField(
-                    value = registerState.category,
-                    onValueChange = {
-                        authViewModel.updateStep1Data(
-                            registerState.shopName, registerState.ownerName, registerState.phone,
-                            registerState.email, it, registerState.address
-                        )
-                    },
-                    label = { Text("Shop Category") },
-                    trailingIcon = {
-                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = EmeraldBright)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    textStyle = LocalTextStyle.current.copy(color = TextPrimary),
-                    colors = posTextFieldColors(),
-                    singleLine = true
-                )
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = registerState.category,
+                        onValueChange = {
+                            authViewModel.updateStep1Data(
+                                registerState.shopName, registerState.ownerName, registerState.phone,
+                                registerState.email, it, registerState.address
+                            )
+                        },
+                        label = { Text("Shop Category") },
+                        placeholder = { Text("Select or enter category") },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.Badge, contentDescription = null, tint = EmeraldBright)
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = { categoryExpanded = !categoryExpanded }) {
+                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Select category", tint = EmeraldBright)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                        colors = posTextFieldColors(),
+                        singleLine = true
+                    )
+
+                    DropdownMenu(
+                        expanded = categoryExpanded,
+                        onDismissRequest = { categoryExpanded = false },
+                        modifier = Modifier
+                            .fillMaxWidth(0.88f)
+                            .background(SurfaceDark)
+                            .border(1.dp, SurfaceBorder, RoundedCornerShape(8.dp))
+                    ) {
+                        shopCategories.forEach { categoryOption ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = categoryOption,
+                                        color = if (registerState.category == categoryOption) EmeraldBright else TextPrimary
+                                    )
+                                },
+                                onClick = {
+                                    authViewModel.updateStep1Data(
+                                        registerState.shopName, registerState.ownerName, registerState.phone,
+                                        registerState.email, categoryOption, registerState.address
+                                    )
+                                    categoryExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(14.dp))
 
@@ -279,7 +337,7 @@ fun RegisterShopStep1Screen(
                         )
                     },
                     label = { Text("Shop Physical Address") },
-                    placeholder = { Text("Street, town, or building") },
+                    placeholder = { Text("e.g. Plot 42, Biashara Street, Nairobi") },
                     leadingIcon = {
                         Icon(Icons.Outlined.Place, contentDescription = null, tint = EmeraldBright)
                     },
@@ -490,7 +548,7 @@ fun RegisterShopStep2Screen(
                     value = registerState.password,
                     onValueChange = { authViewModel.updatePassword(it) },
                     label = { Text("Password") },
-                    placeholder = { Text("Create password") },
+                    placeholder = { Text("Enter password (min. 8 characters)") },
                     leadingIcon = {
                         Icon(Icons.Outlined.Lock, contentDescription = null, tint = EmeraldBright)
                     },
@@ -518,7 +576,7 @@ fun RegisterShopStep2Screen(
                     value = registerState.confirmPassword,
                     onValueChange = { authViewModel.updateConfirmPassword(it) },
                     label = { Text("Confirm Password") },
-                    placeholder = { Text("Re-enter password") },
+                    placeholder = { Text("Re-enter password to match") },
                     leadingIcon = {
                         Icon(Icons.Outlined.Lock, contentDescription = null, tint = EmeraldBright)
                     },

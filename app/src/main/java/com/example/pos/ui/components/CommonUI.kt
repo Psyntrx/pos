@@ -23,10 +23,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.pos.ui.theme.*
+import java.util.Calendar
 
 @Composable
 fun posTextFieldColors(
@@ -368,12 +372,23 @@ fun RetailSyncHeader(
     profilePhotoUri: String? = null,
     onNotificationClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
-    hasUnreadNotifications: Boolean = false
+    hasUnreadNotifications: Boolean = false,
+    unreadCount: Int = if (hasUnreadNotifications) 1 else 0
 ) {
+    val greeting = remember {
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        when (hour) {
+            in 0..11 -> "Good morning,"
+            in 12..16 -> "Good afternoon,"
+            else -> "Good evening,"
+        }
+    }
+    val effectiveUnreadCount = if (unreadCount > 0) unreadCount else if (hasUnreadNotifications) 1 else 0
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .padding(horizontal = 18.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -397,7 +412,7 @@ fun RetailSyncHeader(
 
             Column {
                 Text(
-                    text = "Good morning,",
+                    text = greeting,
                     style = MaterialTheme.typography.bodyMedium.copy(
                         color = TextSecondary,
                         fontSize = 12.sp
@@ -415,7 +430,10 @@ fun RetailSyncHeader(
             }
         }
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End
+        ) {
             // Shop Switcher Pill
             Box(
                 modifier = Modifier
@@ -428,6 +446,8 @@ fun RetailSyncHeader(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = shopName,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = TextPrimary,
                             fontWeight = FontWeight.Medium
@@ -443,31 +463,54 @@ fun RetailSyncHeader(
                 }
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(10.dp))
 
-            // Notification Bell
+            // Notification Bell with Floating Count Badge (well-oriented & never cropped!)
             Box(
                 modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(SurfaceDarkVariant)
-                    .clickable { onNotificationClick() },
+                    .wrapContentSize()
+                    .padding(top = 2.dp, end = 2.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.Notifications,
-                    contentDescription = "Notifications",
-                    tint = TextPrimary,
-                    modifier = Modifier.size(20.dp)
-                )
-                if (hasUnreadNotifications) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(SurfaceDarkVariant)
+                        .border(1.dp, SurfaceBorder.copy(alpha = 0.8f), CircleShape)
+                        .clickable { onNotificationClick() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (effectiveUnreadCount > 0) Icons.Default.Notifications else Icons.Outlined.Notifications,
+                        contentDescription = "Notifications",
+                        tint = if (effectiveUnreadCount > 0) EmeraldBright else TextPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                if (effectiveUnreadCount > 0) {
+                    val countDisplay = if (effectiveUnreadCount > 99) "99+" else effectiveUnreadCount.toString()
                     Box(
                         modifier = Modifier
-                            .size(8.dp)
+                            .align(Alignment.TopEnd)
+                            .offset(x = 6.dp, y = (-5).dp)
+                            .defaultMinSize(minWidth = 19.dp, minHeight = 19.dp)
                             .clip(CircleShape)
                             .background(EmeraldBright)
-                            .align(Alignment.TopEnd)
-                    )
+                            .border(1.5.dp, BgDark, CircleShape)
+                            .padding(horizontal = 4.dp, vertical = 1.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = countDisplay,
+                            color = TextOnPrimary,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 10.sp
+                        )
+                    }
                 }
             }
         }

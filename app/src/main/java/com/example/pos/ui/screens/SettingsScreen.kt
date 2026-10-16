@@ -85,6 +85,8 @@ fun SettingsScreen(
     onOpenNotifications: () -> Unit
 ) {
     val shop by viewModel.shop.collectAsState()
+    val notifications by viewModel.notifications.collectAsState()
+    val unreadNotificationsCount = notifications.count { !it.isRead }
     var showShopEditor by remember { mutableStateOf(false) }
     var showPhotoPreview by remember { mutableStateOf(false) }
     var photoBeingEdited by remember { mutableStateOf<Bitmap?>(null) }
@@ -182,6 +184,7 @@ fun SettingsScreen(
         SettingsMenuItem(
             label = "Notifications & alerts",
             icon = Icons.Default.Notifications,
+            badgeCount = unreadNotificationsCount,
             onClick = onOpenNotifications
         )
 
@@ -534,6 +537,7 @@ private fun ShopInformationDialog(
     var phone by remember(shop) { mutableStateOf(shop.phone) }
     var address by remember(shop) { mutableStateOf(shop.address) }
     var category by remember(shop) { mutableStateOf(shop.category) }
+    var dailyTargetStr by remember(shop) { mutableStateOf(if (shop.dailyTarget > 0) shop.dailyTarget.toInt().toString() else "30000") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -549,6 +553,7 @@ private fun ShopInformationDialog(
                 ShopInfoField("Phone", phone) { phone = it }
                 ShopInfoField("Business category", category) { category = it }
                 ShopInfoField("Address", address) { address = it }
+                ShopInfoField("Daily Sales Target (KSh)", dailyTargetStr) { dailyTargetStr = it.filter { ch -> ch.isDigit() } }
             }
         },
         confirmButton = {
@@ -561,7 +566,8 @@ private fun ShopInformationDialog(
                             email = email.trim(),
                             phone = phone.trim(),
                             category = category.trim(),
-                            address = address.trim()
+                            address = address.trim(),
+                            dailyTarget = dailyTargetStr.toDoubleOrNull() ?: shop.dailyTarget
                         )
                     )
                 },
@@ -941,6 +947,7 @@ private fun Color.toHexString(): String =
 fun SettingsMenuItem(
     label: String,
     icon: ImageVector,
+    badgeCount: Int = 0,
     onClick: () -> Unit
 ) {
     SurfaceCard(
@@ -985,12 +992,31 @@ fun SettingsMenuItem(
                 )
             }
 
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = TextMuted,
-                modifier = Modifier.size(20.dp)
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (badgeCount > 0) {
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(EmeraldBright)
+                            .padding(horizontal = 7.dp, vertical = 2.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (badgeCount > 99) "99+" else badgeCount.toString(),
+                            color = TextOnPrimary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = TextMuted,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }

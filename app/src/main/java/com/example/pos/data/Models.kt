@@ -5,13 +5,14 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class Shop(
     val id: String = "shop_1",
-    val name: String = "Faith's Store",
-    val ownerName: String = "Faith",
-    val email: String = "faith@store.com",
-    val phone: String = "+254 712 345 678",
-    val category: String = "Retail & Grocery",
-    val address: String = "Plot 42, Biashara Street, Nairobi",
-    val currency: String = "KSh"
+    val name: String = "",
+    val ownerName: String = "",
+    val email: String = "",
+    val phone: String = "",
+    val category: String = "",
+    val address: String = "",
+    val currency: String = "KSh",
+    val dailyTarget: Double = 30000.0
 )
 
 @Serializable
@@ -27,7 +28,8 @@ data class Product(
     val minStock: Int = 10,
     val supplier: String = "",
     val iconType: String = "box",
-    val imageUri: String? = null
+    val imageUri: String? = null,
+    val shopId: String? = null
 ) {
     val isLowStock: Boolean get() = stockQuantity <= minStock
 }
@@ -52,6 +54,7 @@ data class AppNotification(
     val isRead: Boolean = false
 )
 
+@Serializable
 data class CartItem(
     val product: Product,
     val quantity: Int
@@ -68,11 +71,12 @@ data class Sale(
     val customerName: String = "",
     val dateFormatted: String = "Today, 10:42 AM",
     val timestamp: Long = System.currentTimeMillis(),
-    val employeeName: String = "Faith",
+    val employeeName: String = "Store Owner",
     val isCreditSale: Boolean = false,
     val paidAmount: Double = totalAmount,
     val balance: Double = 0.0,
-    val dueDate: String = ""
+    val dueDate: String = "",
+    val shopId: String? = null
 )
 
 @Serializable
@@ -84,7 +88,8 @@ data class StockInRecord(
     val buyingPrice: Double,
     val supplier: String,
     val dateFormatted: String,
-    val employeeName: String
+    val employeeName: String,
+    val shopId: String? = null
 )
 
 @Serializable
@@ -94,7 +99,20 @@ data class Expense(
     val category: String,
     val amount: Double,
     val dateFormatted: String,
-    val iconType: String = "receipt"
+    val iconType: String = "receipt",
+    val shopId: String? = null,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
+@Serializable
+data class CreditPayment(
+    val id: String,
+    val amount: Double,
+    val method: String,
+    val timestamp: Long = System.currentTimeMillis(),
+    val balanceAfterPayment: Double = 0.0,
+    val referenceCode: String = "",
+    val notes: String = ""
 )
 
 @Serializable
@@ -107,7 +125,12 @@ data class CustomerCredit(
     val amountPaid: Double,
     val balance: Double,
     val dueDate: String,
-    val status: String = "Pending"
+    val status: String = "Pending",
+    val paymentHistory: List<CreditPayment> = emptyList(),
+    val createdAt: Long = System.currentTimeMillis(),
+    val settledAt: String? = null,
+    val shopId: String? = null,
+    val timestamp: Long = createdAt
 )
 
 @Serializable
@@ -117,7 +140,8 @@ data class Employee(
     val role: String,
     val phone: String,
     val email: String,
-    val isOwner: Boolean = false
+    val isOwner: Boolean = false,
+    val shopId: String? = null
 )
 
 data class AuthSession(
@@ -152,4 +176,3 @@ data class AuthSession(
         return currentTime >= (tokenExpiresAt - 60_000L)
     }
 }
-

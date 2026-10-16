@@ -15,6 +15,8 @@ class PosStorageManager(context: Context? = null) {
         private const val KEY_CUSTOMER_CREDITS = "key_customer_credits"
         private const val KEY_EMPLOYEES = "key_employees"
         private const val KEY_STOCK_IN = "key_stock_in"
+        private const val KEY_CREDIT_DURATION_DAYS = "key_credit_duration_days"
+        private const val KEY_LEGACY_CREDIT_DURATION_MONTHS = "key_credit_duration_months"
         private const val KEY_SHOP = "key_shop"
         private const val KEY_AUTH_SESSION = "key_auth_session"
         private const val KEY_REMEMBERED_EMAIL = "key_remembered_email"
@@ -23,11 +25,17 @@ class PosStorageManager(context: Context? = null) {
         private const val KEY_SYSTEM_NOTIFICATIONS_ENABLED = "key_system_notifications_enabled"
     }
 
+    private inline fun editPrefs(action: SharedPreferences.Editor.() -> Unit) {
+        val p = prefs ?: return
+        val editor = p.edit()
+        editor.action()
+        editor.apply()
+    }
+
     fun saveProducts(products: List<Product>) {
-        if (prefs == null) return
         val jsonArray = JSONArray()
         products.forEach { jsonArray.put(it.toJson()) }
-        prefs.edit().putString(KEY_PRODUCTS, jsonArray.toString()).apply()
+        editPrefs { putString(KEY_PRODUCTS, jsonArray.toString()) }
     }
 
     fun loadProducts(defaultProducts: List<Product>): List<Product> {
@@ -57,11 +65,12 @@ class PosStorageManager(context: Context? = null) {
                 put("isRead", notification.isRead)
             })
         }
-        prefs.edit().putString(KEY_NOTIFICATIONS, json.toString()).apply()
+        editPrefs { putString(KEY_NOTIFICATIONS, json.toString()) }
     }
 
     fun loadNotifications(): List<AppNotification> = runCatching {
-        val json = JSONArray(prefs.getString(KEY_NOTIFICATIONS, "[]"))
+        val jsonString = prefs?.getString(KEY_NOTIFICATIONS, "[]") ?: "[]"
+        val json = JSONArray(jsonString)
         (0 until json.length()).map { index ->
             val item = json.getJSONObject(index)
             val ids = item.optJSONArray("productIds") ?: JSONArray()
@@ -78,17 +87,16 @@ class PosStorageManager(context: Context? = null) {
     }.getOrDefault(emptyList())
 
     fun areSystemNotificationsEnabled(): Boolean =
-        prefs.getBoolean(KEY_SYSTEM_NOTIFICATIONS_ENABLED, false)
+        prefs?.getBoolean(KEY_SYSTEM_NOTIFICATIONS_ENABLED, false) ?: false
 
     fun setSystemNotificationsEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_SYSTEM_NOTIFICATIONS_ENABLED, enabled).apply()
+        editPrefs { putBoolean(KEY_SYSTEM_NOTIFICATIONS_ENABLED, enabled) }
     }
 
     fun saveSales(sales: List<Sale>) {
-        if (prefs == null) return
         val jsonArray = JSONArray()
         sales.forEach { jsonArray.put(it.toJson()) }
-        prefs.edit().putString(KEY_SALES, jsonArray.toString()).apply()
+        editPrefs { putString(KEY_SALES, jsonArray.toString()) }
     }
 
     fun loadSales(defaultSales: List<Sale>): List<Sale> {
@@ -106,10 +114,9 @@ class PosStorageManager(context: Context? = null) {
     }
 
     fun saveExpenses(expenses: List<Expense>) {
-        if (prefs == null) return
         val jsonArray = JSONArray()
         expenses.forEach { jsonArray.put(it.toJson()) }
-        prefs.edit().putString(KEY_EXPENSES, jsonArray.toString()).apply()
+        editPrefs { putString(KEY_EXPENSES, jsonArray.toString()) }
     }
 
     fun loadExpenses(defaultExpenses: List<Expense>): List<Expense> {
@@ -127,10 +134,9 @@ class PosStorageManager(context: Context? = null) {
     }
 
     fun saveCustomerCredits(credits: List<CustomerCredit>) {
-        if (prefs == null) return
         val jsonArray = JSONArray()
         credits.forEach { jsonArray.put(it.toJson()) }
-        prefs.edit().putString(KEY_CUSTOMER_CREDITS, jsonArray.toString()).apply()
+        editPrefs { putString(KEY_CUSTOMER_CREDITS, jsonArray.toString()) }
     }
 
     fun loadCustomerCredits(defaultCredits: List<CustomerCredit>): List<CustomerCredit> {
@@ -148,10 +154,9 @@ class PosStorageManager(context: Context? = null) {
     }
 
     fun saveEmployees(employees: List<Employee>) {
-        if (prefs == null) return
         val jsonArray = JSONArray()
         employees.forEach { jsonArray.put(it.toJson()) }
-        prefs.edit().putString(KEY_EMPLOYEES, jsonArray.toString()).apply()
+        editPrefs { putString(KEY_EMPLOYEES, jsonArray.toString()) }
     }
 
     fun loadEmployees(defaultEmployees: List<Employee>): List<Employee> {
@@ -169,10 +174,9 @@ class PosStorageManager(context: Context? = null) {
     }
 
     fun saveStockInRecords(records: List<StockInRecord>) {
-        if (prefs == null) return
         val jsonArray = JSONArray()
         records.forEach { jsonArray.put(it.toJson()) }
-        prefs.edit().putString(KEY_STOCK_IN, jsonArray.toString()).apply()
+        editPrefs { putString(KEY_STOCK_IN, jsonArray.toString()) }
     }
 
     fun loadStockInRecords(defaultRecords: List<StockInRecord>): List<StockInRecord> {
@@ -190,8 +194,7 @@ class PosStorageManager(context: Context? = null) {
     }
 
     fun saveShop(shop: Shop) {
-        if (prefs == null) return
-        prefs.edit().putString(KEY_SHOP, shop.toJson().toString()).apply()
+        editPrefs { putString(KEY_SHOP, shop.toJson().toString()) }
     }
 
     fun loadShop(defaultShop: Shop): Shop {
@@ -203,11 +206,26 @@ class PosStorageManager(context: Context? = null) {
         }
     }
 
+    fun saveCreditDurationDays(days: Int) {
+        editPrefs { putInt(KEY_CREDIT_DURATION_DAYS, days.coerceAtLeast(1)) }
+    }
+
+    fun loadCreditDurationDays(defaultDays: Int = 14): Int {
+        val p = prefs ?: return defaultDays
+        if (p.contains(KEY_CREDIT_DURATION_DAYS)) {
+            return p.getInt(KEY_CREDIT_DURATION_DAYS, defaultDays).coerceAtLeast(1)
+        }
+
+        val legacyValue = p.getInt(KEY_LEGACY_CREDIT_DURATION_MONTHS, 0)
+        val migratedDays = legacyValue.takeIf { it in setOf(7, 14, 30, 60) } ?: defaultDays
+        saveCreditDurationDays(migratedDays)
+        return migratedDays
+    }
+
     // ==========================================
     // AUTH SESSION & REMEMBER ME
     // ==========================================
     fun saveAuthSession(session: AuthSession) {
-        if (prefs == null) return
         val json = JSONObject().apply {
             put("accessToken", session.accessToken)
             put("refreshToken", session.refreshToken)
@@ -217,7 +235,7 @@ class PosStorageManager(context: Context? = null) {
             put("rememberMe", session.rememberMe)
             put("loginTimestamp", session.loginTimestamp)
         }
-        prefs.edit().putString(KEY_AUTH_SESSION, json.toString()).apply()
+        editPrefs { putString(KEY_AUTH_SESSION, json.toString()) }
     }
 
     fun loadAuthSession(): AuthSession? {
@@ -250,7 +268,7 @@ class PosStorageManager(context: Context? = null) {
     }
 
     fun clearAuthSession() {
-        prefs?.edit()?.remove(KEY_AUTH_SESSION)?.apply()
+        editPrefs { remove(KEY_AUTH_SESSION) }
     }
 
     fun isSessionValid(): Boolean {
@@ -259,7 +277,7 @@ class PosStorageManager(context: Context? = null) {
     }
 
     fun saveRememberedEmail(email: String) {
-        prefs?.edit()?.putString(KEY_REMEMBERED_EMAIL, email)?.apply()
+        editPrefs { putString(KEY_REMEMBERED_EMAIL, email) }
     }
 
     fun loadRememberedEmail(): String? {
@@ -267,15 +285,28 @@ class PosStorageManager(context: Context? = null) {
     }
 
     fun clearRememberedEmail() {
-        prefs?.edit()?.remove(KEY_REMEMBERED_EMAIL)?.apply()
+        editPrefs { remove(KEY_REMEMBERED_EMAIL) }
     }
 
     fun saveRememberMePreference(enabled: Boolean) {
-        prefs?.edit()?.putBoolean(KEY_REMEMBER_ME, enabled)?.apply()
+        editPrefs { putBoolean(KEY_REMEMBER_ME, enabled) }
     }
 
     fun loadRememberMePreference(): Boolean {
         return prefs?.getBoolean(KEY_REMEMBER_ME, true) ?: true
+    }
+
+    fun clearShopData() {
+        editPrefs {
+            remove(KEY_SALES)
+            remove(KEY_EXPENSES)
+            remove(KEY_CUSTOMER_CREDITS)
+            remove(KEY_STOCK_IN)
+            remove(KEY_EMPLOYEES)
+            remove(KEY_PRODUCTS)
+            remove(KEY_SHOP)
+            remove(KEY_NOTIFICATIONS)
+        }
     }
 }
 
@@ -294,6 +325,7 @@ fun Product.toJson(): JSONObject {
         put("supplier", supplier)
         put("iconType", iconType)
         put("imageUri", imageUri)
+        put("shopId", shopId)
     }
 }
 
@@ -310,7 +342,8 @@ fun JSONObject.toProduct(): Product {
         minStock = optInt("minStock", 10),
         supplier = optString("supplier", ""),
         iconType = optString("iconType", "box"),
-        imageUri = optString("imageUri", "").takeIf { it.isNotBlank() && it != "null" }
+        imageUri = optString("imageUri", "").takeIf { it.isNotBlank() && it != "null" },
+        shopId = optString("shopId", "").takeIf { it.isNotBlank() }
     )
 }
 
@@ -344,6 +377,7 @@ fun Sale.toJson(): JSONObject {
         put("paidAmount", paidAmount)
         put("balance", balance)
         put("dueDate", dueDate)
+        put("shopId", shopId)
     }
 }
 
@@ -361,11 +395,12 @@ fun JSONObject.toSale(): Sale {
         customerName = optString("customerName", ""),
         dateFormatted = optString("dateFormatted", "Today"),
         timestamp = optLong("timestamp", System.currentTimeMillis()),
-        employeeName = optString("employeeName", "Faith"),
+        employeeName = optString("employeeName", "Store Owner"),
         isCreditSale = optBoolean("isCreditSale", false),
         paidAmount = optDouble("paidAmount", getDouble("totalAmount")),
         balance = optDouble("balance", 0.0),
-        dueDate = optString("dueDate", "")
+        dueDate = optString("dueDate", ""),
+        shopId = optString("shopId", "").takeIf { it.isNotBlank() }
     )
 }
 
@@ -379,6 +414,7 @@ fun StockInRecord.toJson(): JSONObject {
         put("supplier", supplier)
         put("dateFormatted", dateFormatted)
         put("employeeName", employeeName)
+        put("shopId", shopId)
     }
 }
 
@@ -391,7 +427,8 @@ fun JSONObject.toStockInRecord(): StockInRecord {
         buyingPrice = getDouble("buyingPrice"),
         supplier = optString("supplier", ""),
         dateFormatted = optString("dateFormatted", ""),
-        employeeName = optString("employeeName", "")
+        employeeName = optString("employeeName", ""),
+        shopId = optString("shopId", "").takeIf { it.isNotBlank() }
     )
 }
 
@@ -403,21 +440,53 @@ fun Expense.toJson(): JSONObject {
         put("amount", amount)
         put("dateFormatted", dateFormatted)
         put("iconType", iconType)
+        put("shopId", shopId)
+        put("timestamp", timestamp)
     }
 }
 
 fun JSONObject.toExpense(): Expense {
+    val recordId = getString("id")
+    val defaultTimestamp = recordId.removePrefix("exp_").toLongOrNull() ?: System.currentTimeMillis()
     return Expense(
-        id = getString("id"),
+        id = recordId,
         title = getString("title"),
         category = getString("category"),
         amount = getDouble("amount"),
         dateFormatted = optString("dateFormatted", ""),
-        iconType = optString("iconType", "receipt")
+        iconType = optString("iconType", "receipt"),
+        shopId = optString("shopId", "").takeIf { it.isNotBlank() },
+        timestamp = optLong("timestamp", defaultTimestamp)
+    )
+}
+
+fun CreditPayment.toJson(): JSONObject {
+    return JSONObject().apply {
+        put("id", id)
+        put("amount", amount)
+        put("method", method)
+        put("timestamp", timestamp)
+        put("balanceAfterPayment", balanceAfterPayment)
+        put("referenceCode", referenceCode)
+        put("notes", notes)
+    }
+}
+
+fun JSONObject.toCreditPayment(): CreditPayment {
+    return CreditPayment(
+        id = optString("id", "payment_${System.currentTimeMillis()}"),
+        amount = optDouble("amount", 0.0),
+        method = optString("method", "Cash"),
+        timestamp = if (has("timestamp")) optLong("timestamp", 0L) else 0L,
+        balanceAfterPayment = optDouble("balanceAfterPayment", 0.0),
+        referenceCode = optString("referenceCode", ""),
+        notes = optString("notes", "")
     )
 }
 
 fun CustomerCredit.toJson(): JSONObject {
+    val paymentHistoryArray = JSONArray()
+    paymentHistory.forEach { paymentHistoryArray.put(it.toJson()) }
     return JSONObject().apply {
         put("id", id)
         put("customerName", customerName)
@@ -428,12 +497,29 @@ fun CustomerCredit.toJson(): JSONObject {
         put("balance", balance)
         put("dueDate", dueDate)
         put("status", status)
+        put("createdAt", createdAt)
+        put("settledAt", settledAt ?: "")
+        put("paymentHistory", paymentHistoryArray)
+        put("shopId", shopId)
+        put("timestamp", timestamp)
     }
 }
 
 fun JSONObject.toCustomerCredit(): CustomerCredit {
+    val recordId = getString("id")
+    val defaultTimestamp = recordId.removePrefix("c_").toLongOrNull() ?: System.currentTimeMillis()
+    val paymentHistoryArray = optJSONArray("paymentHistory")
+    val paymentHistory = mutableListOf<CreditPayment>()
+    if (paymentHistoryArray != null) {
+        for (i in 0 until paymentHistoryArray.length()) {
+            paymentHistory.add(paymentHistoryArray.getJSONObject(i).toCreditPayment())
+        }
+    }
+
+    val createdAtVal = if (has("createdAt")) optLong("createdAt", defaultTimestamp) else defaultTimestamp
+
     return CustomerCredit(
-        id = getString("id"),
+        id = recordId,
         customerName = getString("customerName"),
         customerPhone = optString("customerPhone", ""),
         totalOutstanding = getDouble("totalOutstanding"),
@@ -441,7 +527,12 @@ fun JSONObject.toCustomerCredit(): CustomerCredit {
         amountPaid = optDouble("amountPaid", 0.0),
         balance = getDouble("balance"),
         dueDate = optString("dueDate", ""),
-        status = optString("status", "Pending")
+        status = optString("status", "Pending"),
+        paymentHistory = paymentHistory,
+        createdAt = createdAtVal,
+        settledAt = if (has("settledAt")) optString("settledAt", "").takeIf { it.isNotBlank() } else null,
+        shopId = optString("shopId", "").takeIf { it.isNotBlank() },
+        timestamp = optLong("timestamp", createdAtVal)
     )
 }
 
@@ -453,6 +544,7 @@ fun Employee.toJson(): JSONObject {
         put("phone", phone)
         put("email", email)
         put("isOwner", isOwner)
+        put("shopId", shopId)
     }
 }
 
@@ -463,7 +555,8 @@ fun JSONObject.toEmployee(): Employee {
         role = getString("role"),
         phone = optString("phone", ""),
         email = optString("email", ""),
-        isOwner = optBoolean("isOwner", false)
+        isOwner = optBoolean("isOwner", false),
+        shopId = optString("shopId", "").takeIf { it.isNotBlank() }
     )
 }
 
@@ -477,18 +570,20 @@ fun Shop.toJson(): JSONObject {
         put("category", category)
         put("address", address)
         put("currency", currency)
+        put("dailyTarget", dailyTarget)
     }
 }
 
 fun JSONObject.toShop(): Shop {
     return Shop(
         id = optString("id", "shop_1"),
-        name = optString("name", "Faith's Store"),
-        ownerName = optString("ownerName", "Faith"),
-        email = optString("email", "faith@store.com"),
-        phone = optString("phone", "+254 712 345 678"),
-        category = optString("category", "Retail & Grocery"),
-        address = optString("address", "Plot 42, Biashara Street, Nairobi"),
-        currency = optString("currency", "KSh")
+        name = optString("name", ""),
+        ownerName = optString("ownerName", ""),
+        email = optString("email", ""),
+        phone = optString("phone", ""),
+        category = optString("category", ""),
+        address = optString("address", ""),
+        currency = optString("currency", "KSh"),
+        dailyTarget = optDouble("dailyTarget", 30000.0)
     )
 }

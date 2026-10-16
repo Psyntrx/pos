@@ -3,9 +3,10 @@ package com.example.pos.viewmodel
 import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.pos.data.AppNotification
 import com.example.pos.data.AuthSession
 import com.example.pos.data.CartItem
-import com.example.pos.data.AppNotification
+import com.example.pos.data.CreditLedgerUtils
 import com.example.pos.data.CustomerCredit
 import com.example.pos.data.InventoryAlertKind
 import com.example.pos.data.LowStockNotificationManager
@@ -27,9 +28,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class PosViewModel(
-    application: Application? = null,
+    private val application: Application? = null,
     private val storageManager: PosStorageManager = PosStorageManager(application),
-    private val supabase: SupabaseService = SupabaseClient.service
+    private val supabase: SupabaseService? = SupabaseClient.service
 ) : ViewModel() {
 
     // Shop & Profile
@@ -51,16 +52,7 @@ class PosViewModel(
     val selectedTab: StateFlow<Int> = _selectedTab.asStateFlow()
 
     // Products & Inventory
-    private val defaultProducts = listOf(
-        Product("p1", "Unga", "Groceries", "UG001", "pcs", 110.0, 150.0, 20, 10, "Pemba Millers", "groceries"),
-        Product("p2", "Sukari", "Groceries", "SK001", "kg", 110.0, 140.0, 35, 15, "Mumias Sugar", "sugar"),
-        Product("p3", "Cooking Oil", "Groceries", "CO001", "L", 340.0, 420.0, 12, 10, "Bidco Africa", "oil"),
-        Product("p4", "Rice", "Groceries", "RI001", "kg", 260.0, 350.0, 8, 10, "Mwea Farmers", "rice"),
-        Product("p5", "Detergent", "Household", "DE001", "pkt", 200.0, 280.0, 18, 5, "Unilever", "household"),
-        Product("p6", "Fresh Milk", "Beverages", "MK001", "pkt", 50.0, 70.0, 4, 10, "Brookside", "beverage"),
-        Product("p7", "Soda 500ml", "Beverages", "SD001", "btl", 45.0, 65.0, 40, 12, "Coca Cola", "beverage"),
-        Product("p8", "Potato Chips", "Snacks", "SN001", "pkt", 80.0, 120.0, 25, 8, "Tropical", "snack")
-    )
+    private val defaultProducts = emptyList<Product>()
     private val _products = MutableStateFlow(storageManager.loadProducts(defaultProducts))
     val products: StateFlow<List<Product>> = _products.asStateFlow()
     private val _notifications = MutableStateFlow(storageManager.loadNotifications())
@@ -83,61 +75,35 @@ class PosViewModel(
     val completedSale: StateFlow<Sale?> = _completedSale.asStateFlow()
 
     // Sales History
-    private val defaultSalesHistory = listOf(
-        Sale("SL-1092", listOf(
-            CartItem(Product("p1", "Unga", "Groceries", "UG001", "pcs", 110.0, 150.0, 20, 10), 3),
-            CartItem(Product("p3", "Cooking Oil", "Groceries", "CO001", "L", 340.0, 420.0, 12, 10), 1),
-            CartItem(Product("p2", "Sukari", "Groceries", "SK001", "kg", 110.0, 140.0, 35, 15), 1)
-        ), 1010.0, "M-Pesa", "John Doe", "Today, 10:42 AM", System.currentTimeMillis() - 3600000),
-        Sale("SL-1091", listOf(
-            CartItem(Product("p7", "Soda 500ml", "Beverages", "SD001", "btl", 45.0, 65.0, 40, 12), 4)
-        ), 260.0, "Cash", "Walk-in Customer", "Today, 09:15 AM", System.currentTimeMillis() - 7200000),
-        Sale("SL-1090", listOf(
-            CartItem(Product("p4", "Rice", "Groceries", "RI001", "kg", 260.0, 350.0, 8, 10), 5)
-        ), 1750.0, "M-Pesa", "Sarah M.", "Yesterday, 04:30 PM", System.currentTimeMillis() - 86400000)
-    )
+    private val defaultSalesHistory = emptyList<Sale>()
     private val _salesHistory = MutableStateFlow(storageManager.loadSales(defaultSalesHistory))
     val salesHistory: StateFlow<List<Sale>> = _salesHistory.asStateFlow()
 
     // Expenses
-    private val defaultExpenses = listOf(
-        Expense("e1", "Rent", "Utility", 3000.0, "Sep 28, 2026", "rent"),
-        Expense("e2", "Electricity", "Utility", 1200.0, "Sep 26, 2026", "electricity"),
-        Expense("e3", "Transport", "Logistics", 800.0, "Sep 24, 2026", "transport"),
-        Expense("e4", "Salaries", "Payroll", 5000.0, "Sep 22, 2026", "salaries"),
-        Expense("e5", "Internet", "Utility", 1000.0, "Sep 20, 2026", "wifi"),
-        Expense("e6", "Repairs", "Maintenance", 600.0, "Sep 18, 2026", "repairs")
-    )
+    private val defaultExpenses = emptyList<Expense>()
     private val _expenses = MutableStateFlow(storageManager.loadExpenses(defaultExpenses))
     val expenses: StateFlow<List<Expense>> = _expenses.asStateFlow()
 
     // Customer Credit Balances
-    private val defaultCustomerCredits = listOf(
-        CustomerCredit("c1", "Samuel Njuguna", "+254 722 111 222", 8460.0, "2 Items | Unga, Cooking Oil", 500.0, 750.0, "Sep 30, 2026", "Pending"),
-        CustomerCredit("c2", "Mary Wanjiku", "+254 733 444 555", 3200.0, "4 Items | Sukari, Rice", 1000.0, 2200.0, "Oct 05, 2026", "Pending"),
-        CustomerCredit("c3", "David Ochieng", "+254 711 888 999", 5510.0, "1 Item | Cooking Oil x5", 1500.0, 4010.0, "Oct 12, 2026", "Pending")
-    )
+    private val defaultCustomerCredits = emptyList<CustomerCredit>()
     private val _customerCredits = MutableStateFlow(storageManager.loadCustomerCredits(defaultCustomerCredits))
     val customerCredits: StateFlow<List<CustomerCredit>> = _customerCredits.asStateFlow()
 
     // Employees
-    private val defaultEmployees = listOf(
-        Employee("emp1", "Faith W.", "Owner", "+254 712 345 678", "faith@store.com", isOwner = true),
-        Employee("emp2", "Kevin Otieno", "Sales Clerk", "+254 720 998 877", "kevin@store.com"),
-        Employee("emp3", "Amina Hassan", "Manager", "+254 735 112 233", "amina@store.com")
-    )
+    private val defaultEmployees = emptyList<Employee>()
     private val _employees = MutableStateFlow(storageManager.loadEmployees(defaultEmployees))
     val employees: StateFlow<List<Employee>> = _employees.asStateFlow()
 
     // Stock In History
-    private val defaultStockInRecords = listOf(
-        StockInRecord("stk1", "p1", "Unga", 50, 110.0, "Pemba Millers", "Sep 28, 2026 09:41 AM", "Faith"),
-        StockInRecord("stk2", "p3", "Cooking Oil", 20, 340.0, "Bidco Africa", "Sep 25, 2026 02:15 PM", "Amina")
-    )
+    private val defaultStockInRecords = emptyList<StockInRecord>()
     private val _stockInRecords = MutableStateFlow(storageManager.loadStockInRecords(defaultStockInRecords))
     val stockInRecords: StateFlow<List<StockInRecord>> = _stockInRecords.asStateFlow()
 
     init {
+        if (_expenses.value.isEmpty()) {
+            _expenses.value = CreditLedgerUtils.buildDemoExpenses()
+        }
+
         // Save initial defaults locally if not already stored
         storageManager.saveProducts(_products.value)
         storageManager.saveSales(_salesHistory.value)
@@ -148,25 +114,27 @@ class PosViewModel(
         storageManager.saveShop(_shop.value)
 
         // Restore authenticated Supabase session if valid
-        initialSession?.let { session ->
-            if (session.isSessionValid()) {
-                supabase.setTokens(
-                    access = session.accessToken,
-                    refresh = session.refreshToken,
-                    expiresAt = session.tokenExpiresAt
-                )
-                // If token is expiring or expired, refresh silently in the background
-                if (session.refreshToken.isNotBlank() && session.isAccessTokenExpired()) {
-                    viewModelScope.launch {
-                        refreshSession(session.refreshToken, session.rememberMe)
+        if (supabase != null) {
+            initialSession?.let { session ->
+                if (session.isSessionValid()) {
+                    supabase.setTokens(
+                        access = session.accessToken,
+                        refresh = session.refreshToken,
+                        expiresAt = session.tokenExpiresAt
+                    )
+                    // If token is expiring or expired, refresh silently in the background
+                    if (session.refreshToken.isNotBlank() && session.isAccessTokenExpired()) {
+                        viewModelScope.launch {
+                            refreshSession(session.refreshToken, session.rememberMe)
+                        }
                     }
                 }
             }
-        }
 
-        // Keep local persistent storage synchronized if Supabase refreshes the token
-        supabase.onSessionRefreshedListener = { refreshedSession ->
-            storageManager.saveAuthSession(refreshedSession)
+            // Keep local persistent storage synchronized if Supabase refreshes the token
+            supabase.onSessionRefreshedListener = { refreshedSession ->
+                storageManager.saveAuthSession(refreshedSession)
+            }
         }
         observeInventoryThresholds()
 
@@ -177,6 +145,14 @@ class PosViewModel(
     private fun observeInventoryThresholds() {
         viewModelScope.launch {
             var previous = _products.value.associateBy { it.id }
+            // If there are no saved notifications yet, populate initial alerts for any current low or out of stock products
+            if (_notifications.value.isEmpty()) {
+                val current = _products.value
+                val initialOut = current.filter { it.stockQuantity <= 0 }
+                val initialLow = current.filter { it.stockQuantity > 0 && it.stockQuantity <= it.minStock }
+                createInventoryNotification(InventoryAlertKind.OUT_OF_STOCK, initialOut)
+                createInventoryNotification(InventoryAlertKind.LOW_STOCK, initialLow)
+            }
             _products.collect { productsNow ->
                 val current = productsNow.associateBy { it.id }
                 val outOfStock = current.values.filter { product ->
@@ -218,7 +194,7 @@ class PosViewModel(
         _notifications.update { (listOf(notification) + it).take(100) }
         storageManager.saveNotifications(_notifications.value)
         if (_systemNotificationsEnabled.value) {
-            LowStockNotificationManager.show(getApplication(), notification)
+            application?.let { LowStockNotificationManager.show(it, notification) }
         }
     }
 
@@ -232,6 +208,40 @@ class PosViewModel(
         storageManager.saveNotifications(_notifications.value)
     }
 
+    fun markNotificationAsRead(notificationId: String) {
+        _notifications.update { items ->
+            items.map { if (it.id == notificationId) it.copy(isRead = true) else it }
+        }
+        storageManager.saveNotifications(_notifications.value)
+    }
+
+    fun markNotificationAsUnread(notificationId: String) {
+        _notifications.update { items ->
+            items.map { if (it.id == notificationId) it.copy(isRead = false) else it }
+        }
+        storageManager.saveNotifications(_notifications.value)
+    }
+
+    fun deleteNotification(notificationId: String) {
+        _notifications.update { items -> items.filterNot { it.id == notificationId } }
+        storageManager.saveNotifications(_notifications.value)
+    }
+
+    fun triggerTestNotification() {
+        val lowStockProducts = _products.value.filter { it.isLowStock }
+        val sampleProducts = if (lowStockProducts.isNotEmpty()) {
+            lowStockProducts
+        } else {
+            _products.value.take(2)
+        }
+        val kind = if (sampleProducts.any { it.stockQuantity <= 0 }) {
+            InventoryAlertKind.OUT_OF_STOCK
+        } else {
+            InventoryAlertKind.LOW_STOCK
+        }
+        createInventoryNotification(kind, sampleProducts)
+    }
+
     fun clearNotifications() {
         _notifications.value = emptyList()
         storageManager.saveNotifications(emptyList())
@@ -243,10 +253,13 @@ class PosViewModel(
 
     /**
      * Synchronize Products, Expenses, Sales, and Stock Records with Supabase.
+     * Scoped to the authenticated user's shop for complete multi-tenant isolation.
      * Offline-first: Falls back seamlessly to local storage cache if network is unavailable.
      * Includes a throttle guard so rapid UI transitions do not trigger redundant or racing requests.
      */
     fun syncWithSupabase(force: Boolean = false) {
+        val service = supabase ?: return
+
         val now = System.currentTimeMillis()
         if (!force && (now - lastSyncTime < 15_000L)) {
             return
@@ -254,10 +267,27 @@ class PosViewModel(
         lastSyncTime = now
 
         viewModelScope.launch {
-            // 1. Fetch live products from Supabase (updates Low Stock alerts & catalog)
-            // Preserves in-flight local modifications so optimistic UI updates are not overwritten by stale GETs
-            supabase.getProducts().onSuccess { remoteProducts ->
-                if (remoteProducts.isNotEmpty()) {
+            // First: resolve active user email and current shop
+            val activeEmail = storageManager.loadAuthSession()?.userEmail?.takeIf { it.isNotBlank() }
+                ?: _shop.value.email.takeIf { it.isNotBlank() }
+
+            var currentShop = _shop.value
+            service.getShop(
+                userEmail = activeEmail,
+                shopId = currentShop.id.takeIf { it != "shop_default" && it != "shop_1" }
+            ).onSuccess { remoteShop ->
+                if (remoteShop != null) {
+                    currentShop = remoteShop
+                    _shop.value = remoteShop
+                    storageManager.saveShop(remoteShop)
+                }
+            }
+
+            val activeShopId = currentShop.id.takeIf { it != "shop_default" }
+
+            // 1. Fetch live products from Supabase scoped to activeShopId
+            service.getProducts(activeShopId).onSuccess { remoteProducts ->
+                if (activeShopId != null || remoteProducts.isNotEmpty()) {
                     _products.update { currentList ->
                         val currentMap = currentList.associateBy { it.id }
                         val remoteIds = remoteProducts.mapTo(mutableSetOf()) { it.id }
@@ -275,30 +305,42 @@ class PosViewModel(
                     storageManager.saveProducts(_products.value)
                 }
             }
-            // 2. Fetch live expenses from Supabase (powers Home screen Net Profit)
-            supabase.getExpenses().onSuccess { remoteExpenses ->
-                if (remoteExpenses.isNotEmpty()) {
+
+            // 2. Fetch live expenses from Supabase scoped to activeShopId
+            service.getExpenses(activeShopId).onSuccess { remoteExpenses ->
+                if (activeShopId != null || remoteExpenses.isNotEmpty()) {
                     _expenses.value = remoteExpenses
                     storageManager.saveExpenses(remoteExpenses)
                 }
             }
-            // 3. Fetch live sales if any (powers Home screen Sales Trend and metrics)
-            supabase.getSales().onSuccess { remoteSales ->
-                if (remoteSales.isNotEmpty()) {
+
+            // 3. Fetch customer credits from Supabase scoped to activeShopId
+            service.getCustomerCredits(activeShopId).onSuccess { remoteCredits ->
+                val mergedCredits = CreditLedgerUtils.mergeRemoteCredits(remoteCredits, _customerCredits.value)
+                _customerCredits.value = mergedCredits
+                storageManager.saveCustomerCredits(mergedCredits)
+            }
+
+            // 4. Fetch live sales scoped to activeShopId
+            service.getSales(activeShopId).onSuccess { remoteSales ->
+                if (activeShopId != null || remoteSales.isNotEmpty()) {
                     _salesHistory.value = remoteSales
                     storageManager.saveSales(remoteSales)
                 }
             }
-            // 4. Fetch stock in records from Supabase
-            supabase.getStockInRecords().onSuccess { remoteStockIn ->
-                if (remoteStockIn.isNotEmpty()) {
+
+            // 5. Fetch stock in records scoped to activeShopId
+            service.getStockInRecords(activeShopId).onSuccess { remoteStockIn ->
+                if (activeShopId != null || remoteStockIn.isNotEmpty()) {
                     _stockInRecords.value = remoteStockIn
                     storageManager.saveStockInRecords(remoteStockIn)
                 }
             }
-            // 5. Fetch shop info if any
-            supabase.getShop().onSuccess { remoteShop ->
-                if (remoteShop != null) {
+
+            // 6. Fetch shop info if any
+            val userEmail = storageManager.loadRememberedEmail() ?: _shop.value.email
+            service.getShop(userEmail).onSuccess { remoteShop ->
+                if (remoteShop != null && remoteShop.name.isNotBlank()) {
                     _shop.value = remoteShop
                     storageManager.saveShop(remoteShop)
                 }
@@ -324,7 +366,7 @@ class PosViewModel(
             } else {
                 storageManager.clearRememberedEmail()
             }
-            supabase.setTokens(session.accessToken, session.refreshToken, session.tokenExpiresAt)
+            supabase?.setTokens(session.accessToken, session.refreshToken, session.tokenExpiresAt)
         } else {
             val fallbackSession = AuthSession(
                 accessToken = "local_token_${System.currentTimeMillis()}",
@@ -337,12 +379,40 @@ class PosViewModel(
         }
         _isLoggedIn.value = true
         _currentScreen.value = "main"
-        syncWithSupabase(force = true)
+
+        // Clear cached shop data from any previous session so there is zero data bleeding
+        storageManager.clearShopData()
+        _products.value = emptyList()
+        _salesHistory.value = emptyList()
+        _expenses.value = emptyList()
+        _stockInRecords.value = emptyList()
+        _customerCredits.value = emptyList()
+        _cart.value = emptyList()
+        _notifications.value = emptyList()
+
+        // Fetch shop for this specific user immediately upon login
+        viewModelScope.launch {
+            val service = supabase
+            if (service != null) {
+                service.getShop(userEmail = email).onSuccess { remoteShop ->
+                    if (remoteShop != null) {
+                        _shop.value = remoteShop
+                        storageManager.saveShop(remoteShop)
+                    }
+                    syncWithSupabase(force = true)
+                }.onFailure {
+                    syncWithSupabase(force = true)
+                }
+            } else {
+                syncWithSupabase(force = true)
+            }
+        }
     }
 
     fun refreshSession(refreshTokenStr: String, rememberMe: Boolean = true) {
+        val service = supabase ?: return
         viewModelScope.launch {
-            supabase.refreshSession(refreshTokenStr, rememberMe).onSuccess { newSession ->
+            service.refreshSession(refreshTokenStr, rememberMe).onSuccess { newSession ->
                 storageManager.saveAuthSession(newSession)
             }
         }
@@ -350,22 +420,23 @@ class PosViewModel(
 
     fun registerShop(shopName: String, ownerName: String, email: String, phone: String, address: String, category: String) {
         val newShop = Shop(
-            name = shopName.ifBlank { "Faith's Store" },
-            ownerName = ownerName.ifBlank { "Faith" },
-            email = email.ifBlank { "faith@store.com" },
-            phone = phone.ifBlank { "+254 712 345 678" },
-            address = address.ifBlank { "Nairobi, Kenya" },
-            category = category.ifBlank { "Retail & Grocery" }
+            id = "shop_${System.currentTimeMillis()}",
+            name = shopName.trim().ifBlank { "My Shop" },
+            ownerName = ownerName.trim().ifBlank { "Owner" },
+            email = email.trim(),
+            phone = phone.trim(),
+            address = address.trim(),
+            category = category.trim().ifBlank { "Retail & Grocery" }
         )
         _shop.value = newShop
         storageManager.saveShop(newShop)
 
         // Save persistent session for newly registered shop
         val regSession = AuthSession(
-            accessToken = supabase.getAccessToken() ?: "reg_token_${System.currentTimeMillis()}",
-            refreshToken = supabase.getRefreshToken().orEmpty(),
+            accessToken = supabase?.getAccessToken() ?: "reg_token_${System.currentTimeMillis()}",
+            refreshToken = supabase?.getRefreshToken().orEmpty(),
             userEmail = newShop.email,
-            tokenExpiresAt = supabase.getTokenExpiresAt(),
+            tokenExpiresAt = supabase?.getTokenExpiresAt() ?: 0L,
             rememberMe = true,
             loginTimestamp = System.currentTimeMillis()
         )
@@ -375,8 +446,19 @@ class PosViewModel(
         _isLoggedIn.value = true
         _currentScreen.value = "main"
 
+        // Clear cached shop data so newly registered shop starts with a 100% clean slate
+        storageManager.clearShopData()
+        _products.value = emptyList()
+        _salesHistory.value = emptyList()
+        _expenses.value = emptyList()
+        _stockInRecords.value = emptyList()
+        _customerCredits.value = emptyList()
+        _cart.value = emptyList()
+        _notifications.value = emptyList()
+
         viewModelScope.launch {
             SupabaseClient.service.saveShop(newShop)
+            syncWithSupabase(force = true)
         }
     }
 
@@ -388,11 +470,25 @@ class PosViewModel(
         }
     }
 
+    fun updateDailyTarget(target: Double) {
+        val updated = _shop.value.copy(dailyTarget = target)
+        updateShopInformation(updated)
+    }
+
     fun logout() {
         storageManager.clearAuthSession()
-        supabase.clearSession()
+        storageManager.clearShopData()
+        supabase?.clearSession()
         _isLoggedIn.value = false
         _currentScreen.value = "login"
+        _shop.value = defaultShop
+        _products.value = defaultProducts
+        _salesHistory.value = emptyList()
+        _expenses.value = emptyList()
+        _stockInRecords.value = emptyList()
+        _customerCredits.value = emptyList()
+        _cart.value = emptyList()
+        _notifications.value = emptyList()
     }
 
     // Category & Search
@@ -406,6 +502,7 @@ class PosViewModel(
 
     // Cart operations
     fun addToCart(product: Product) {
+        if (product.stockQuantity <= 0) return
         _cart.update { currentCart ->
             val existingIndex = currentCart.indexOfFirst { it.product.id == product.id }
             if (existingIndex >= 0) {
@@ -452,6 +549,49 @@ class PosViewModel(
     ): Sale {
         val currentCartItems = _cart.value
         val total = currentCartItems.sumOf { it.totalPrice }
+        val creditTotal = if (isCredit) {
+            CreditLedgerUtils.normalizeMoney(total)
+                ?: throw IllegalArgumentException("Credit sale total is invalid.")
+        } else {
+            total
+        }
+        val creditPaid = if (isCredit) {
+            CreditLedgerUtils.normalizeMoney(paidAmount)
+                ?: throw IllegalArgumentException("Initial payment is invalid.")
+        } else {
+            total
+        }
+        val creditBalance = if (isCredit) {
+            CreditLedgerUtils.calculateOutstandingBalance(creditTotal, creditPaid)
+                ?: throw IllegalArgumentException("Initial payment exceeds the credit sale total.")
+        } else {
+            0.0
+        }
+        val trimmedCustomerName = customerName.trim()
+        if (isCredit && trimmedCustomerName.isBlank()) {
+            throw IllegalArgumentException("Customer name is required for credit sales.")
+        }
+        val normalizedCustomerPhone = if (isCredit) {
+            CreditLedgerUtils.normalizePhoneNumber(customerPhone)
+                ?: throw IllegalArgumentException("Valid phone number is required for credit sales.")
+        } else {
+            customerPhone.trim()
+        }
+
+        val creditRecord = if (isCredit) {
+            CreditLedgerUtils.createCredit(
+                id = "c_${System.currentTimeMillis()}",
+                customerName = trimmedCustomerName,
+                customerPhone = normalizedCustomerPhone,
+                originalAmount = creditTotal,
+                amountPaid = creditPaid,
+                productsSummary = "${currentCartItems.size} Items | ${currentCartItems.joinToString { it.product.name }}",
+                dueDate = dueDate.ifBlank { defaultCreditDueDate() },
+                paymentMethod = paymentMethod
+            ) ?: throw IllegalArgumentException("Credit sale due date or details are invalid.")
+        } else {
+            null
+        }
 
         // Deduct inventory locally
         _products.update { currentList ->
@@ -467,52 +607,52 @@ class PosViewModel(
         }
         storageManager.saveProducts(_products.value)
 
+        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val activeOwnerName = _shop.value.ownerName.ifBlank { "Store Owner" }
+
         val newSale = Sale(
             id = "SL-${(1093..9999).random()}",
-            items = currentCartItems,
-            totalAmount = total,
+            items = currentCartItems.map { it.copy(product = it.product.copy(shopId = activeShopId)) },
+            totalAmount = creditTotal,
             paymentMethod = paymentMethod,
-            customerName = customerName.ifBlank { if (isCredit) "Credit Customer" else "Walk-in Customer" },
+            customerName = if (trimmedCustomerName.isNotBlank()) trimmedCustomerName else if (isCredit) "Credit Customer" else "Walk-in Customer",
             dateFormatted = "Just now",
             timestamp = System.currentTimeMillis(),
+            employeeName = activeOwnerName,
             isCreditSale = isCredit,
-            paidAmount = if (isCredit) paidAmount else total,
-            balance = if (isCredit) (total - paidAmount).coerceAtLeast(0.0) else 0.0,
-            dueDate = dueDate
+            paidAmount = creditPaid,
+            balance = creditBalance,
+            dueDate = if (isCredit) creditRecord?.dueDate.orEmpty() else dueDate,
+            shopId = activeShopId
         )
 
         _salesHistory.update { listOf(newSale) + it }
         storageManager.saveSales(_salesHistory.value)
 
-        var creditRecord: CustomerCredit? = null
-        if (isCredit) {
-            val calcBalance = (total - paidAmount).coerceAtLeast(0.0)
-            creditRecord = CustomerCredit(
-                id = "c_${System.currentTimeMillis()}",
-                customerName = customerName.ifBlank { "Credit Customer" },
-                customerPhone = customerPhone.ifBlank { "+254 700 000 000" },
-                totalOutstanding = total,
-                productsSummary = "${currentCartItems.size} Items | ${currentCartItems.joinToString { it.product.name }}",
-                amountPaid = paidAmount,
-                balance = calcBalance,
-                dueDate = dueDate.ifBlank { "In 14 Days" },
-                status = "Pending"
-            )
-            _customerCredits.update { listOf(creditRecord) + it }
+        val finalCreditRecord = creditRecord?.copy(shopId = activeShopId)
+        if (isCredit && finalCreditRecord != null) {
+            _customerCredits.update { listOf(finalCreditRecord) + it }
             storageManager.saveCustomerCredits(_customerCredits.value)
+            val service = supabase
+            if (service != null) {
+                viewModelScope.launch { service.upsertCustomerCredit(finalCreditRecord, activeShopId) }
+            }
         }
 
         // Asynchronous cloud sync to Supabase
-        viewModelScope.launch {
-            currentCartItems.forEach { cartItem ->
-                val updatedProd = _products.value.find { it.id == cartItem.product.id }
-                if (updatedProd != null) {
-                    SupabaseClient.service.updateProductStock(updatedProd.id, updatedProd.stockQuantity)
+        val service = supabase
+        if (service != null) {
+            viewModelScope.launch {
+                currentCartItems.forEach { cartItem ->
+                    val updatedProd = _products.value.find { it.id == cartItem.product.id }
+                    if (updatedProd != null) {
+                        service.updateProductStock(updatedProd.id, updatedProd.stockQuantity)
+                    }
                 }
-            }
-            SupabaseClient.service.insertSale(newSale)
-            if (creditRecord != null) {
-                SupabaseClient.service.upsertCustomerCredit(creditRecord)
+                service.insertSale(newSale, activeShopId)
+                if (finalCreditRecord != null) {
+                    service.upsertCustomerCredit(finalCreditRecord, activeShopId)
+                }
             }
         }
 
@@ -525,72 +665,83 @@ class PosViewModel(
         _completedSale.value = null
     }
 
-    fun deleteSale(saleId: String) {
-        _salesHistory.update { list -> list.filterNot { it.id == saleId } }
-        storageManager.saveSales(_salesHistory.value)
-
-        viewModelScope.launch {
-            SupabaseClient.service.deleteSale(saleId)
-        }
+    fun defaultCreditDueDate(): String {
+        val days = storageManager.loadCreditDurationDays(CreditLedgerUtils.defaultCreditDurationDays())
+        return CreditLedgerUtils.calculateDueDate(days)
     }
 
-    fun updateSale(updatedSale: Sale) {
-        _salesHistory.update { list ->
-            list.map { if (it.id == updatedSale.id) updatedSale else it }
-        }
-        storageManager.saveSales(_salesHistory.value)
+    fun getCreditDurationDays(): Int = storageManager.loadCreditDurationDays(CreditLedgerUtils.defaultCreditDurationDays())
 
-        var matchedCredit: CustomerCredit? = null
-        if (updatedSale.isCreditSale) {
-            _customerCredits.update { list ->
-                val existing = list.find { it.customerName.equals(updatedSale.customerName, ignoreCase = true) }
-                if (existing != null) {
-                    list.map {
-                        if (it.id == existing.id) {
-                            val updated = it.copy(
-                                customerName = updatedSale.customerName,
-                                totalOutstanding = updatedSale.totalAmount,
-                                amountPaid = updatedSale.paidAmount,
-                                balance = updatedSale.balance,
-                                dueDate = updatedSale.dueDate,
-                                productsSummary = "${updatedSale.items.size} Items | ${updatedSale.items.joinToString { item -> item.product.name }}"
-                            )
-                            matchedCredit = updated
-                            updated
-                        } else it
-                    }
-                } else list
-            }
-            storageManager.saveCustomerCredits(_customerCredits.value)
-        }
+    fun setCreditDurationDays(days: Int) {
+        storageManager.saveCreditDurationDays(days.coerceAtLeast(1))
+    }
 
-        viewModelScope.launch {
-            val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
-            SupabaseClient.service.upsertSale(updatedSale, activeShopId)
-            if (matchedCredit != null) {
-                SupabaseClient.service.upsertCustomerCredit(matchedCredit!!)
-            }
-        }
+    fun addCustomerCredit(
+        customerName: String,
+        phone: String,
+        productsSummary: String,
+        originalAmount: Double,
+        amountPaid: Double,
+        dueDate: String,
+        paymentMethod: String = "Cash"
+    ): Boolean {
+        val normalizedName = customerName.trim()
+        if (normalizedName.isBlank()) return false
+        val normalizedPhone = CreditLedgerUtils.normalizePhoneNumber(phone) ?: return false
+        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val created = CreditLedgerUtils.createCredit(
+            id = "c_${System.currentTimeMillis()}",
+            customerName = normalizedName,
+            customerPhone = normalizedPhone,
+            originalAmount = originalAmount,
+            amountPaid = amountPaid,
+            productsSummary = productsSummary.ifBlank { "1 Item | Product" },
+            dueDate = dueDate.ifBlank { defaultCreditDueDate() },
+            paymentMethod = paymentMethod
+        ) ?: return false
+
+        val creditRecord = created.copy(shopId = activeShopId)
+        _customerCredits.update { listOf(creditRecord) + it }
+        storageManager.saveCustomerCredits(_customerCredits.value)
+        val s = supabase ?: return true
+        viewModelScope.launch { s.upsertCustomerCredit(creditRecord, activeShopId) }
+        return true
     }
 
     fun addCustomerCredit(customerName: String, phone: String, productsSummary: String, amountPaid: Double, balance: Double, dueDate: String) {
-        val total = amountPaid + balance
-        val creditRecord = CustomerCredit(
-            id = "c_${System.currentTimeMillis()}",
-            customerName = customerName.ifBlank { "Credit Customer" },
-            customerPhone = phone.ifBlank { "+254 722 111 222" },
-            totalOutstanding = total,
-            productsSummary = productsSummary.ifBlank { "1 Item | Product" },
+        addCustomerCredit(
+            customerName = customerName,
+            phone = phone,
+            productsSummary = productsSummary,
+            originalAmount = amountPaid + balance,
             amountPaid = amountPaid,
-            balance = balance,
-            dueDate = dueDate.ifBlank { "In 14 Days" },
-            status = "Pending"
+            dueDate = dueDate
         )
-        _customerCredits.update { listOf(creditRecord) + it }
-        storageManager.saveCustomerCredits(_customerCredits.value)
+    }
 
-        viewModelScope.launch {
-            SupabaseClient.service.upsertCustomerCredit(creditRecord)
+    fun recordRepayment(
+        creditId: String,
+        amount: Double,
+        method: String,
+        referenceCode: String = "",
+        notes: String = ""
+    ): Result<CustomerCredit> {
+        val currentCredit = _customerCredits.value.find { it.id == creditId }
+            ?: return Result.failure(IllegalArgumentException("Credit record not found."))
+
+        return try {
+            val updatedCredit = CreditLedgerUtils.applyRepayment(currentCredit, amount, method, referenceCode, notes)
+            val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+            val finalCredit = updatedCredit.copy(shopId = activeShopId ?: updatedCredit.shopId)
+            _customerCredits.update { currentList ->
+                currentList.map { if (it.id == creditId) finalCredit else it }
+            }
+            storageManager.saveCustomerCredits(_customerCredits.value)
+            val s = supabase ?: return Result.success(finalCredit)
+            viewModelScope.launch { s.upsertCustomerCredit(finalCredit, activeShopId) }
+            Result.success(finalCredit)
+        } catch (e: IllegalArgumentException) {
+            Result.failure(e)
         }
     }
 
@@ -610,6 +761,7 @@ class PosViewModel(
             _products.value.any { it.sku.equals(normalizedSku, ignoreCase = true) }
         ) return false
 
+        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
         val newProduct = Product(
             id = "p_${System.currentTimeMillis()}",
             name = normalizedName,
@@ -622,14 +774,16 @@ class PosViewModel(
             minStock = minStock,
             supplier = supplier.trim(),
             iconType = normalizedCategory.lowercase(),
-            imageUri = imageUri
+            imageUri = imageUri,
+            shopId = activeShopId
         )
         _products.update { listOf(newProduct) + it }
         storageManager.saveProducts(_products.value)
+        val service = supabase ?: return true
         pendingProductUpdates.add(newProduct.id)
         viewModelScope.launch {
             try {
-                supabase.upsertProduct(newProduct)
+                service.upsertProduct(newProduct, activeShopId)
             } finally {
                 pendingProductUpdates.remove(newProduct.id)
             }
@@ -654,6 +808,7 @@ class PosViewModel(
             _products.value.any { it.id != productId && it.sku.equals(normalizedSku, ignoreCase = true) }
         ) return false
 
+        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
         val updatedProduct = currentProduct.copy(
             name = normalizedName,
             category = normalizedCategory,
@@ -665,19 +820,21 @@ class PosViewModel(
             minStock = minStock,
             supplier = supplier.trim(),
             iconType = normalizedCategory.lowercase(),
-            imageUri = imageUri
+            imageUri = imageUri,
+            shopId = currentProduct.shopId ?: activeShopId
         )
         _products.update { products -> products.map { if (it.id == productId) updatedProduct else it } }
         storageManager.saveProducts(_products.value)
         if (currentProduct.imageUri != updatedProduct.imageUri) {
-            ProductImageStorage.deleteIfOwned(getApplication(), currentProduct.imageUri)
+            application?.let { ProductImageStorage.deleteIfOwned(it, currentProduct.imageUri) }
         }
 
         // Asynchronously update product in Supabase while safeguarding local state
+        val service = supabase ?: return true
         pendingProductUpdates.add(productId)
         viewModelScope.launch {
             try {
-                supabase.upsertProduct(updatedProduct)
+                service.upsertProduct(updatedProduct, activeShopId)
             } finally {
                 pendingProductUpdates.remove(productId)
             }
@@ -701,7 +858,6 @@ class PosViewModel(
             currentList.map { p ->
                 if (p.id == productId) {
                     p.copy(
-                        stockQuantity = p.stockQuantity + quantityAdded,
                         buyingPrice = if (buyingPrice > 0) buyingPrice else p.buyingPrice,
                         sellingPrice = if (sellingPrice > 0) sellingPrice else p.sellingPrice,
                         supplier = if (supplier.isNotBlank()) supplier else p.supplier
@@ -712,6 +868,7 @@ class PosViewModel(
         storageManager.saveProducts(_products.value)
 
         val prodName = _products.value.find { it.id == productId }?.name ?: "Product"
+        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
         val record = StockInRecord(
             id = "stk_${System.currentTimeMillis()}",
             productId = productId,
@@ -720,19 +877,21 @@ class PosViewModel(
             buyingPrice = buyingPrice,
             supplier = supplier,
             dateFormatted = "Today, 10:00 AM",
-            employeeName = employeeName
+            employeeName = employeeName.ifBlank { _shop.value.ownerName.ifBlank { "Store Owner" } },
+            shopId = activeShopId
         )
         _stockInRecords.update { listOf(record) + it }
         storageManager.saveStockInRecords(_stockInRecords.value)
 
         // Asynchronously update product inventory and insert stock-in record in Supabase
         val updatedProduct = _products.value.find { it.id == productId }
+        val service = supabase ?: return
         viewModelScope.launch {
             pendingProductUpdates.add(productId)
             try {
-                supabase.insertStockInRecord(record)
+                service.insertStockInRecord(record, activeShopId)
                 if (updatedProduct != null) {
-                    supabase.upsertProduct(updatedProduct)
+                    service.upsertProduct(updatedProduct, activeShopId)
                 }
             } finally {
                 pendingProductUpdates.remove(productId)
@@ -741,37 +900,79 @@ class PosViewModel(
     }
 
     // Expenses
-    fun addExpense(title: String, category: String, amount: Double) {
+    fun addExpense(title: String, category: String, amount: Double): Boolean {
+        val normalizedTitle = title.trim()
+        val normalizedCategory = category.trim()
+        val safeAmount = amount.coerceAtLeast(0.0)
+        if (normalizedTitle.isBlank() || normalizedCategory.isBlank() || safeAmount <= 0.0) return false
+
+        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
         val newExpense = Expense(
             id = "exp_${System.currentTimeMillis()}",
-            title = title,
-            category = category,
-            amount = amount,
-            dateFormatted = "Today",
-            iconType = category.lowercase()
+            title = normalizedTitle,
+            category = normalizedCategory,
+            amount = safeAmount,
+            dateFormatted = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy")),
+            iconType = normalizedCategory.lowercase(),
+            shopId = activeShopId
         )
         _expenses.update { listOf(newExpense) + it }
         storageManager.saveExpenses(_expenses.value)
+        val service = supabase ?: return true
+        viewModelScope.launch { service.insertExpense(newExpense, activeShopId) }
+        return true
+    }
 
-        viewModelScope.launch {
-            SupabaseClient.service.insertExpense(newExpense)
+    fun updateExpense(expenseId: String, title: String, category: String, amount: Double): Boolean {
+        val normalizedTitle = title.trim()
+        val normalizedCategory = category.trim()
+        if (normalizedTitle.isBlank() || normalizedCategory.isBlank()) return false
+
+        val currentExpense = _expenses.value.find { it.id == expenseId } ?: return false
+        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val updatedExpense = currentExpense.copy(
+            title = normalizedTitle,
+            category = normalizedCategory,
+            amount = amount.coerceAtLeast(0.0),
+            iconType = normalizedCategory.lowercase(),
+            shopId = activeShopId ?: currentExpense.shopId
+        )
+
+        _expenses.update { currentList ->
+            currentList.map { if (it.id == expenseId) updatedExpense else it }
+        }
+        storageManager.saveExpenses(_expenses.value)
+        val service = supabase ?: return true
+        viewModelScope.launch { service.upsertExpense(updatedExpense, activeShopId) }
+        return true
+    }
+
+    fun deleteExpenses(ids: Set<String>) {
+        if (ids.isEmpty()) return
+        _expenses.update { currentList -> currentList.filterNot { ids.contains(it.id) } }
+        storageManager.saveExpenses(_expenses.value)
+        val service = supabase ?: return
+        ids.forEach { id ->
+            viewModelScope.launch { service.deleteExpense(id) }
         }
     }
 
     // Add Employee
     fun addEmployee(name: String, role: String, phone: String, email: String) {
+        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
         val emp = Employee(
             id = "emp_${System.currentTimeMillis()}",
             name = name,
             role = role,
             phone = phone,
-            email = email
+            email = email,
+            shopId = activeShopId
         )
         _employees.update { it + emp }
         storageManager.saveEmployees(_employees.value)
 
         viewModelScope.launch {
-            SupabaseClient.service.upsertEmployee(emp)
+            SupabaseClient.service.upsertEmployee(emp, activeShopId)
         }
     }
 }
