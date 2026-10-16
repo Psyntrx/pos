@@ -48,166 +48,141 @@ fun NewSaleScreen(
 ) {
     val products by viewModel.products.collectAsState()
     val cart by viewModel.cart.collectAsState()
-    var search by remember { mutableStateOf("") }
+    val selectedCategory by viewModel.selectedCategory.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
 
-    val filteredProducts = remember(products, search) {
-        if (search.isBlank()) products
-        else products.filter {
-            it.name.contains(search, ignoreCase = true) || it.sku.contains(search, ignoreCase = true)
-        }
+    val categories = listOf("All", "Groceries", "Household", "Beverages", "Snacks")
+
+    val filteredProducts = products.filter { product ->
+        val matchesCategory = (selectedCategory == "All") || product.category.equals(selectedCategory, ignoreCase = true)
+        val matchesSearch = product.name.contains(searchQuery, ignoreCase = true) ||
+                product.sku.contains(searchQuery, ignoreCase = true)
+        matchesCategory && matchesSearch
     }
 
-    val subtotal = cart.sumOf { it.totalPrice }
-    val total = subtotal
+    val totalCartAmount = cart.sumOf { it.totalPrice }
+    val totalCartItems = cart.sumOf { it.quantity }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(BgDark)
+            .padding(16.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 20.dp, vertical = 12.dp)
-        ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "New Sale",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                )
-
-                if (cart.isNotEmpty()) {
-                    Text(
-                        text = "Clear Cart",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            color = ErrorRed,
-                            fontWeight = FontWeight.Bold
-                        ),
-                        modifier = Modifier.clickable { viewModel.clearCart() }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Search bar
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Search Input
             OutlinedTextField(
-                value = search,
-                onValueChange = { search = it },
-                placeholder = { Text("Search for products...", color = TextSecondary, fontSize = 14.sp) },
-                leadingIcon = {
-                    Icon(Icons.Default.Search, contentDescription = "Search", tint = EmeraldBright)
-                },
+                value = searchQuery,
+                onValueChange = { viewModel.updateSearchQuery(it) },
+                placeholder = { Text("Search product name or SKU...", color = TextMuted) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = EmeraldBright) },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                shape = RoundedCornerShape(16.dp),
                 colors = com.example.pos.ui.components.posTextFieldColors(),
                 singleLine = true
             )
 
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Categories Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                categories.forEach { category ->
+                    val isSelected = selectedCategory == category
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { viewModel.selectCategory(category) },
+                        label = {
+                            Text(
+                                text = category,
+                                color = if (isSelected) BgDark else TextPrimary,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = SurfaceDark,
+                            selectedContainerColor = EmeraldBright
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true,
+                            selected = isSelected,
+                            borderColor = SurfaceBorder,
+                            selectedBorderColor = EmeraldBright
+                        ),
+                        shape = RoundedCornerShape(20.dp)
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Product Selection List
+            // Products Grid / List
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier
-                    .fillMaxWidth()
                     .weight(1f)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(filteredProducts, key = { it.id }) { product ->
                     val cartItem = cart.find { it.product.id == product.id }
-                    val quantityInCart = cartItem?.quantity ?: 0
+                    val qtyInCart = cartItem?.quantity ?: 0
 
-                    PosProductItemRow(
+                    ProductItemCard(
                         product = product,
-                        quantityInCart = quantityInCart,
+                        quantityInCart = qtyInCart,
                         onAdd = { viewModel.addToCart(product) },
                         onRemove = { viewModel.removeFromCart(product.id) }
                     )
                 }
-
-                item {
-                    Spacer(modifier = Modifier.height(200.dp))
-                }
             }
-        }
 
-        // Sleek Floating Bezelled Summary Bar
-        Surface(
-            color = SurfaceDark,
-            shadowElevation = 16.dp,
-            shape = RoundedCornerShape(28.dp),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-                .border(1.dp, SurfaceBorder, RoundedCornerShape(28.dp))
-                .clip(RoundedCornerShape(28.dp))
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+            // Checkout Floating Bar
+            if (cart.isNotEmpty()) {
+                SurfaceCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    backgroundColor = SurfaceDark,
+                    borderColor = EmeraldBright,
+                    cornerRadius = 20.dp
                 ) {
-                    Text(
-                        text = "Subtotal",
-                        style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
-                    )
-                    Text(
-                        text = "KSh ${String.format("%,.0f", subtotal)}",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            color = TextPrimary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "$totalCartItems items in cart",
+                                style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
+                            )
+                            Text(
+                                text = "KSh ${String.format("%,.0f", totalCartAmount)}",
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = EmeraldBright
+                                )
+                            )
+                        }
+
+                        Button(
+                            onClick = onProceedToPayment,
+                            colors = ButtonDefaults.buttonColors(containerColor = EmeraldBright),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Text("Charge", color = BgDark, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "Total",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            color = TextPrimary
-                        )
-                    )
-                    Text(
-                        text = "KSh ${String.format("%,.0f", total)}",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            color = EmeraldBright
-                        )
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                PrimaryGreenButton(
-                    text = if (cart.isEmpty()) "Select Products" else "Complete Sale (${cart.sumOf { it.quantity }})",
-                    onClick = onProceedToPayment,
-                    enabled = cart.isNotEmpty()
-                )
             }
         }
     }
 }
 
 @Composable
-fun PosProductItemRow(
+fun ProductItemCard(
     product: Product,
     quantityInCart: Int,
     onAdd: () -> Unit,
@@ -221,61 +196,45 @@ fun PosProductItemRow(
             .fillMaxWidth()
             .clickable(enabled = canAddMore) { onAdd() },
         backgroundColor = SurfaceDark,
-        borderColor = if (quantityInCart > 0) EmeraldBright.copy(alpha = 0.5f) else SurfaceBorder,
-        cornerRadius = 18.dp
+        borderColor = if (quantityInCart > 0) EmeraldBright else SurfaceBorder,
+        cornerRadius = 16.dp
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (isOutOfStock) SurfaceDarkVariant.copy(alpha = 0.5f) else SurfaceDarkVariant),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.LocalGroceryStore,
-                        contentDescription = null,
-                        tint = if (isOutOfStock) TextMuted else EmeraldBright,
-                        modifier = Modifier.size(22.dp)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = product.name,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
                     )
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column {
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = product.name,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
-                            color = if (isOutOfStock) TextSecondary else TextPrimary
+                        text = "KSh ${String.format("%,.0f", product.sellingPrice)} / ${product.unit}",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            color = EmeraldBright
                         )
                     )
-                    val stockText = if (isOutOfStock) "Out of Stock" else "Stock: ${product.stockQuantity}"
-                    val stockColor = if (isOutOfStock) ErrorRed else TextSecondary
+                    Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "KSh ${String.format("%,.0f", product.sellingPrice)} • $stockText",
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = 12.sp,
-                            color = stockColor
+                        text = if (isOutOfStock) "Out of Stock" else "Stock: ${product.stockQuantity}",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = if (isOutOfStock) ErrorRed else if (product.isLowStock) WarningYellow else TextMuted
                         )
                     )
                 }
             }
 
-            // Quantity Stepper
             if (quantityInCart > 0) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Box(
                         modifier = Modifier
@@ -396,7 +355,7 @@ fun PaymentScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(28.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
                 // Total Amount Display
                 Column(
@@ -418,7 +377,7 @@ fun PaymentScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(28.dp))
 
                 // Payment Methods
                 Text(
@@ -429,7 +388,7 @@ fun PaymentScreen(
                     )
                 )
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 val methods = listOf("Cash", "M-Pesa", "Credit")
 
@@ -477,7 +436,7 @@ fun PaymentScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
                 if (isCreditSale) {
                     // Credit Customer Name (Mandatory)
@@ -648,7 +607,7 @@ fun PaymentScreen(
                     } else {
                         viewModel.completeSale(
                             paymentMethod = selectedPaymentMethod,
-                            customerName = customerInput,
+                            customerName = customerInput.trim(),
                             customerPhone = "",
                             isCredit = false
                         )
@@ -709,51 +668,93 @@ fun SaleSuccessDialog(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = "Transaction ID: ${sale.id}",
+                        text = "Receipt #${sale.id}",
                         style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Text(
-                        text = "KSh ${String.format("%,.0f", sale.totalAmount)}",
-                        style = MaterialTheme.typography.headlineLarge.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            color = EmeraldBright
-                        )
-                    )
-
-                    Text(
-                        text = "Paid via ${sale.paymentMethod}",
-                        style = MaterialTheme.typography.labelSmall.copy(color = TextMuted)
-                    )
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    Row(
+                    SurfaceCard(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        backgroundColor = SurfaceDarkVariant,
+                        borderColor = SurfaceBorder,
+                        cornerRadius = 16.dp
                     ) {
-                        SecondaryDarkButton(
-                            text = "Print",
-                            onClick = { },
-                            icon = Icons.Default.Print,
-                            modifier = Modifier.weight(1f)
-                        )
-                        SecondaryDarkButton(
-                            text = "Share",
-                            onClick = { },
-                            icon = Icons.Default.Share,
-                            modifier = Modifier.weight(1f)
-                        )
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Total Amount", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+                                Text(
+                                    "KSh ${String.format("%,.0f", sale.totalAmount)}",
+                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = EmeraldBright)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Payment Method", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+                                Text(
+                                    sale.paymentMethod,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                                )
+                            }
+
+                            if (sale.isCreditSale) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Amount Paid", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+                                    Text(
+                                        "KSh ${String.format("%,.0f", sale.paidAmount)}",
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = EmeraldBright)
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Credit Balance", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+                                    Text(
+                                        "KSh ${String.format("%,.0f", sale.balance)}",
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = WarningYellow)
+                                    )
+                                }
+                            }
+
+                            if (sale.customerName.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Customer", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+                                    Text(
+                                        sale.customerName,
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium, color = TextPrimary)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             },
             confirmButton = {
-                PrimaryGreenButton(
-                    text = "New Sale",
-                    onClick = onDismiss
-                )
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    PrimaryGreenButton(
+                        text = "Done",
+                        onClick = onDismiss
+                    )
+                }
             }
         )
     }

@@ -22,9 +22,10 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextAlign
+
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.pos.data.AuthSession
 import com.example.pos.ui.components.AbstractBlobHeader
 import com.example.pos.ui.components.GoogleIcon
 import com.example.pos.ui.components.PrimaryGreenButton
@@ -39,7 +40,7 @@ import com.example.pos.viewmodel.AuthViewModel
 @Composable
 fun LoginScreen(
     authViewModel: AuthViewModel,
-    onLoginSuccess: (email: String, pass: String) -> Unit,
+    onLoginSuccess: (email: String, pass: String, session: AuthSession?) -> Unit,
     onNavigateToRegisterStep1: () -> Unit,
     onNavigateToForgotPassword: () -> Unit,
     onBackToSplash: () -> Unit
@@ -116,7 +117,7 @@ fun LoginScreen(
                     value = loginState.email,
                     onValueChange = { authViewModel.updateLoginEmail(it) },
                     label = { Text("Email") },
-                    placeholder = { Text("Enter your email") },
+                    placeholder = { Text("e.g. user@example.com") },
                     leadingIcon = {
                         Icon(Icons.Outlined.Email, contentDescription = null, tint = EmeraldBright)
                     },
@@ -169,10 +170,15 @@ fun LoginScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable {
+                            authViewModel.updateRememberMe(!loginState.rememberMe)
+                        }
+                    ) {
                         Checkbox(
-                            checked = false,
-                            onCheckedChange = { /* Remember me toggle */ },
+                            checked = loginState.rememberMe,
+                            onCheckedChange = { authViewModel.updateRememberMe(it) },
                             colors = CheckboxDefaults.colors(
                                 checkedColor = EmeraldBright,
                                 uncheckedColor = TextMuted,
@@ -214,11 +220,11 @@ fun LoginScreen(
 
                 // Sign In button
                 PrimaryGreenButton(
-                    text = "Sign In",
-                    enabled = loginState.canSubmit,
+                    text = if (loginState.isLoading) "Signing In..." else "Sign In",
+                    enabled = loginState.canSubmit && !loginState.isLoading,
                     onClick = {
-                        authViewModel.login { email, pass ->
-                            onLoginSuccess(email, pass)
+                        authViewModel.login { email, pass, session ->
+                            onLoginSuccess(email, pass, session)
                         }
                     }
                 )
@@ -243,8 +249,8 @@ fun LoginScreen(
                 // Google sign-in button
                 OutlinedButton(
                     onClick = {
-                        authViewModel.login { email, pass ->
-                            onLoginSuccess(email, pass)
+                        authViewModel.login { email, pass, session ->
+                            onLoginSuccess(email, pass, session)
                         }
                     },
                     modifier = Modifier

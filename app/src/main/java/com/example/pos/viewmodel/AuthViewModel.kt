@@ -2,9 +2,11 @@ package com.example.pos.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.pos.data.AuthSession
+import com.example.pos.data.PosStorageManager
+import com.example.pos.data.Shop
 import com.example.pos.data.SupabaseClient
 import com.example.pos.data.SupabaseService
-import com.example.pos.data.Shop
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,12 +19,12 @@ import kotlinx.coroutines.launch
  */
 data class RegisterUiState(
     // Step 1 Fields
-    val shopName: String = "Faith's Store",
-    val ownerName: String = "Faith",
-    val phone: String = "+254 712 345 678",
-    val email: String = "faith@store.com",
-    val category: String = "Groceries & Retail",
-    val address: String = "Plot 42, Biashara Street, Nairobi",
+    val shopName: String = "",
+    val ownerName: String = "",
+    val phone: String = "",
+    val email: String = "",
+    val category: String = "",
+    val address: String = "",
 
     // Step 2 Fields
     val password: String = "",
@@ -60,9 +62,10 @@ data class RegisterUiState(
 }
 
 data class LoginUiState(
-    val email: String = "faith@store.com",
-    val password: String = "password123",
+    val email: String = "",
+    val password: String = "",
     val passwordVisible: Boolean = false,
+    val rememberMe: Boolean = true,
     val isLoading: Boolean = false,
     val errorMessage: String? = null
 ) {
@@ -81,7 +84,8 @@ data class ForgotPasswordUiState(
 }
 
 class AuthViewModel(
-    private val supabase: SupabaseService? = SupabaseClient.service
+    private val supabase: SupabaseService? = SupabaseClient.service,
+    private val storageManager: PosStorageManager? = null
 ) : ViewModel() {
 
     private val _registerState = MutableStateFlow(RegisterUiState())
@@ -92,6 +96,19 @@ class AuthViewModel(
 
     private val _forgotPasswordState = MutableStateFlow(ForgotPasswordUiState())
     val forgotPasswordState: StateFlow<ForgotPasswordUiState> = _forgotPasswordState.asStateFlow()
+
+    init {
+        storageManager?.let { storage ->
+            val rememberedEmail = storage.loadRememberedEmail()
+            val rememberPref = storage.loadRememberMePreference()
+            _loginState.update { current ->
+                current.copy(
+                    email = if (!rememberedEmail.isNullOrBlank()) rememberedEmail else current.email,
+                    rememberMe = rememberPref
+                )
+            }
+        }
+    }
 
     // -------------------------------------------------------------
     // Register Step 1 Actions
@@ -174,11 +191,22 @@ class AuthViewModel(
             return
         }
 
+        val metadata = mapOf(
+            "shop_name" to createdShop.name,
+            "owner_name" to createdShop.ownerName,
+            "phone" to createdShop.phone,
+            "address" to createdShop.address,
+            "category" to createdShop.category,
+            "business_reg_no" to state.businessRegNo.trim()
+        )
+
         _registerState.update { it.copy(isLoading = true, errorMessage = null) }
         viewModelScope.launch {
-            val result = supabase.signUp(state.email.trim(), state.password)
+            val result = supabase.signUp(state.email.trim(), state.password, metadata)
             result.fold(
                 onSuccess = {
+                    // Ensure the shop is persisted in Supabase shops table
+                    supabase.saveShop(createdShop)
                     _registerState.update {
                         it.copy(isLoading = false, isRegisteredSuccessfully = true)
                     }
@@ -208,7 +236,12 @@ class AuthViewModel(
         _loginState.update { it.copy(passwordVisible = !it.passwordVisible) }
     }
 
-    fun login(onSuccess: (email: String, pass: String) -> Unit) {
+    fun updateRememberMe(rememberMe: Boolean) {
+        _loginState.update { it.copy(rememberMe = rememberMe) }
+        storageManager?.saveRememberMePreference(rememberMe)
+    }
+
+    fun login(onSuccessWithSession: (email: String, pass: String, session: AuthSession?) -> Unit) {
         val state = _loginState.value
         if (!state.canSubmit) {
             _loginState.update { it.copy(errorMessage = "Please enter a valid email address and password.") }
@@ -217,7 +250,7 @@ class AuthViewModel(
 
         if (supabase == null) {
             _loginState.update { it.copy(isLoading = false) }
-            onSuccess(state.email, state.password)
+            onSuccessWithSession(state.email, state.password, null)
             return
         }
 
@@ -225,9 +258,21 @@ class AuthViewModel(
         viewModelScope.launch {
             val result = supabase.signIn(state.email.trim(), state.password)
             result.fold(
-                onSuccess = {
+                onSuccess = { responseBody ->
                     _loginState.update { it.copy(isLoading = false) }
-                    onSuccess(state.email, state.password)
+                    val session = supabase.parseAuthSession(responseBody, state.rememberMe)
+                    if (storageManager != null) {
+                        storageManager.saveRememberMePreference(state.rememberMe)
+                        if (session != null) {
+                            storageManager.saveAuthSession(session)
+                        }
+                        if (state.rememberMe) {
+                            storageManager.saveRememberedEmail(state.email.trim())
+                        } else {
+                            storageManager.clearRememberedEmail()
+                        }
+                    }
+                    onSuccessWithSession(state.email, state.password, session)
                 },
                 onFailure = { error ->
                     _loginState.update {
@@ -236,6 +281,10 @@ class AuthViewModel(
                 }
             )
         }
+    }
+
+    fun login(onSuccess: (email: String, pass: String) -> Unit) {
+        login { email, pass, _ -> onSuccess(email, pass) }
     }
 
     // -------------------------------------------------------------

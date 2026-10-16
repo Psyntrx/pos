@@ -7,14 +7,29 @@ import androidx.compose.ui.graphics.Color
  * so all screens using these shared tokens recompose when the user changes appearance.
  */
 private val isDarkPalette = mutableStateOf(false)
+private val selectedColorTheme = mutableStateOf(AppColorTheme.EMERALD)
+private val selectedCustomAccentColor = mutableStateOf(Color(0xFF14B8A6))
 
-internal fun updatePaletteForDarkTheme(isDark: Boolean) {
+internal fun updateColorPalette(isDark: Boolean, colorTheme: AppColorTheme, customAccentColor: Color) {
     if (isDarkPalette.value != isDark) {
         isDarkPalette.value = isDark
     }
+    if (selectedColorTheme.value != colorTheme) {
+        selectedColorTheme.value = colorTheme
+    }
+    if (selectedCustomAccentColor.value != customAccentColor) {
+        selectedCustomAccentColor.value = customAccentColor
+    }
+}
+
+internal fun updatePaletteForDarkTheme(isDark: Boolean) {
+    updateColorPalette(isDark, selectedColorTheme.value, selectedCustomAccentColor.value)
 }
 
 private fun palette(light: Color, dark: Color): Color =
+    if (isDarkPalette.value) dark else light
+
+private fun accent(light: Color, dark: Color): Color =
     if (isDarkPalette.value) dark else light
 
 // Semantic tokens retained for the existing UI; same components work in both themes.
@@ -23,11 +38,11 @@ val SurfaceDark: Color get() = palette(Color(0xFFFFFFFF), Color(0xFF111A17))
 val SurfaceDarkVariant: Color get() = palette(Color(0xFFF5F9F5), Color(0xFF16231E))
 val SurfaceBorder: Color get() = palette(Color(0xFFDCE8DE), Color(0xFF1F332B))
 
-val EmeraldPrimary: Color get() = palette(Color(0xFF176B3A), Color(0xFF10B981))
-val EmeraldBright: Color get() = palette(Color(0xFF16834A), Color(0xFF12D18E))
-val EmeraldGlow: Color get() = palette(Color(0xFF2A9A5C), Color(0xFF059669))
-val EmeraldLight: Color get() = palette(Color(0xFF16834A), Color(0xFF10B981))
-val EmeraldContainer: Color get() = palette(Color(0xFFE4F3E8), Color(0xFF0C2B20))
+val EmeraldPrimary: Color get() = accent(selectedColorTheme.value.resolveColors(selectedCustomAccentColor.value).lightPrimary, selectedColorTheme.value.resolveColors(selectedCustomAccentColor.value).darkPrimary)
+val EmeraldBright: Color get() = accent(selectedColorTheme.value.resolveColors(selectedCustomAccentColor.value).lightSecondary, selectedColorTheme.value.resolveColors(selectedCustomAccentColor.value).darkSecondary)
+val EmeraldGlow: Color get() = accent(selectedColorTheme.value.resolveColors(selectedCustomAccentColor.value).lightSecondary, selectedColorTheme.value.resolveColors(selectedCustomAccentColor.value).darkPrimary)
+val EmeraldLight: Color get() = accent(selectedColorTheme.value.resolveColors(selectedCustomAccentColor.value).lightSecondary, selectedColorTheme.value.resolveColors(selectedCustomAccentColor.value).darkPrimary)
+val EmeraldContainer: Color get() = accent(selectedColorTheme.value.resolveColors(selectedCustomAccentColor.value).lightContainer, selectedColorTheme.value.resolveColors(selectedCustomAccentColor.value).darkContainer)
 
 val TextPrimary: Color get() = palette(Color(0xFF172B1F), Color(0xFFF8FAFC))
 val TextSecondary: Color get() = palette(Color(0xFF5D7163), Color(0xFF94A3B8))

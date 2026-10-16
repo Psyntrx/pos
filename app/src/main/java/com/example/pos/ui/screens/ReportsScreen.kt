@@ -31,14 +31,17 @@ fun ReportsScreen(
     viewModel: PosViewModel
 ) {
     val products by viewModel.products.collectAsState()
+    val salesHistory by viewModel.salesHistory.collectAsState()
     val expenses by viewModel.expenses.collectAsState()
     var selectedPeriod by remember { mutableStateOf("Daily") }
 
-    val revenue = 24580.0
-    val cogs = 6260.0
-    val grossProfit = revenue - cogs
+    val revenue = salesHistory.sumOf { it.totalAmount }
+    val cogs = salesHistory.sumOf { sale ->
+        sale.items.sumOf { (if (it.product.buyingPrice > 0) it.product.buyingPrice else it.product.sellingPrice * 0.7) * it.quantity }
+    }
+    val grossProfit = (revenue - cogs).coerceAtLeast(0.0)
     val totalExpenses = expenses.sumOf { it.amount }
-    val netProfit = grossProfit - totalExpenses
+    val netProfit = (grossProfit - totalExpenses).coerceAtLeast(0.0)
 
     Column(
         modifier = Modifier

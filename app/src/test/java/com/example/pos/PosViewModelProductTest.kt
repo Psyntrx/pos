@@ -44,6 +44,17 @@ class PosViewModelProductTest {
     @Test
     fun addProductRejectsDuplicateSku() {
         val viewModel = PosViewModel(application, supabase = null)
+        viewModel.addProduct(
+            name = "Existing Product",
+            category = "Groceries",
+            sku = "UG001",
+            unit = "pcs",
+            buyingPrice = 100.0,
+            sellingPrice = 150.0,
+            quantity = 10,
+            minStock = 2,
+            supplier = ""
+        )
         val initialCount = viewModel.products.value.size
 
         val saved = viewModel.addProduct(
@@ -65,6 +76,7 @@ class PosViewModelProductTest {
     @Test
     fun addProductRejectsInvalidPriceAndStock() {
         val viewModel = PosViewModel(application, supabase = null)
+        val initialCount = viewModel.products.value.size
 
         val saved = viewModel.addProduct(
             name = "New product",
@@ -79,7 +91,7 @@ class PosViewModelProductTest {
         )
 
         assertFalse(saved)
-        assertEquals(8, viewModel.products.value.size)
+        assertEquals(initialCount, viewModel.products.value.size)
     }
 
     @Test
@@ -111,6 +123,17 @@ class PosViewModelProductTest {
     @Test
     fun completeSaleCreditRequiresNameAndValidPhone() {
         val viewModel = PosViewModel(application, supabase = null)
+        viewModel.addProduct(
+            name = "Test Item",
+            category = "General",
+            sku = "TEST-CREDIT-01",
+            unit = "pcs",
+            buyingPrice = 50.0,
+            sellingPrice = 100.0,
+            quantity = 10,
+            minStock = 2,
+            supplier = "Local"
+        )
         val product = viewModel.products.value.first()
         viewModel.addToCart(product)
 
@@ -170,6 +193,17 @@ class PosViewModelProductTest {
     @Test
     fun completeSaleCashDoesNotRequireCustomerPhone() {
         val viewModel = PosViewModel(application, supabase = null)
+        viewModel.addProduct(
+            name = "Cash Item",
+            category = "General",
+            sku = "TEST-CASH-01",
+            unit = "pcs",
+            buyingPrice = 50.0,
+            sellingPrice = 100.0,
+            quantity = 10,
+            minStock = 2,
+            supplier = "Local"
+        )
         val product = viewModel.products.value.first()
         viewModel.addToCart(product)
 
