@@ -100,7 +100,19 @@ data class Expense(
     val amount: Double,
     val dateFormatted: String,
     val iconType: String = "receipt",
-    val shopId: String? = null
+    val shopId: String? = null,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
+@Serializable
+data class CreditPayment(
+    val id: String,
+    val amount: Double,
+    val method: String,
+    val timestamp: Long = System.currentTimeMillis(),
+    val balanceAfterPayment: Double = 0.0,
+    val referenceCode: String = "",
+    val notes: String = ""
 )
 
 @Serializable
@@ -114,7 +126,11 @@ data class CustomerCredit(
     val balance: Double,
     val dueDate: String,
     val status: String = "Pending",
-    val shopId: String? = null
+    val paymentHistory: List<CreditPayment> = emptyList(),
+    val createdAt: Long = System.currentTimeMillis(),
+    val settledAt: String? = null,
+    val shopId: String? = null,
+    val timestamp: Long = createdAt
 )
 
 @Serializable
@@ -160,4 +176,3 @@ data class AuthSession(
         return currentTime >= (tokenExpiresAt - 60_000L)
     }
 }
-

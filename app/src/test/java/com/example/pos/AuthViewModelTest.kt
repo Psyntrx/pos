@@ -21,7 +21,7 @@ class AuthViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
-        viewModel = AuthViewModel()
+        viewModel = AuthViewModel(supabase = null)
     }
 
     @After

@@ -726,6 +726,50 @@ class SupabaseService(
         }
     }
 
+    suspend fun upsertExpense(expense: Expense, shopId: String? = null): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val resolvedShopId = shopId ?: expense.shopId
+            val json = JSONObject().apply {
+                put("id", expense.id)
+                put("title", expense.title)
+                put("category", expense.category)
+                put("amount", expense.amount)
+                put("date_formatted", expense.dateFormatted)
+                put("icon_type", expense.iconType)
+                if (!resolvedShopId.isNullOrBlank()) {
+                    put("shop_id", resolvedShopId)
+                }
+            }
+            val req = buildRequest(
+                path = "/rest/v1/expenses",
+                method = "POST",
+                bodyString = json.toString(),
+                extraHeaders = mapOf("Prefer" to "resolution=merge-duplicates")
+            )
+            client.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) Result.success(Unit)
+                else Result.failure(Exception("Failed to update expense (${resp.code})"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteExpense(expenseId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val req = buildRequest(
+                path = "/rest/v1/expenses?id=eq.$expenseId",
+                method = "DELETE"
+            )
+            client.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) Result.success(Unit)
+                else Result.failure(Exception("Failed to delete expense (${resp.code})"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     // ==========================================
     // CUSTOMER CREDITS
     // ==========================================

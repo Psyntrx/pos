@@ -15,6 +15,8 @@ class PosStorageManager(context: Context? = null) {
         private const val KEY_CUSTOMER_CREDITS = "key_customer_credits"
         private const val KEY_EMPLOYEES = "key_employees"
         private const val KEY_STOCK_IN = "key_stock_in"
+        private const val KEY_CREDIT_DURATION_DAYS = "key_credit_duration_days"
+        private const val KEY_LEGACY_CREDIT_DURATION_MONTHS = "key_credit_duration_months"
         private const val KEY_SHOP = "key_shop"
         private const val KEY_AUTH_SESSION = "key_auth_session"
         private const val KEY_REMEMBERED_EMAIL = "key_remembered_email"
@@ -202,6 +204,22 @@ class PosStorageManager(context: Context? = null) {
         } catch (e: Exception) {
             defaultShop
         }
+    }
+
+    fun saveCreditDurationDays(days: Int) {
+        editPrefs { putInt(KEY_CREDIT_DURATION_DAYS, days.coerceAtLeast(1)) }
+    }
+
+    fun loadCreditDurationDays(defaultDays: Int = 14): Int {
+        val p = prefs ?: return defaultDays
+        if (p.contains(KEY_CREDIT_DURATION_DAYS)) {
+            return p.getInt(KEY_CREDIT_DURATION_DAYS, defaultDays).coerceAtLeast(1)
+        }
+
+        val legacyValue = p.getInt(KEY_LEGACY_CREDIT_DURATION_MONTHS, 0)
+        val migratedDays = legacyValue.takeIf { it in setOf(7, 14, 30, 60) } ?: defaultDays
+        saveCreditDurationDays(migratedDays)
+        return migratedDays
     }
 
     // ==========================================
@@ -423,22 +441,52 @@ fun Expense.toJson(): JSONObject {
         put("dateFormatted", dateFormatted)
         put("iconType", iconType)
         put("shopId", shopId)
+        put("timestamp", timestamp)
     }
 }
 
 fun JSONObject.toExpense(): Expense {
+    val recordId = getString("id")
+    val defaultTimestamp = recordId.removePrefix("exp_").toLongOrNull() ?: System.currentTimeMillis()
     return Expense(
-        id = getString("id"),
+        id = recordId,
         title = getString("title"),
         category = getString("category"),
         amount = getDouble("amount"),
         dateFormatted = optString("dateFormatted", ""),
         iconType = optString("iconType", "receipt"),
-        shopId = optString("shopId", "").takeIf { it.isNotBlank() }
+        shopId = optString("shopId", "").takeIf { it.isNotBlank() },
+        timestamp = optLong("timestamp", defaultTimestamp)
+    )
+}
+
+fun CreditPayment.toJson(): JSONObject {
+    return JSONObject().apply {
+        put("id", id)
+        put("amount", amount)
+        put("method", method)
+        put("timestamp", timestamp)
+        put("balanceAfterPayment", balanceAfterPayment)
+        put("referenceCode", referenceCode)
+        put("notes", notes)
+    }
+}
+
+fun JSONObject.toCreditPayment(): CreditPayment {
+    return CreditPayment(
+        id = optString("id", "payment_${System.currentTimeMillis()}"),
+        amount = optDouble("amount", 0.0),
+        method = optString("method", "Cash"),
+        timestamp = if (has("timestamp")) optLong("timestamp", 0L) else 0L,
+        balanceAfterPayment = optDouble("balanceAfterPayment", 0.0),
+        referenceCode = optString("referenceCode", ""),
+        notes = optString("notes", "")
     )
 }
 
 fun CustomerCredit.toJson(): JSONObject {
+    val paymentHistoryArray = JSONArray()
+    paymentHistory.forEach { paymentHistoryArray.put(it.toJson()) }
     return JSONObject().apply {
         put("id", id)
         put("customerName", customerName)
@@ -449,13 +497,29 @@ fun CustomerCredit.toJson(): JSONObject {
         put("balance", balance)
         put("dueDate", dueDate)
         put("status", status)
+        put("createdAt", createdAt)
+        put("settledAt", settledAt ?: "")
+        put("paymentHistory", paymentHistoryArray)
         put("shopId", shopId)
+        put("timestamp", timestamp)
     }
 }
 
 fun JSONObject.toCustomerCredit(): CustomerCredit {
+    val recordId = getString("id")
+    val defaultTimestamp = recordId.removePrefix("c_").toLongOrNull() ?: System.currentTimeMillis()
+    val paymentHistoryArray = optJSONArray("paymentHistory")
+    val paymentHistory = mutableListOf<CreditPayment>()
+    if (paymentHistoryArray != null) {
+        for (i in 0 until paymentHistoryArray.length()) {
+            paymentHistory.add(paymentHistoryArray.getJSONObject(i).toCreditPayment())
+        }
+    }
+
+    val createdAtVal = if (has("createdAt")) optLong("createdAt", defaultTimestamp) else defaultTimestamp
+
     return CustomerCredit(
-        id = getString("id"),
+        id = recordId,
         customerName = getString("customerName"),
         customerPhone = optString("customerPhone", ""),
         totalOutstanding = getDouble("totalOutstanding"),
@@ -464,7 +528,11 @@ fun JSONObject.toCustomerCredit(): CustomerCredit {
         balance = getDouble("balance"),
         dueDate = optString("dueDate", ""),
         status = optString("status", "Pending"),
-        shopId = optString("shopId", "").takeIf { it.isNotBlank() }
+        paymentHistory = paymentHistory,
+        createdAt = createdAtVal,
+        settledAt = if (has("settledAt")) optString("settledAt", "").takeIf { it.isNotBlank() } else null,
+        shopId = optString("shopId", "").takeIf { it.isNotBlank() },
+        timestamp = optLong("timestamp", createdAtVal)
     )
 }
 
