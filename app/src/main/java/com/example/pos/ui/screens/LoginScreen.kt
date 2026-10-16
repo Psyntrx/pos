@@ -117,7 +117,7 @@ fun LoginScreen(
                     value = loginState.email,
                     onValueChange = { authViewModel.updateLoginEmail(it) },
                     label = { Text("Email") },
-                    placeholder = { Text("Enter your email") },
+                    placeholder = { Text("e.g. user@example.com") },
                     leadingIcon = {
                         Icon(Icons.Outlined.Email, contentDescription = null, tint = EmeraldBright)
                     },

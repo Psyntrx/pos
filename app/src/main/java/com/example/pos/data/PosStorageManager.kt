@@ -506,13 +506,13 @@ fun Shop.toJson(): JSONObject {
 
 fun JSONObject.toShop(): Shop {
     return Shop(
-        id = optString("id", "shop_default"),
-        name = optString("name", "My Store"),
-        ownerName = optString("ownerName", "Store Owner"),
+        id = optString("id", "shop_1"),
+        name = optString("name", ""),
+        ownerName = optString("ownerName", ""),
         email = optString("email", ""),
         phone = optString("phone", ""),
-        category = optString("category", "Retail & Grocery"),
-        address = optString("address", "Nairobi, Kenya"),
+        category = optString("category", ""),
+        address = optString("address", ""),
         currency = optString("currency", "KSh")
     )
 }

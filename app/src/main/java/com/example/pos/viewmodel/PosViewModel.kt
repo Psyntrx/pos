@@ -317,18 +317,12 @@ class PosViewModel(
                     storageManager.saveStockInRecords(remoteStockIn)
                 }
             }
-            // 5. Fetch customer credits scoped to activeShopId
-            supabase.getCustomerCredits(activeShopId).onSuccess { remoteCredits ->
-                if (activeShopId != null || remoteCredits.isNotEmpty()) {
-                    _customerCredits.value = remoteCredits
-                    storageManager.saveCustomerCredits(remoteCredits)
-                }
-            }
-            // 6. Fetch employees scoped to activeShopId
-            supabase.getEmployees(activeShopId).onSuccess { remoteEmployees ->
-                if (activeShopId != null || remoteEmployees.isNotEmpty()) {
-                    _employees.value = remoteEmployees
-                    storageManager.saveEmployees(remoteEmployees)
+            // 5. Fetch shop info if any
+            val userEmail = storageManager.loadRememberedEmail() ?: _shop.value.email
+            supabase.getShop(userEmail).onSuccess { remoteShop ->
+                if (remoteShop != null && remoteShop.name.isNotBlank()) {
+                    _shop.value = remoteShop
+                    storageManager.saveShop(remoteShop)
                 }
             }
         }
@@ -400,12 +394,12 @@ class PosViewModel(
     fun registerShop(shopName: String, ownerName: String, email: String, phone: String, address: String, category: String) {
         val newShop = Shop(
             id = "shop_${System.currentTimeMillis()}",
-            name = shopName.ifBlank { "My Store" },
-            ownerName = ownerName.ifBlank { "Store Owner" },
-            email = email.ifBlank { "owner@store.com" },
-            phone = phone.ifBlank { "+254 700 000 000" },
-            address = address.ifBlank { "Nairobi, Kenya" },
-            category = category.ifBlank { "Retail & Grocery" }
+            name = shopName.trim().ifBlank { "My Shop" },
+            ownerName = ownerName.trim().ifBlank { "Owner" },
+            email = email.trim(),
+            phone = phone.trim(),
+            address = address.trim(),
+            category = category.trim().ifBlank { "Retail & Grocery" }
         )
         _shop.value = newShop
         storageManager.saveShop(newShop)

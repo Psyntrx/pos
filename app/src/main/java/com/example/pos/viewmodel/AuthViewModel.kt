@@ -23,7 +23,7 @@ data class RegisterUiState(
     val ownerName: String = "",
     val phone: String = "",
     val email: String = "",
-    val category: String = "Groceries & Retail",
+    val category: String = "",
     val address: String = "",
 
     // Step 2 Fields
@@ -185,11 +185,22 @@ class AuthViewModel(
             category = state.category.trim()
         )
 
+        val metadata = mapOf(
+            "shop_name" to createdShop.name,
+            "owner_name" to createdShop.ownerName,
+            "phone" to createdShop.phone,
+            "address" to createdShop.address,
+            "category" to createdShop.category,
+            "business_reg_no" to state.businessRegNo.trim()
+        )
+
         _registerState.update { it.copy(isLoading = true, errorMessage = null) }
         viewModelScope.launch {
-            val result = supabase.signUp(state.email.trim(), state.password)
+            val result = supabase.signUp(state.email.trim(), state.password, metadata)
             result.fold(
                 onSuccess = {
+                    // Ensure the shop is persisted in Supabase shops table
+                    supabase.saveShop(createdShop)
                     _registerState.update {
                         it.copy(isLoading = false, isRegisteredSuccessfully = true)
                     }

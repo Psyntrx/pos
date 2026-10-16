@@ -4,13 +4,13 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class Shop(
-    val id: String = "shop_default",
-    val name: String = "My Store",
-    val ownerName: String = "Store Owner",
+    val id: String = "shop_1",
+    val name: String = "",
+    val ownerName: String = "",
     val email: String = "",
     val phone: String = "",
-    val category: String = "Retail & Grocery",
-    val address: String = "Nairobi, Kenya",
+    val category: String = "",
+    val address: String = "",
     val currency: String = "KSh"
 )
 
