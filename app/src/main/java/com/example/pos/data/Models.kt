@@ -100,7 +100,8 @@ data class Expense(
     val amount: Double,
     val dateFormatted: String,
     val iconType: String = "receipt",
-    val shopId: String? = null
+    val shopId: String? = null,
+    val timestamp: Long = System.currentTimeMillis()
 )
 
 @Serializable
@@ -114,7 +115,8 @@ data class CustomerCredit(
     val balance: Double,
     val dueDate: String,
     val status: String = "Pending",
-    val shopId: String? = null
+    val shopId: String? = null,
+    val timestamp: Long = System.currentTimeMillis()
 )
 
 @Serializable

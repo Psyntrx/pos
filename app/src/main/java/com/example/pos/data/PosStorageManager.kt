@@ -423,18 +423,22 @@ fun Expense.toJson(): JSONObject {
         put("dateFormatted", dateFormatted)
         put("iconType", iconType)
         put("shopId", shopId)
+        put("timestamp", timestamp)
     }
 }
 
 fun JSONObject.toExpense(): Expense {
+    val recordId = getString("id")
+    val defaultTimestamp = recordId.removePrefix("exp_").toLongOrNull() ?: System.currentTimeMillis()
     return Expense(
-        id = getString("id"),
+        id = recordId,
         title = getString("title"),
         category = getString("category"),
         amount = getDouble("amount"),
         dateFormatted = optString("dateFormatted", ""),
         iconType = optString("iconType", "receipt"),
-        shopId = optString("shopId", "").takeIf { it.isNotBlank() }
+        shopId = optString("shopId", "").takeIf { it.isNotBlank() },
+        timestamp = optLong("timestamp", defaultTimestamp)
     )
 }
 
@@ -450,12 +454,15 @@ fun CustomerCredit.toJson(): JSONObject {
         put("dueDate", dueDate)
         put("status", status)
         put("shopId", shopId)
+        put("timestamp", timestamp)
     }
 }
 
 fun JSONObject.toCustomerCredit(): CustomerCredit {
+    val recordId = getString("id")
+    val defaultTimestamp = recordId.removePrefix("c_").toLongOrNull() ?: System.currentTimeMillis()
     return CustomerCredit(
-        id = getString("id"),
+        id = recordId,
         customerName = getString("customerName"),
         customerPhone = optString("customerPhone", ""),
         totalOutstanding = getDouble("totalOutstanding"),
@@ -464,7 +471,8 @@ fun JSONObject.toCustomerCredit(): CustomerCredit {
         balance = getDouble("balance"),
         dueDate = optString("dueDate", ""),
         status = optString("status", "Pending"),
-        shopId = optString("shopId", "").takeIf { it.isNotBlank() }
+        shopId = optString("shopId", "").takeIf { it.isNotBlank() },
+        timestamp = optLong("timestamp", defaultTimestamp)
     )
 }
 
