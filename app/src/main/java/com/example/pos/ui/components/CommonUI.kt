@@ -465,20 +465,20 @@ fun RetailSyncHeader(
 
             Spacer(modifier = Modifier.width(10.dp))
 
-            // Notification Bell with Floating Count Badge (well-oriented & never cropped!)
+            // Notification Bell with Floating Count Badge (well-oriented & fully clickable!)
             Box(
                 modifier = Modifier
-                    .wrapContentSize()
-                    .padding(top = 2.dp, end = 2.dp),
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onNotificationClick),
                 contentAlignment = Alignment.Center
             ) {
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(38.dp)
                         .clip(CircleShape)
                         .background(SurfaceDarkVariant)
-                        .border(1.dp, SurfaceBorder.copy(alpha = 0.8f), CircleShape)
-                        .clickable { onNotificationClick() },
+                        .border(1.dp, SurfaceBorder.copy(alpha = 0.8f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -494,8 +494,8 @@ fun RetailSyncHeader(
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .offset(x = 6.dp, y = (-5).dp)
-                            .defaultMinSize(minWidth = 19.dp, minHeight = 19.dp)
+                            .offset(x = 1.dp, y = (-1).dp)
+                            .defaultMinSize(minWidth = 18.dp, minHeight = 18.dp)
                             .clip(CircleShape)
                             .background(EmeraldBright)
                             .border(1.5.dp, BgDark, CircleShape)

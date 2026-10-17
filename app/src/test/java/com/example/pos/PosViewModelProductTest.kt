@@ -400,5 +400,56 @@ class PosViewModelProductTest {
         // Deleting non-existent product returns false
         assertFalse(viewModel.deleteProduct("non-existent-id"))
     }
+
+    @Test
+    fun recordStockInAutoResolvesNotificationWhenStockBecomesHealthy() {
+        val viewModel = PosViewModel(application, supabase = null)
+        viewModel.addProduct(
+            name = "Test Item",
+            category = "Groceries",
+            sku = "NOTIF-TEST-01",
+            unit = "pcs",
+            buyingPrice = 50.0,
+            sellingPrice = 100.0,
+            quantity = 1,
+            minStock = 5,
+            supplier = ""
+        )
+        val product = viewModel.products.value.first { it.sku == "NOTIF-TEST-01" }
+
+        // Trigger test notification or verify threshold notification
+        viewModel.triggerTestNotification()
+        val unreadBefore = viewModel.notifications.value.filter { !it.isRead }
+        assertTrue(unreadBefore.isNotEmpty())
+
+        // Restock product above minStock
+        viewModel.recordStockIn(
+            productId = product.id,
+            quantityAdded = 10,
+            buyingPrice = 50.0,
+            sellingPrice = 100.0,
+            supplier = "Local",
+            employeeName = "Owner"
+        )
+
+        // Verifies the notification containing this product was auto-resolved if all items became healthy
+        val unreadForProduct = viewModel.notifications.value.filter {
+            !it.isRead && product.id in it.productIds
+        }
+        assertTrue("Notifications for restocked healthy product should be auto-marked as read", unreadForProduct.isEmpty())
+    }
+
+    @Test
+    fun markAllNotificationsReadAndClearNotificationsWork() {
+        val viewModel = PosViewModel(application, supabase = null)
+        viewModel.triggerTestNotification()
+        assertTrue(viewModel.notifications.value.isNotEmpty())
+
+        viewModel.markAllNotificationsRead()
+        assertTrue(viewModel.notifications.value.all { it.isRead })
+
+        viewModel.clearNotifications()
+        assertTrue(viewModel.notifications.value.isEmpty())
+    }
 }
 

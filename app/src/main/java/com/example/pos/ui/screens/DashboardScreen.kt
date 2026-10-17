@@ -5,8 +5,10 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -27,6 +29,7 @@ import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddBox
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Inventory2
@@ -34,9 +37,11 @@ import androidx.compose.material.icons.filled.LocalGroceryStore
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material.icons.outlined.Receipt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import com.example.pos.data.InventoryAlertKind
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -89,6 +94,11 @@ fun DashboardScreen(
     val products by viewModel.products.collectAsState()
     val salesHistory by viewModel.salesHistory.collectAsState()
     val expenses by viewModel.expenses.collectAsState()
+    val notifications by viewModel.notifications.collectAsState()
+
+    val unreadNotifications = remember(notifications) { notifications.filter { !it.isRead } }
+    val effectiveUnreadCount = unreadNotifications.size
+    val effectiveHasUnread = effectiveUnreadCount > 0
 
     val totalSalesToday = salesHistory
         .filter { it.dateFormatted.contains("Today", ignoreCase = true) || it.dateFormatted.contains("Just now", ignoreCase = true) }
@@ -186,8 +196,8 @@ fun DashboardScreen(
             profilePhotoUri = profilePhotoUri,
             onNotificationClick = onOpenNotifications,
             onProfileClick = { onNavigateToTab(4) },
-            hasUnreadNotifications = hasUnreadNotifications,
-            unreadCount = unreadNotificationsCount
+            hasUnreadNotifications = effectiveHasUnread,
+            unreadCount = effectiveUnreadCount
         )
 
         Column(
@@ -196,6 +206,147 @@ fun DashboardScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 8.dp)
         ) {
+            // Live In-App Notification Alert Banner for Unread Alerts
+            AnimatedVisibility(
+                visible = unreadNotifications.isNotEmpty(),
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                val latestAlert = unreadNotifications.firstOrNull()
+                if (latestAlert != null) {
+                    val isOutOfStock = latestAlert.kind == InventoryAlertKind.OUT_OF_STOCK
+                    val alertAccent = if (isOutOfStock) ErrorRed else WarningYellow
+                    val alertBg = if (isOutOfStock) ErrorRed.copy(alpha = 0.12f) else WarningContainer
+
+                    SurfaceCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 14.dp)
+                            .clickable { onOpenNotifications() },
+                        backgroundColor = SurfaceDark,
+                        borderColor = alertAccent.copy(alpha = 0.45f),
+                        cornerRadius = 20.dp
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(alertBg),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (isOutOfStock) Icons.Default.Inventory2 else Icons.Default.WarningAmber,
+                                    contentDescription = null,
+                                    tint = alertAccent,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = latestAlert.title,
+                                        style = MaterialTheme.typography.titleSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = TextPrimary,
+                                            fontSize = 13.sp
+                                        ),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
+                                    )
+                                    if (unreadNotifications.size > 1) {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(alertAccent.copy(alpha = 0.2f))
+                                                .padding(horizontal = 5.dp, vertical = 1.dp)
+                                        ) {
+                                            Text(
+                                                text = "+${unreadNotifications.size - 1}",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    color = alertAccent,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 9.5.sp
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = latestAlert.message,
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = TextSecondary,
+                                        fontSize = 11.sp,
+                                        lineHeight = 14.sp
+                                    ),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            // Action buttons
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (latestAlert.productIds.isNotEmpty()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(EmeraldContainer)
+                                            .border(1.dp, EmeraldBright.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                                            .clickable {
+                                                val targetId = latestAlert.productIds.firstOrNull()
+                                                if (targetId != null) {
+                                                    onOpenStockIn(targetId)
+                                                } else {
+                                                    onOpenNotifications()
+                                                }
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "Restock",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = EmeraldBright,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 11.sp
+                                            )
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                }
+
+                                IconButton(
+                                    onClick = { viewModel.markNotificationAsRead(latestAlert.id) },
+                                    modifier = Modifier.size(26.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Dismiss",
+                                        tint = TextMuted,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // 1. Today's Sales Hero Card with Interactive Doughnut Chart
             SurfaceCard(
                 modifier = Modifier.fillMaxWidth(),
