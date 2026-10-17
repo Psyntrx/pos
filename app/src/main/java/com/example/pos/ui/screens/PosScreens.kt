@@ -806,11 +806,23 @@ fun ProductItemCard(
                             color = EmeraldBright
                         )
                     )
+                    val remainingStock = (product.stockQuantity - quantityInCart).coerceAtLeast(0)
+                    val stockText = when {
+                        isOutOfStock -> "Out of Stock"
+                        remainingStock <= 0 -> "0 left (in cart)"
+                        quantityInCart > 0 -> "Stock: $remainingStock left"
+                        else -> "Stock: ${product.stockQuantity}"
+                    }
+                    val stockColor = when {
+                        isOutOfStock || remainingStock <= 0 -> ErrorRed
+                        remainingStock <= product.minStock -> WarningYellow
+                        else -> TextMuted
+                    }
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = if (isOutOfStock) "Out of Stock" else "Stock: ${product.stockQuantity}",
+                        text = stockText,
                         style = MaterialTheme.typography.bodySmall.copy(
-                            color = if (isOutOfStock) ErrorRed else if (product.isLowStock) WarningYellow else TextMuted
+                            color = stockColor
                         )
                     )
                 }

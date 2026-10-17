@@ -1,9 +1,15 @@
 package com.example.pos
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
@@ -73,6 +79,24 @@ class MainActivity : ComponentActivity() {
                     val posViewModel = remember { PosViewModel(application) }
                     val authViewModel = remember { AuthViewModel(SupabaseClient.service, PosStorageManager(application)) }
                     val currentScreen by posViewModel.currentScreen.collectAsState()
+
+                    val permissionLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.RequestPermission()
+                    ) { granted ->
+                        posViewModel.setSystemNotificationsEnabled(granted)
+                    }
+
+                    LaunchedEffect(Unit) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            if (ContextCompat.checkSelfPermission(
+                                    this@MainActivity,
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                ) != PackageManager.PERMISSION_GRANTED
+                            ) {
+                                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        }
+                    }
 
                     LaunchedEffect(notificationRequest) {
                         if (notificationRequest > 0) posViewModel.navigateTo("main")

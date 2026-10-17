@@ -1,6 +1,7 @@
 package com.example.pos.ui.screens
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -302,12 +303,30 @@ fun NotificationCenterScreen(
             }
 
             if (permissionDenied) {
-                Text(
-                    text = "Permission denied. Allow notifications in Android app settings to receive system alerts.",
-                    color = WarningYellow,
-                    fontSize = 11.sp,
-                    modifier = Modifier.padding(top = 10.dp)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Notifications are blocked in system settings.",
+                        color = WarningYellow,
+                        fontSize = 11.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(
+                        onClick = {
+                            val intent = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            }
+                            runCatching { context.startActivity(intent) }
+                        }
+                    ) {
+                        Text("Settings", color = EmeraldBright, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
 
@@ -376,6 +395,7 @@ fun NotificationCenterScreen(
             }
         } else {
             LazyColumn(
+                contentPadding = PaddingValues(bottom = 36.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
@@ -489,8 +509,6 @@ private fun InventoryNotificationCard(
                         color = titleColor,
                         fontSize = 13.5.sp,
                         fontWeight = titleWeight,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
 
@@ -533,16 +551,15 @@ private fun InventoryNotificationCard(
                     }
                 }
 
-                // Message Text (greyed out when read)
+                // Message Text (complete, uncropped with clean spacing)
                 Text(
                     text = notification.message,
                     color = messageColor,
-                    fontSize = 11.5.sp,
-                    lineHeight = 16.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 3.dp)
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp,
+                    modifier = Modifier.padding(top = 4.dp)
                 )
+
 
                 // Footer Row: Formatted Timestamp
                 Row(

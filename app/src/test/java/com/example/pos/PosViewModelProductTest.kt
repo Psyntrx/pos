@@ -1,7 +1,9 @@
 package com.example.pos
 
 import android.content.Context
+import com.example.pos.data.CartItem
 import com.example.pos.data.PosStorageManager
+import com.example.pos.data.Sale
 import com.example.pos.viewmodel.PosViewModel
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -451,5 +453,150 @@ class PosViewModelProductTest {
         viewModel.clearNotifications()
         assertTrue(viewModel.notifications.value.isEmpty())
     }
+
+    @Test
+    fun completeSaleDeductsProductStockAndPersists() {
+        val viewModel = PosViewModel(application, supabase = null)
+        viewModel.addProduct(
+            name = "Sugar",
+            category = "Groceries",
+            sku = "SUGAR-01",
+            unit = "kg",
+            buyingPrice = 100.0,
+            sellingPrice = 150.0,
+            quantity = 10,
+            minStock = 2,
+            supplier = "Local"
+        )
+        val product = viewModel.products.value.first { it.sku == "SUGAR-01" }
+        viewModel.addToCart(product)
+        viewModel.addToCart(product)
+        viewModel.addToCart(product) // 3 items in cart
+
+        val sale = viewModel.completeSale(
+            paymentMethod = "Cash",
+            customerName = "Jane Doe",
+            customerPhone = "0712345678"
+        )
+        assertTrue(sale.id.isNotBlank())
+
+        val updatedProduct = viewModel.products.value.first { it.id == product.id }
+        assertEquals(7, updatedProduct.stockQuantity)
+
+        val storageProducts = PosStorageManager(application).loadProducts()
+        val persistedProduct = storageProducts.first { it.id == product.id }
+        assertEquals(7, persistedProduct.stockQuantity)
+    }
+
+    @Test
+    fun deleteSaleRestoresProductStock() {
+        val viewModel = PosViewModel(application, supabase = null)
+        viewModel.addProduct(
+            name = "Flour",
+            category = "Groceries",
+            sku = "FLOUR-01",
+            unit = "kg",
+            buyingPrice = 120.0,
+            sellingPrice = 160.0,
+            quantity = 15,
+            minStock = 3,
+            supplier = "Local"
+        )
+        val product = viewModel.products.value.first { it.sku == "FLOUR-01" }
+        viewModel.addToCart(product)
+        viewModel.addToCart(product) // 2 items in cart
+
+        val sale = viewModel.completeSale(paymentMethod = "Cash")
+        assertTrue(sale.id.isNotBlank())
+        assertEquals(13, viewModel.products.value.first { it.id == product.id }.stockQuantity)
+
+        viewModel.deleteSale(sale.id)
+
+        val restoredProduct = viewModel.products.value.first { it.id == product.id }
+        assertEquals(15, restoredProduct.stockQuantity)
+
+        val persisted = PosStorageManager(application).loadProducts().first { it.id == product.id }
+        assertEquals(15, persisted.stockQuantity)
+    }
+
+    @Test
+    fun updateSaleAdjustsStockDelta() {
+        val viewModel = PosViewModel(application, supabase = null)
+        viewModel.addProduct(
+            name = "Milk",
+            category = "Groceries",
+            sku = "MILK-01",
+            unit = "ltr",
+            buyingPrice = 50.0,
+            sellingPrice = 65.0,
+            quantity = 20,
+            minStock = 5,
+            supplier = "Dairy"
+        )
+        val product = viewModel.products.value.first { it.sku == "MILK-01" }
+        viewModel.addToCart(product)
+        viewModel.addToCart(product)
+        viewModel.addToCart(product) // 3 items in cart
+
+        val sale = viewModel.completeSale(paymentMethod = "Cash")
+        assertTrue(sale.id.isNotBlank())
+        assertEquals(17, viewModel.products.value.first { it.id == product.id }.stockQuantity)
+
+        // Update sale from 3 items to 5 items (+2 more sold)
+        val saleWith5Items = sale.copy(
+            items = listOf(CartItem(product = product, quantity = 5)),
+            totalAmount = 5 * 65.0
+        )
+        viewModel.updateSale(saleWith5Items)
+        assertEquals(15, viewModel.products.value.first { it.id == product.id }.stockQuantity)
+
+        // Update sale from 5 items to 2 items (-3 fewer sold -> 3 restored)
+        val saleWith2Items = sale.copy(
+            items = listOf(CartItem(product = product, quantity = 2)),
+            totalAmount = 2 * 65.0
+        )
+        viewModel.updateSale(saleWith2Items)
+        assertEquals(18, viewModel.products.value.first { it.id == product.id }.stockQuantity)
+    }
+
+    @Test
+    fun addCustomerCreditWithItemsDeductsProductStock() {
+        val viewModel = PosViewModel(application, supabase = null)
+        viewModel.addProduct(
+            name = "Cooking Oil",
+            category = "Groceries",
+            sku = "OIL-01",
+            unit = "ltr",
+            buyingPrice = 200.0,
+            sellingPrice = 250.0,
+            quantity = 10,
+            minStock = 2,
+            supplier = "Local"
+        )
+        val product = viewModel.products.value.first { it.sku == "OIL-01" }
+
+        val saved = viewModel.addCustomerCredit(
+            customerName = "John Doe",
+            phone = "0712345678",
+            productsSummary = "4 x Cooking Oil",
+            originalAmount = 1000.0,
+            amountPaid = 200.0,
+            dueDate = "Nov 1, 2026",
+            paymentMethod = "Cash",
+            itemsMap = mapOf(product.id to 4)
+        )
+        assertTrue(saved)
+
+        val updatedProduct = viewModel.products.value.first { it.id == product.id }
+        assertEquals(6, updatedProduct.stockQuantity)
+
+        val creditSale = viewModel.salesHistory.value.firstOrNull { it.customerName == "John Doe" }
+        assertTrue(creditSale != null)
+        assertTrue(creditSale!!.isCreditSale)
+        assertEquals(1000.0, creditSale.totalAmount, 0.001)
+        assertEquals(200.0, creditSale.paidAmount, 0.001)
+        assertEquals(800.0, creditSale.balance, 0.001)
+    }
 }
+
 

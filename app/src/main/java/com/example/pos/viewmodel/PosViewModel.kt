@@ -702,21 +702,31 @@ class PosViewModel(
             }
         }
 
+        val productIds = currentCartItems.map { it.product.id }.toSet()
+        pendingProductUpdates.addAll(productIds)
+
         // Asynchronous cloud sync to Supabase
         val service = supabase
         if (service != null) {
             viewModelScope.launch {
-                currentCartItems.forEach { cartItem ->
-                    val updatedProd = _products.value.find { it.id == cartItem.product.id }
-                    if (updatedProd != null) {
-                        service.updateProductStock(updatedProd.id, updatedProd.stockQuantity)
+                try {
+                    currentCartItems.forEach { cartItem ->
+                        val updatedProd = _products.value.find { it.id == cartItem.product.id }
+                        if (updatedProd != null) {
+                            service.updateProductStock(updatedProd.id, updatedProd.stockQuantity, activeShopId)
+                            service.upsertProduct(updatedProd, activeShopId)
+                        }
                     }
-                }
-                service.insertSale(newSale, activeShopId)
-                if (finalCreditRecord != null) {
-                    service.upsertCustomerCredit(finalCreditRecord, activeShopId)
+                    service.insertSale(newSale, activeShopId)
+                    if (finalCreditRecord != null) {
+                        service.upsertCustomerCredit(finalCreditRecord, activeShopId)
+                    }
+                } finally {
+                    pendingProductUpdates.removeAll(productIds)
                 }
             }
+        } else {
+            pendingProductUpdates.removeAll(productIds)
         }
 
         _completedSale.value = newSale
@@ -725,25 +735,106 @@ class PosViewModel(
     }
 
     fun deleteSale(saleId: String) {
+        val saleToDelete = _salesHistory.value.find { it.id == saleId }
         _salesHistory.update { list -> list.filterNot { it.id == saleId } }
         storageManager.saveSales(_salesHistory.value)
 
-        val service = supabase ?: return
-        viewModelScope.launch {
-            service.deleteSale(saleId)
+        if (saleToDelete != null) {
+            // Restore inventory for the products in the deleted sale
+            val productIds = saleToDelete.items.map { it.product.id }.toSet()
+            _products.update { currentList ->
+                currentList.map { product ->
+                    val soldItem = saleToDelete.items.find { it.product.id == product.id }
+                    if (soldItem != null) {
+                        product.copy(stockQuantity = product.stockQuantity + soldItem.quantity)
+                    } else product
+                }
+            }
+            storageManager.saveProducts(_products.value)
+
+            val service = supabase
+            if (service != null) {
+                val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+                pendingProductUpdates.addAll(productIds)
+                viewModelScope.launch {
+                    try {
+                        service.deleteSale(saleId)
+                        saleToDelete.items.forEach { soldItem ->
+                            val updatedProd = _products.value.find { it.id == soldItem.product.id }
+                            if (updatedProd != null) {
+                                service.updateProductStock(updatedProd.id, updatedProd.stockQuantity, activeShopId)
+                                service.upsertProduct(updatedProd, activeShopId)
+                            }
+                        }
+                    } finally {
+                        pendingProductUpdates.removeAll(productIds)
+                    }
+                }
+            }
+        } else {
+            val service = supabase ?: return
+            viewModelScope.launch {
+                service.deleteSale(saleId)
+            }
         }
     }
 
     fun updateSale(updatedSale: Sale) {
+        val originalSale = _salesHistory.value.find { it.id == updatedSale.id }
         _salesHistory.update { list ->
             list.map { if (it.id == updatedSale.id) updatedSale else it }
         }
         storageManager.saveSales(_salesHistory.value)
 
-        val service = supabase ?: return
-        viewModelScope.launch {
-            val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
-            service.upsertSale(updatedSale, activeShopId)
+        if (originalSale != null) {
+            // Calculate item quantity differences: (newQty - oldQty)
+            // positive delta = more sold -> deduct from stock
+            // negative delta = fewer sold -> restore to stock
+            val allProductIds = (originalSale.items.map { it.product.id } + updatedSale.items.map { it.product.id }).toSet()
+            val oldItemMap = originalSale.items.associate { it.product.id to it.quantity }
+            val newItemMap = updatedSale.items.associate { it.product.id to it.quantity }
+
+            val hasInventoryChanges = allProductIds.any { id -> (oldItemMap[id] ?: 0) != (newItemMap[id] ?: 0) }
+
+            if (hasInventoryChanges) {
+                _products.update { currentList ->
+                    currentList.map { product ->
+                        val oldQty = oldItemMap[product.id] ?: 0
+                        val newQty = newItemMap[product.id] ?: 0
+                        val delta = newQty - oldQty
+                        if (delta != 0) {
+                            product.copy(stockQuantity = (product.stockQuantity - delta).coerceAtLeast(0))
+                        } else product
+                    }
+                }
+                storageManager.saveProducts(_products.value)
+            }
+
+            val service = supabase ?: return
+            viewModelScope.launch {
+                val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+                pendingProductUpdates.addAll(allProductIds)
+                try {
+                    service.upsertSale(updatedSale, activeShopId)
+                    if (hasInventoryChanges) {
+                        allProductIds.forEach { pId ->
+                            val updatedProd = _products.value.find { it.id == pId }
+                            if (updatedProd != null) {
+                                service.updateProductStock(updatedProd.id, updatedProd.stockQuantity, activeShopId)
+                                service.upsertProduct(updatedProd, activeShopId)
+                            }
+                        }
+                    }
+                } finally {
+                    pendingProductUpdates.removeAll(allProductIds)
+                }
+            }
+        } else {
+            val service = supabase ?: return
+            viewModelScope.launch {
+                val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+                service.upsertSale(updatedSale, activeShopId)
+            }
         }
     }
 
@@ -769,7 +860,8 @@ class PosViewModel(
         originalAmount: Double,
         amountPaid: Double,
         dueDate: String,
-        paymentMethod: String = "Cash"
+        paymentMethod: String = "Cash",
+        itemsMap: Map<String, Int> = emptyMap()
     ): Boolean {
         val normalizedName = customerName.trim()
         if (normalizedName.isBlank()) return false
@@ -789,8 +881,62 @@ class PosViewModel(
         val creditRecord = created.copy(shopId = activeShopId)
         _customerCredits.update { listOf(creditRecord) + it }
         storageManager.saveCustomerCredits(_customerCredits.value)
-        val s = supabase ?: return true
-        viewModelScope.launch { s.upsertCustomerCredit(creditRecord, activeShopId) }
+
+        // Deduct inventory if items were selected
+        if (itemsMap.isNotEmpty()) {
+            val productIds = itemsMap.keys.toSet()
+            val cartItems = mutableListOf<CartItem>()
+            _products.update { currentList ->
+                currentList.map { product ->
+                    val qtySold = itemsMap[product.id] ?: 0
+                    if (qtySold > 0) {
+                        cartItems.add(CartItem(product.copy(shopId = activeShopId), qtySold))
+                        product.copy(stockQuantity = (product.stockQuantity - qtySold).coerceAtLeast(0))
+                    } else product
+                }
+            }
+            storageManager.saveProducts(_products.value)
+
+            // Also create a corresponding Sale record to keep Sales History and Reports in sync
+            val newSale = Sale(
+                id = "SL-${(1093..9999).random()}",
+                items = cartItems,
+                totalAmount = originalAmount,
+                paymentMethod = paymentMethod,
+                customerName = normalizedName,
+                dateFormatted = "Just now",
+                timestamp = System.currentTimeMillis(),
+                employeeName = _shop.value.ownerName.ifBlank { "Store Owner" },
+                isCreditSale = true,
+                paidAmount = amountPaid,
+                balance = (originalAmount - amountPaid).coerceAtLeast(0.0),
+                dueDate = creditRecord.dueDate,
+                shopId = activeShopId
+            )
+            _salesHistory.update { listOf(newSale) + it }
+            storageManager.saveSales(_salesHistory.value)
+
+            val s = supabase ?: return true
+            pendingProductUpdates.addAll(productIds)
+            viewModelScope.launch {
+                try {
+                    s.upsertCustomerCredit(creditRecord, activeShopId)
+                    s.insertSale(newSale, activeShopId)
+                    itemsMap.keys.forEach { pId ->
+                        val updatedProd = _products.value.find { it.id == pId }
+                        if (updatedProd != null) {
+                            s.updateProductStock(updatedProd.id, updatedProd.stockQuantity, activeShopId)
+                            s.upsertProduct(updatedProd, activeShopId)
+                        }
+                    }
+                } finally {
+                    pendingProductUpdates.removeAll(productIds)
+                }
+            }
+        } else {
+            val s = supabase ?: return true
+            viewModelScope.launch { s.upsertCustomerCredit(creditRecord, activeShopId) }
+        }
         return true
     }
 

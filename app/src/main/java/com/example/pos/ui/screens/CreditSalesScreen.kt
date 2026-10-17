@@ -551,7 +551,8 @@ fun CreditSalesScreen(
                         originalAmount = originalAmount,
                         amountPaid = parsedAmountPaid,
                         dueDate = dueDate,
-                        paymentMethod = initialPaymentMethod
+                        paymentMethod = initialPaymentMethod,
+                        itemsMap = selectedCreditProducts
                     )
                     isSaving = false
                     if (saved) {
@@ -1530,8 +1531,14 @@ fun CreditSalesScreen(
                                                     color = EmeraldBright,
                                                     style = MaterialTheme.typography.bodySmall
                                                 )
-                                                val stockText = if (isOutOfStock) "Out of Stock" else "Stock: ${product.stockQuantity}"
-                                                val stockColor = if (isOutOfStock) ErrorRed else TextMuted
+                                                val remainingStock = (product.stockQuantity - currentQty).coerceAtLeast(0)
+                                                val stockText = when {
+                                                    isOutOfStock -> "Out of Stock"
+                                                    remainingStock <= 0 -> "0 left (all selected)"
+                                                    currentQty > 0 -> "Stock: $remainingStock left (${product.stockQuantity} total)"
+                                                    else -> "Stock: ${product.stockQuantity}"
+                                                }
+                                                val stockColor = if (isOutOfStock || remainingStock <= 0) ErrorRed else TextMuted
                                                 Text(stockText, color = stockColor, style = MaterialTheme.typography.labelSmall)
                                             }
 

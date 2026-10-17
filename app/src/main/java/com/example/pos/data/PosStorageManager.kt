@@ -38,7 +38,7 @@ class PosStorageManager(context: Context? = null) {
         editPrefs { putString(KEY_PRODUCTS, jsonArray.toString()) }
     }
 
-    fun loadProducts(defaultProducts: List<Product>): List<Product> {
+    fun loadProducts(defaultProducts: List<Product> = emptyList()): List<Product> {
         val jsonString = prefs?.getString(KEY_PRODUCTS, null) ?: return defaultProducts
         return try {
             val jsonArray = JSONArray(jsonString)
@@ -87,7 +87,7 @@ class PosStorageManager(context: Context? = null) {
     }.getOrDefault(emptyList())
 
     fun areSystemNotificationsEnabled(): Boolean =
-        prefs?.getBoolean(KEY_SYSTEM_NOTIFICATIONS_ENABLED, false) ?: false
+        prefs?.getBoolean(KEY_SYSTEM_NOTIFICATIONS_ENABLED, true) ?: true
 
     fun setSystemNotificationsEnabled(enabled: Boolean) {
         editPrefs { putBoolean(KEY_SYSTEM_NOTIFICATIONS_ENABLED, enabled) }
@@ -99,7 +99,7 @@ class PosStorageManager(context: Context? = null) {
         editPrefs { putString(KEY_SALES, jsonArray.toString()) }
     }
 
-    fun loadSales(defaultSales: List<Sale>): List<Sale> {
+    fun loadSales(defaultSales: List<Sale> = emptyList()): List<Sale> {
         val jsonString = prefs?.getString(KEY_SALES, null) ?: return defaultSales
         return try {
             val jsonArray = JSONArray(jsonString)
