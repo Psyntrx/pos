@@ -623,13 +623,14 @@ class PosViewModel(
         val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
         val activeOwnerName = _shop.value.ownerName.ifBlank { "Store Owner" }
 
+        val saleTimeFormat = java.text.SimpleDateFormat("h:mm a", java.util.Locale.US).format(java.util.Date())
         val newSale = Sale(
             id = "SL-${(1093..9999).random()}",
             items = currentCartItems.map { it.copy(product = it.product.copy(shopId = activeShopId)) },
             totalAmount = creditTotal,
             paymentMethod = paymentMethod,
             customerName = if (trimmedCustomerName.isNotBlank()) trimmedCustomerName else if (isCredit) "Credit Customer" else "Walk-in Customer",
-            dateFormatted = "Just now",
+            dateFormatted = "Today, $saleTimeFormat",
             timestamp = System.currentTimeMillis(),
             employeeName = activeOwnerName,
             isCreditSale = isCredit,

@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -104,6 +105,41 @@ fun DueDateSelector(
     }
 }
 
+fun formatSaleTimestamp(sale: Sale): String {
+    if (sale.timestamp <= 0L) {
+        return if (sale.dateFormatted.isNotBlank() && !sale.dateFormatted.equals("Just now", ignoreCase = true)) {
+            sale.dateFormatted
+        } else {
+            "Today"
+        }
+    }
+    return try {
+        val saleCal = java.util.Calendar.getInstance().apply { timeInMillis = sale.timestamp }
+        val nowCal = java.util.Calendar.getInstance()
+        val timeFormat = java.text.SimpleDateFormat("h:mm a", java.util.Locale.US).format(saleCal.time)
+
+        val isSameYear = saleCal.get(java.util.Calendar.YEAR) == nowCal.get(java.util.Calendar.YEAR)
+        val isSameDay = isSameYear && saleCal.get(java.util.Calendar.DAY_OF_YEAR) == nowCal.get(java.util.Calendar.DAY_OF_YEAR)
+
+        val yesterdayCal = (nowCal.clone() as java.util.Calendar).apply { add(java.util.Calendar.DAY_OF_YEAR, -1) }
+        val isYesterday = yesterdayCal.get(java.util.Calendar.YEAR) == saleCal.get(java.util.Calendar.YEAR) &&
+                yesterdayCal.get(java.util.Calendar.DAY_OF_YEAR) == saleCal.get(java.util.Calendar.DAY_OF_YEAR)
+
+        when {
+            isSameDay -> "Today, $timeFormat"
+            isYesterday -> "Yesterday, $timeFormat"
+            isSameYear -> java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.US).format(saleCal.time)
+            else -> java.text.SimpleDateFormat("MMM d, yyyy, h:mm a", java.util.Locale.US).format(saleCal.time)
+        }
+    } catch (e: Exception) {
+        if (sale.dateFormatted.isNotBlank() && !sale.dateFormatted.equals("Just now", ignoreCase = true)) {
+            sale.dateFormatted
+        } else {
+            "Today"
+        }
+    }
+}
+
 @Composable
 fun NewSaleScreen(
     viewModel: PosViewModel,
@@ -118,6 +154,7 @@ fun NewSaleScreen(
     var isAddingNewSale by remember { mutableStateOf(false) }
     var selectedMethodFilter by remember { mutableStateOf("All") }
     var saleToDelete by remember { mutableStateOf<Sale?>(null) }
+    var showFinalDeleteConfirm by remember { mutableStateOf(false) }
     var saleToEdit by remember { mutableStateOf<Sale?>(null) }
 
     // If cart has items, automatically switch to product selection
@@ -251,167 +288,172 @@ fun NewSaleScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(BgDark)
-                .padding(16.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = PaddingValues(bottom = 24.dp)
+            ) {
                 // Header with "New Sale" action button
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "Sales Transactions",
-                            style = MaterialTheme.typography.headlineMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                        )
-                        Text(
-                            text = "$totalCount total sales recorded",
-                            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
-                        )
-                    }
-
-                    Button(
-                        onClick = { isAddingNewSale = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = EmeraldBright),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null, tint = BgDark)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("New Sale", color = BgDark, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Stats Banner Card
-                SurfaceCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    backgroundColor = SurfaceDark,
-                    borderColor = SurfaceBorder,
-                    cornerRadius = 20.dp
-                ) {
+                item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("Total Revenue", style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary))
                             Text(
-                                "KSh ${String.format("%,.0f", totalRevenue)}",
-                                style = MaterialTheme.typography.headlineSmall.copy(
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = EmeraldBright
+                                text = "Sales Transactions",
+                                style = MaterialTheme.typography.headlineMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
                                 )
+                            )
+                            Text(
+                                text = "$totalCount total sales recorded",
+                                style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
                             )
                         }
 
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .background(EmeraldContainer),
-                            contentAlignment = Alignment.Center
+                        Button(
+                            onClick = { isAddingNewSale = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = EmeraldBright),
+                            shape = RoundedCornerShape(14.dp)
                         ) {
-                            Icon(Icons.Default.ReceiptLong, contentDescription = null, tint = EmeraldBright)
+                            Icon(Icons.Default.Add, contentDescription = null, tint = BgDark)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("New Sale", color = BgDark, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                // Stats Banner Card
+                item {
+                    SurfaceCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        backgroundColor = SurfaceDark,
+                        borderColor = SurfaceBorder,
+                        cornerRadius = 20.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Total Revenue", style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary))
+                                Text(
+                                    "KSh ${String.format("%,.0f", totalRevenue)}",
+                                    style = MaterialTheme.typography.headlineSmall.copy(
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = EmeraldBright
+                                    )
+                                )
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(EmeraldContainer),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.ReceiptLong, contentDescription = null, tint = EmeraldBright)
+                            }
+                        }
+                    }
+                }
 
                 // Search Bar
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { viewModel.updateSearchQuery(it) },
-                    placeholder = { Text("Search receipt ID or customer...", color = TextMuted) },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = EmeraldBright) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = com.example.pos.ui.components.posTextFieldColors(),
-                    singleLine = true
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
+                item {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { viewModel.updateSearchQuery(it) },
+                        placeholder = { Text("Search receipt ID or customer...", color = TextMuted) },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = EmeraldBright) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = com.example.pos.ui.components.posTextFieldColors(),
+                        singleLine = true
+                    )
+                }
 
                 // Payment Method Filter Chips
-                val methodFilters = listOf("All", "Cash", "M-Pesa", "Credit")
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    methodFilters.forEach { filter ->
-                        val isSelected = selectedMethodFilter == filter
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = { selectedMethodFilter = filter },
-                            label = {
-                                Text(
-                                    text = filter,
-                                    color = if (isSelected) BgDark else TextPrimary,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                                )
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                containerColor = SurfaceDark,
-                                selectedContainerColor = EmeraldBright
-                            ),
-                            border = FilterChipDefaults.filterChipBorder(
-                                enabled = true,
+                item {
+                    val methodFilters = listOf("All", "Cash", "M-Pesa", "Credit")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        methodFilters.forEach { filter ->
+                            val isSelected = selectedMethodFilter == filter
+                            FilterChip(
                                 selected = isSelected,
-                                borderColor = SurfaceBorder,
-                                selectedBorderColor = EmeraldBright
-                            ),
-                            shape = RoundedCornerShape(20.dp)
-                        )
+                                onClick = { selectedMethodFilter = filter },
+                                label = {
+                                    Text(
+                                        text = filter,
+                                        color = if (isSelected) BgDark else TextPrimary,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                    )
+                                },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    containerColor = SurfaceDark,
+                                    selectedContainerColor = EmeraldBright
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    enabled = true,
+                                    selected = isSelected,
+                                    borderColor = SurfaceBorder,
+                                    selectedBorderColor = EmeraldBright
+                                ),
+                                shape = RoundedCornerShape(20.dp)
+                            )
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Sales List
+                // Sales Transactions List
                 if (sortedSales.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No sales records found",
-                            color = TextMuted,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        items(sortedSales) { sale ->
-                            SaleItemCard(
-                                sale = sale,
-                                onEdit = { saleToEdit = sale },
-                                onDelete = { saleToDelete = sale }
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 40.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No sales records found",
+                                color = TextMuted,
+                                style = MaterialTheme.typography.bodyLarge
                             )
                         }
+                    }
+                } else {
+                    items(sortedSales, key = { it.id }) { sale ->
+                        SaleItemCard(
+                            sale = sale,
+                            onEdit = { saleToEdit = sale },
+                            onDelete = {
+                                saleToDelete = sale
+                                showFinalDeleteConfirm = false
+                            }
+                        )
                     }
                 }
             }
         }
     }
 
-    // Delete Sale Confirmation Dialog
-    if (saleToDelete != null) {
+    // 1. Initial Delete Sale Confirmation Dialog
+    if (saleToDelete != null && !showFinalDeleteConfirm) {
         val target = saleToDelete!!
         AlertDialog(
-            onDismissRequest = { saleToDelete = null },
+            onDismissRequest = {
+                saleToDelete = null
+                showFinalDeleteConfirm = false
+            },
             containerColor = SurfaceDark,
             title = {
                 Text("Delete Sale", color = TextPrimary, fontWeight = FontWeight.Bold)
@@ -425,16 +467,70 @@ fun NewSaleScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.deleteSale(target.id)
-                        saleToDelete = null
+                        showFinalDeleteConfirm = true
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444))
+                    colors = ButtonDefaults.buttonColors(containerColor = EmeraldBright),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Delete", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("Delete", color = BgDark, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { saleToDelete = null }) {
+                TextButton(onClick = {
+                    saleToDelete = null
+                    showFinalDeleteConfirm = false
+                }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            }
+        )
+    }
+
+    // 2. Secondary Confirmation Dialog ("just to be sure sure")
+    if (saleToDelete != null && showFinalDeleteConfirm) {
+        val target = saleToDelete!!
+        AlertDialog(
+            onDismissRequest = {
+                saleToDelete = null
+                showFinalDeleteConfirm = false
+            },
+            containerColor = SurfaceDark,
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = WarningYellow,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Confirm Deletion", color = TextPrimary, fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Text(
+                    "Are you sure sure you want to permanently delete sale #${target.id}? This action cannot be undone.",
+                    color = TextSecondary
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteSale(target.id)
+                        saleToDelete = null
+                        showFinalDeleteConfirm = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = EmeraldBright),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Yes, Delete", color = BgDark, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    saleToDelete = null
+                    showFinalDeleteConfirm = false
+                }) {
                     Text("Cancel", color = TextSecondary)
                 }
             }
@@ -808,7 +904,7 @@ fun SaleItemCard(
                         )
                     )
                     Text(
-                        text = sale.dateFormatted,
+                        text = formatSaleTimestamp(sale),
                         style = MaterialTheme.typography.bodySmall.copy(color = TextMuted)
                     )
                 }
@@ -835,7 +931,7 @@ fun SaleItemCard(
                     }
 
                     IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = TextSecondary, modifier = Modifier.size(18.dp))
                     }
                 }
             }
