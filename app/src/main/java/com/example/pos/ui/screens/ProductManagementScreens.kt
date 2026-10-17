@@ -26,6 +26,8 @@ import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.LocalGroceryStore
@@ -52,7 +54,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.pos.data.Product
 import com.example.pos.data.ProductImageStorage
-import com.example.pos.ui.components.FilterChipItem
 import com.example.pos.ui.components.PrimaryGreenButton
 import com.example.pos.ui.components.StockBadge
 import com.example.pos.ui.components.SurfaceCard
@@ -61,8 +62,6 @@ import com.example.pos.viewmodel.PosViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-private val standardProductCategories = listOf("Groceries", "Beverages", "Snacks", "Household")
 
 private fun suggestedProductSku(products: List<Product>): String {
     val existingSkus = products.map { it.sku.trim().lowercase() }.toSet()
@@ -81,132 +80,116 @@ fun ProductsScreen(
     onOpenAddProduct: () -> Unit
 ) {
     var editingProduct by remember { mutableStateOf<Product?>(null) }
+    var deletingProduct by remember { mutableStateOf<Product?>(null) }
     val products by viewModel.products.collectAsState()
-    val selectedCategory by viewModel.selectedCategory.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
-    val categories = remember(products) {
-        listOf("All") + (standardProductCategories + products.map { it.category.trim() })
-            .filter(String::isNotBlank)
-            .distinctBy(String::lowercase)
-    }
     val filteredProducts = products.filter { product ->
-        val matchesCategory = selectedCategory == "All" ||
-            product.category.equals(selectedCategory, ignoreCase = true)
-        val matchesSearch = searchQuery.isBlank() ||
+        searchQuery.isBlank() ||
             product.name.contains(searchQuery.trim(), ignoreCase = true) ||
-            product.sku.contains(searchQuery.trim(), ignoreCase = true)
-        matchesCategory && matchesSearch
+            product.sku.contains(searchQuery.trim(), ignoreCase = true) ||
+            product.category.contains(searchQuery.trim(), ignoreCase = true)
     }
     val lowStockCount = products.count(Product::isLowStock)
 
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .background(BgDark)
-            .padding(horizontal = 18.dp)
+            .padding(horizontal = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(top = 14.dp, bottom = 28.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 14.dp, bottom = 18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column {
-                Text(
-                    text = "Inventory",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        color = TextPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
-                )
-                Text(
-                    text = "Your products, under control",
-                    style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
-                )
-            }
-            FilledTonalButton(
-                onClick = onOpenAddProduct,
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = EmeraldBright,
-                    contentColor = TextOnPrimary
-                ),
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Add product", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-            }
-        }
-
-        InventoryOverviewCard(totalProducts = products.size, lowStockCount = lowStockCount)
-        Spacer(Modifier.height(16.dp))
-
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = viewModel::updateSearchQuery,
-            placeholder = { Text("Search name or SKU", color = TextMuted) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = EmeraldBright) },
-            trailingIcon = {
-                if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { viewModel.updateSearchQuery("") }) {
-                        Icon(Icons.Default.Clear, contentDescription = "Clear search", tint = TextSecondary)
-                    }
+                Column {
+                    Text(
+                        text = "Stock",
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                    Text(
+                        text = "Your products, under control",
+                        style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
+                    )
                 }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(17.dp),
-            textStyle = LocalTextStyle.current.copy(color = TextPrimary),
-            colors = productTextFieldColors(),
-            singleLine = true
-        )
-        Spacer(Modifier.height(12.dp))
-
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(vertical = 2.dp)
-        ) {
-            items(categories) { category ->
-                FilterChipItem(
-                    label = category,
-                    isSelected = selectedCategory.equals(category, ignoreCase = true),
-                    onClick = { viewModel.selectCategory(category) }
-                )
+                FilledTonalButton(
+                    onClick = onOpenAddProduct,
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = EmeraldBright,
+                        contentColor = TextOnPrimary
+                    ),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Add product", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
             }
         }
-        Spacer(Modifier.height(12.dp))
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 9.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text("PRODUCT CATALOG", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
-            Text("${filteredProducts.size} items", color = TextSecondary, fontSize = 12.sp)
+        item {
+            StockOverviewCard(totalProducts = products.size, lowStockCount = lowStockCount)
+        }
+
+        item {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = viewModel::updateSearchQuery,
+                placeholder = { Text("Search products...", color = TextMuted) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = EmeraldBright) },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.updateSearchQuery("") }) {
+                            Icon(Icons.Default.Clear, contentDescription = "Clear search", tint = TextSecondary)
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(17.dp),
+                textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                colors = productTextFieldColors(),
+                singleLine = true
+            )
+        }
+
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp, bottom = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("PRODUCT CATALOG", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
+                Text("${filteredProducts.size} items", color = TextSecondary, fontSize = 12.sp)
+            }
         }
 
         if (filteredProducts.isEmpty()) {
-            EmptyProductsState(
-                hasFilters = searchQuery.isNotBlank() || selectedCategory != "All",
-                onClearFilters = {
-                    viewModel.updateSearchQuery("")
-                    viewModel.selectCategory("All")
-                },
-                onAddProduct = onOpenAddProduct,
-                modifier = Modifier.weight(1f)
-            )
+            item {
+                EmptyProductsState(
+                    hasFilters = searchQuery.isNotBlank(),
+                    onClearFilters = { viewModel.updateSearchQuery("") },
+                    onAddProduct = onOpenAddProduct,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                )
+            }
         } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                contentPadding = PaddingValues(bottom = 18.dp)
-            ) {
-                items(filteredProducts, key = Product::id) { product ->
-                    ProductListItemCard(product = product, onEdit = { editingProduct = product })
-                }
+            items(filteredProducts, key = Product::id) { product ->
+                ProductListItemCard(
+                    product = product,
+                    onEdit = { editingProduct = product },
+                    onDelete = { deletingProduct = product }
+                )
             }
         }
     }
@@ -218,10 +201,21 @@ fun ProductsScreen(
             onDismiss = { editingProduct = null }
         )
     }
+
+    deletingProduct?.let { product ->
+        DeleteProductDialog(
+            product = product,
+            onConfirm = {
+                viewModel.deleteProduct(product.id)
+                deletingProduct = null
+            },
+            onDismiss = { deletingProduct = null }
+        )
+    }
 }
 
 @Composable
-private fun InventoryOverviewCard(totalProducts: Int, lowStockCount: Int) {
+private fun StockOverviewCard(totalProducts: Int, lowStockCount: Int) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -239,7 +233,7 @@ private fun InventoryOverviewCard(totalProducts: Int, lowStockCount: Int) {
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("INVENTORY OVERVIEW", color = EmeraldBright.copy(alpha = 0.9f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
+                Text("STOCK OVERVIEW", color = EmeraldBright.copy(alpha = 0.9f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
                 Spacer(Modifier.height(5.dp))
                 Text("$totalProducts", color = TextPrimary, fontSize = 29.sp, fontWeight = FontWeight.Bold)
                 Text(if (totalProducts == 1) "product in your catalog" else "products in your catalog", color = TextSecondary, fontSize = 12.sp)
@@ -273,7 +267,11 @@ private fun InventoryOverviewCard(totalProducts: Int, lowStockCount: Int) {
 }
 
 @Composable
-fun ProductListItemCard(product: Product, onEdit: () -> Unit) {
+fun ProductListItemCard(
+    product: Product,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
     val accent = when (product.category.lowercase()) {
         "groceries" -> Color(0xFF16834A)
         "beverages" -> Color(0xFF2879B9)
@@ -319,18 +317,20 @@ fun ProductListItemCard(product: Product, onEdit: () -> Unit) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    "${product.category}  ·  ${product.sku}",
-                    color = TextMuted,
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                if (product.category.isNotBlank()) {
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        product.category,
+                        color = TextMuted,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 Spacer(Modifier.height(8.dp))
                 StockBadge(isLowStock = product.isLowStock, stockQty = product.stockQuantity)
             }
-            Spacer(Modifier.width(7.dp))
+            Spacer(Modifier.width(6.dp))
             Column(horizontalAlignment = Alignment.End) {
                 Text(
                     "KSh ${String.format("%,.0f", product.sellingPrice)}",
@@ -341,8 +341,24 @@ fun ProductListItemCard(product: Product, onEdit: () -> Unit) {
                 )
                 Text("per ${product.unit}", color = TextMuted, fontSize = 10.sp)
             }
-            IconButton(onClick = onEdit) {
-                Icon(Icons.Default.Edit, contentDescription = "Edit ${product.name}", tint = EmeraldBright)
+            Spacer(Modifier.width(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onEdit, modifier = Modifier.size(34.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit ${product.name}",
+                        tint = EmeraldBright,
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
+                IconButton(onClick = onDelete, modifier = Modifier.size(34.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteOutline,
+                        contentDescription = "Delete ${product.name}",
+                        tint = ErrorRed,
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
             }
         }
     }
@@ -355,10 +371,9 @@ private fun EditProductDialog(
     onDismiss: () -> Unit
 ) {
     val products by viewModel.products.collectAsState()
-    val initialSku = product.sku.ifBlank { suggestedProductSku(products) }
+    val preservedSku = product.sku.ifBlank { suggestedProductSku(products) }
     var name by remember(product.id) { mutableStateOf(product.name) }
     var category by remember(product.id) { mutableStateOf(product.category) }
-    var sku by remember(product.id) { mutableStateOf(initialSku) }
     var unit by remember(product.id) { mutableStateOf(product.unit.ifBlank { "pcs" }) }
     var buyingPrice by remember(product.id) { mutableStateOf(product.buyingPrice.toString()) }
     var sellingPrice by remember(product.id) { mutableStateOf(product.sellingPrice.toString()) }
@@ -373,11 +388,7 @@ private fun EditProductDialog(
     val parsedSellingPrice = sellingPrice.toDoubleOrNull()
     val parsedQuantity = quantity.toIntOrNull()
     val parsedMinStock = minStock.toIntOrNull()
-    val effectiveSku = sku.trim().ifBlank { initialSku }
-    val duplicateSku = effectiveSku.isNotBlank() && products.any {
-        it.id != product.id && it.sku.isNotBlank() && it.sku.equals(effectiveSku, ignoreCase = true)
-    }
-    val valid = name.isNotBlank() && category.isNotBlank() && !duplicateSku &&
+    val valid = name.isNotBlank() &&
         unit.isNotBlank() && parsedBuyingPrice != null && parsedBuyingPrice.isFinite() && parsedBuyingPrice >= 0 &&
         parsedSellingPrice != null && parsedSellingPrice.isFinite() && parsedSellingPrice > 0 &&
         parsedQuantity != null && parsedQuantity >= 0 && parsedMinStock != null && parsedMinStock >= 0
@@ -392,15 +403,7 @@ private fun EditProductDialog(
             ) {
                 ProductPhotoField(imageUri = imageUri, onImageUriChange = { imageUri = it })
                 ProductFormField(name, { name = it; saveError = null }, "Product name *", placeholder = "Product name")
-                ProductFormField(category, { category = it; saveError = null }, "Category *", placeholder = "Category")
-                ProductFormField(
-                    sku,
-                    { sku = it; saveError = null },
-                    "SKU / barcode *",
-                    placeholder = "Unique code",
-                    isError = attemptedSave && (sku.isBlank() || duplicateSku),
-                    supportingText = if (attemptedSave && duplicateSku) "This SKU is already in use." else null
-                )
+                ProductFormField(category, { category = it; saveError = null }, "Category (optional)", placeholder = "e.g. Groceries, Beverages")
                 ProductFormField(unit, { unit = it; saveError = null }, "Unit *", placeholder = "e.g. kg, pcs, bottle")
                 ProductFormField(buyingPrice, { buyingPrice = it; saveError = null }, "Cost price *", prefix = "KSh", keyboardType = KeyboardType.Decimal)
                 ProductFormField(sellingPrice, { sellingPrice = it; saveError = null }, "Selling price *", prefix = "KSh", keyboardType = KeyboardType.Decimal)
@@ -421,8 +424,8 @@ private fun EditProductDialog(
                     val saved = viewModel.updateProduct(
                         productId = product.id,
                         name = name,
-                        category = category,
-                        sku = effectiveSku,
+                        category = category.trim(),
+                        sku = preservedSku,
                         unit = unit,
                         buyingPrice = parsedBuyingPrice!!,
                         sellingPrice = parsedSellingPrice!!,
@@ -431,12 +434,65 @@ private fun EditProductDialog(
                         supplier = supplier,
                         imageUri = imageUri
                     )
-                    if (saved) onDismiss() else saveError = "Could not update the product. Check its SKU and try again."
+                    if (saved) onDismiss() else saveError = "Could not update the product. Please try again."
                 }
             }) { Text("Save changes", color = EmeraldBright, fontWeight = FontWeight.Bold) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel", color = TextSecondary) }
+        },
+        containerColor = SurfaceDark,
+        titleContentColor = TextPrimary,
+        textContentColor = TextSecondary
+    )
+}
+
+@Composable
+private fun DeleteProductDialog(
+    product: Product,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(CircleShape)
+                    .background(ErrorRed.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = null,
+                    tint = ErrorRed,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        },
+        title = {
+            Text("Delete product", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        },
+        text = {
+            Text(
+                "Are you sure you want to delete \"${product.name}\"? This action cannot be undone and will remove it from your stock catalog.",
+                color = TextSecondary,
+                fontSize = 13.sp
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(contentColor = ErrorRed)
+            ) {
+                Text("Delete", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = TextSecondary)
+            }
         },
         containerColor = SurfaceDark,
         titleContentColor = TextPrimary,
@@ -458,7 +514,7 @@ private fun EmptyProductsState(
         cornerRadius = 22.dp
     ) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(18.dp),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp, horizontal = 18.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -495,7 +551,6 @@ fun AddProductScreen(
     val products by viewModel.products.collectAsState()
     var name by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
-    var sku by remember { mutableStateOf(suggestedProductSku(products)) }
     var unit by remember { mutableStateOf("") }
     var buyingPrice by remember { mutableStateOf("") }
     var sellingPrice by remember { mutableStateOf("") }
@@ -503,28 +558,20 @@ fun AddProductScreen(
     var minStock by remember { mutableStateOf("") }
     var supplier by remember { mutableStateOf("") }
     var imageUri by remember { mutableStateOf<String?>(null) }
-    var categoryMenuExpanded by remember { mutableStateOf(false) }
     var attemptedSave by remember { mutableStateOf(false) }
     var saveError by remember { mutableStateOf<String?>(null) }
-    val categories = remember(products) {
-        (standardProductCategories + products.map { it.category.trim() })
-            .filter(String::isNotBlank)
-            .distinctBy(String::lowercase)
-    }
+
     val parsedBuyingPrice = buyingPrice.toDoubleOrNull()
     val parsedSellingPrice = sellingPrice.toDoubleOrNull()
     val parsedQuantity = quantity.toIntOrNull()
     val parsedMinStock = minStock.toIntOrNull()
-    val duplicateSku = sku.isNotBlank() && products.any { it.sku.equals(sku.trim(), ignoreCase = true) }
     val nameError = attemptedSave && name.isBlank()
-    val categoryError = attemptedSave && category.isBlank()
-    val skuError = attemptedSave && (sku.isBlank() || duplicateSku)
     val unitError = attemptedSave && unit.isBlank()
     val buyingPriceError = attemptedSave && (parsedBuyingPrice == null || !parsedBuyingPrice.isFinite() || parsedBuyingPrice < 0)
     val sellingPriceError = attemptedSave && (parsedSellingPrice == null || !parsedSellingPrice.isFinite() || parsedSellingPrice <= 0)
     val quantityError = attemptedSave && (parsedQuantity == null || parsedQuantity < 0)
     val minStockError = attemptedSave && (parsedMinStock == null || parsedMinStock < 0)
-    val formIsValid = name.isNotBlank() && category.isNotBlank() && sku.isNotBlank() && !duplicateSku &&
+    val formIsValid = name.isNotBlank() &&
         unit.isNotBlank() && parsedBuyingPrice != null && parsedBuyingPrice.isFinite() && parsedBuyingPrice >= 0 &&
         parsedSellingPrice != null && parsedSellingPrice.isFinite() && parsedSellingPrice > 0 &&
         parsedQuantity != null && parsedQuantity >= 0 && parsedMinStock != null && parsedMinStock >= 0
@@ -573,75 +620,23 @@ fun AddProductScreen(
                     supportingText = if (nameError) "Enter a product name." else null
                 )
                 Spacer(Modifier.height(12.dp))
-                ExposedDropdownMenuBox(
-                    expanded = categoryMenuExpanded,
-                    onExpandedChange = { categoryMenuExpanded = it }
-                ) {
-                    ProductFormField(
-                        value = category,
-                        onValueChange = {},
-                        label = "Category *",
-                        placeholder = "Choose a category",
-                        readOnly = true,
-                        isError = categoryError,
-                        supportingText = if (categoryError) "Choose a category." else null,
-                        trailingIcon = {
-                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryMenuExpanded)
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                    )
-                    ExposedDropdownMenu(
-                        expanded = categoryMenuExpanded,
-                        onDismissRequest = { categoryMenuExpanded = false },
-                        modifier = Modifier.background(SurfaceDark)
-                    ) {
-                        categories.forEach { option ->
-                            DropdownMenuItem(
-                                text = { Text(option, color = TextPrimary) },
-                                onClick = {
-                                    category = option
-                                    categoryMenuExpanded = false
-                                    saveError = null
-                                },
-                                leadingIcon = if (category.equals(option, true)) {
-                                    { Icon(Icons.Default.CheckCircle, contentDescription = null, tint = EmeraldBright) }
-                                } else null
-                            )
-                        }
-                    }
-                }
+                ProductFormField(
+                    value = category,
+                    onValueChange = { category = it; saveError = null },
+                    label = "Category (optional)",
+                    placeholder = "e.g. Groceries, Beverages",
+                    modifier = Modifier.fillMaxWidth()
+                )
                 Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
-                    ProductFormField(
-                        value = sku,
-                        onValueChange = { sku = it; saveError = null },
-                        label = "SKU / barcode *",
-                        placeholder = "Enter unique code",
-                        isError = skuError,
-                        supportingText = when {
-                            skuError && duplicateSku -> "This SKU is already in use."
-                            skuError -> "Enter a SKU."
-                            else -> null
-                        },
-                        trailingIcon = {
-                            IconButton(onClick = { sku = suggestedProductSku(products); saveError = null }) {
-                                Icon(Icons.Default.Refresh, contentDescription = "Generate a new SKU", tint = EmeraldBright)
-                            }
-                        },
-                        modifier = Modifier.weight(1.4f)
-                    )
-                    ProductFormField(
-                        value = unit,
-                        onValueChange = { unit = it; saveError = null },
-                        label = "Unit *",
-                        placeholder = "Enter unit",
-                        isError = unitError,
-                        supportingText = if (unitError) "Enter a unit." else null,
-                        modifier = Modifier.weight(0.8f)
-                    )
-                }
+                ProductFormField(
+                    value = unit,
+                    onValueChange = { unit = it; saveError = null },
+                    label = "Unit *",
+                    placeholder = "e.g. pcs, kg, bottle",
+                    isError = unitError,
+                    supportingText = if (unitError) "Enter a unit." else null,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             Spacer(Modifier.height(14.dp))
@@ -739,7 +734,7 @@ fun AddProductScreen(
                             val saved = viewModel.addProduct(
                                 name = name.trim(),
                                 category = category.trim(),
-                                sku = sku.trim(),
+                                sku = suggestedProductSku(products),
                                 unit = unit.trim(),
                                 buyingPrice = parsedBuyingPrice!!,
                                 sellingPrice = parsedSellingPrice!!,
@@ -748,7 +743,7 @@ fun AddProductScreen(
                                 supplier = supplier.trim(),
                                 imageUri = imageUri
                             )
-                            if (saved) onClose() else saveError = "Could not save this product. Check the SKU and try again."
+                            if (saved) onClose() else saveError = "Could not save this product. Please try again."
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),

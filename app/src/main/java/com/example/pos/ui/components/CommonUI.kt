@@ -525,7 +525,7 @@ fun CustomBottomNavBar(
     val items = listOf(
         NavigationItem("Home", Icons.Filled.Home, Icons.Outlined.Home),
         NavigationItem("Sales", Icons.Filled.PointOfSale, Icons.Outlined.PointOfSale),
-        NavigationItem("Inventory", Icons.Filled.Inventory, Icons.Outlined.Inventory2),
+        NavigationItem("Stock", Icons.Filled.Inventory, Icons.Outlined.Inventory2),
         NavigationItem("Reports", Icons.Filled.BarChart, Icons.Outlined.BarChart),
         NavigationItem("More", Icons.Filled.MoreHoriz, Icons.Outlined.MoreHoriz)
     )

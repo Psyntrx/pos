@@ -314,5 +314,91 @@ class PosViewModelProductTest {
         assertTrue(updated.sku.isNotBlank())
         assertEquals(155.0, updated.sellingPrice, 0.001)
     }
+
+    @Test
+    fun addProductAllowsBlankCategoryAndAutoGeneratesSku() {
+        val viewModel = PosViewModel(application, supabase = null)
+        val saved = viewModel.addProduct(
+            name = "Apples",
+            category = "   ",
+            sku = "",
+            unit = "kg",
+            buyingPrice = 50.0,
+            sellingPrice = 80.0,
+            quantity = 20,
+            minStock = 5,
+            supplier = "Farm Fresh"
+        )
+
+        assertTrue(saved)
+        val product = viewModel.products.value.first()
+        assertEquals("Apples", product.name)
+        assertEquals("", product.category)
+        assertTrue(product.sku.isNotBlank())
+        assertEquals("kg", product.unit)
+    }
+
+    @Test
+    fun updateProductAllowsBlankCategory() {
+        val viewModel = PosViewModel(application, supabase = null)
+        viewModel.addProduct(
+            name = "Notebook",
+            category = "Stationery",
+            sku = "NOTE-01",
+            unit = "pcs",
+            buyingPrice = 30.0,
+            sellingPrice = 50.0,
+            quantity = 10,
+            minStock = 2,
+            supplier = ""
+        )
+        val product = viewModel.products.value.first()
+
+        val success = viewModel.updateProduct(
+            productId = product.id,
+            name = "Notebook A5",
+            category = "",
+            sku = "NOTE-01",
+            unit = "pcs",
+            buyingPrice = 30.0,
+            sellingPrice = 55.0,
+            quantity = 15,
+            minStock = 2,
+            supplier = "Local"
+        )
+
+        assertTrue(success)
+        val updated = viewModel.products.value.first { it.id == product.id }
+        assertEquals("Notebook A5", updated.name)
+        assertEquals("", updated.category)
+        assertEquals(55.0, updated.sellingPrice, 0.001)
+    }
+
+    @Test
+    fun deleteProductRemovesProductAndCartEntry() {
+        val viewModel = PosViewModel(application, supabase = null)
+        viewModel.addProduct(
+            name = "Item to Delete",
+            category = "Groceries",
+            sku = "DEL-01",
+            unit = "pcs",
+            buyingPrice = 10.0,
+            sellingPrice = 20.0,
+            quantity = 5,
+            minStock = 1,
+            supplier = ""
+        )
+        val product = viewModel.products.value.first { it.sku == "DEL-01" }
+        viewModel.addToCart(product)
+        assertTrue(viewModel.cart.value.any { it.product.id == product.id })
+
+        val deleted = viewModel.deleteProduct(product.id)
+        assertTrue(deleted)
+        assertFalse(viewModel.products.value.any { it.id == product.id })
+        assertFalse(viewModel.cart.value.any { it.product.id == product.id })
+
+        // Deleting non-existent product returns false
+        assertFalse(viewModel.deleteProduct("non-existent-id"))
+    }
 }
 

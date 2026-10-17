@@ -48,10 +48,10 @@ class PosViewModel(
     private val _currentScreen = MutableStateFlow(if (isInitialSessionValid) "main" else "splash")
     val currentScreen: StateFlow<String> = _currentScreen.asStateFlow()
 
-    private val _selectedTab = MutableStateFlow(0) // 0: Home, 1: Sales, 2: Inventory, 3: Reports, 4: More
+    private val _selectedTab = MutableStateFlow(0) // 0: Home, 1: Sales, 2: Stock, 3: Reports, 4: More
     val selectedTab: StateFlow<Int> = _selectedTab.asStateFlow()
 
-    // Products & Inventory
+    // Products & Stock
     private val defaultProducts = emptyList<Product>()
     private val _products = MutableStateFlow(storageManager.loadProducts(defaultProducts))
     val products: StateFlow<List<Product>> = _products.asStateFlow()
@@ -784,16 +784,26 @@ class PosViewModel(
 
     // Add Product
     fun addProduct(
-        name: String, category: String, sku: String, unit: String,
+        name: String, category: String = "", sku: String = "", unit: String,
         buyingPrice: Double, sellingPrice: Double, quantity: Int, minStock: Int, supplier: String,
         imageUri: String? = null
     ): Boolean {
         val normalizedName = name.trim()
         val normalizedCategory = category.trim()
-        val normalizedSku = sku.trim()
-        val normalizedUnit = unit.trim()
-        if (normalizedName.isBlank() || normalizedCategory.isBlank() || normalizedSku.isBlank() ||
-            normalizedUnit.isBlank() || !buyingPrice.isFinite() || buyingPrice < 0 ||
+        val rawSku = sku.trim()
+        val normalizedSku = if (rawSku.isBlank()) {
+            val existing = _products.value.map { it.sku.trim().lowercase() }.toSet()
+            var num = (_products.value.size + 1).coerceAtLeast(1)
+            var cand = "SKU-${num.toString().padStart(4, '0')}"
+            while (cand.lowercase() in existing) {
+                num++
+                cand = "SKU-${num.toString().padStart(4, '0')}"
+            }
+            cand
+        } else rawSku
+        val normalizedUnit = unit.trim().ifBlank { "pcs" }
+        if (normalizedName.isBlank() ||
+            !buyingPrice.isFinite() || buyingPrice < 0 ||
             !sellingPrice.isFinite() || sellingPrice <= 0 || quantity < 0 || minStock < 0 ||
             _products.value.any { it.sku.equals(normalizedSku, ignoreCase = true) }
         ) return false
@@ -810,7 +820,7 @@ class PosViewModel(
             stockQuantity = quantity,
             minStock = minStock,
             supplier = supplier.trim(),
-            iconType = normalizedCategory.lowercase(),
+            iconType = normalizedCategory.lowercase().ifBlank { "box" },
             imageUri = imageUri,
             shopId = activeShopId
         )
@@ -830,7 +840,7 @@ class PosViewModel(
 
     fun updateProduct(
         productId: String,
-        name: String, category: String, sku: String, unit: String,
+        name: String, category: String = "", sku: String = "", unit: String,
         buyingPrice: Double, sellingPrice: Double, quantity: Int, minStock: Int, supplier: String,
         imageUri: String? = currentProductImageUri(productId)
     ): Boolean {
@@ -842,7 +852,7 @@ class PosViewModel(
             currentProduct.sku.ifBlank { "SKU-${productId.takeLast(4).uppercase()}" }
         } else rawSku
         val normalizedUnit = unit.trim().ifBlank { "pcs" }
-        if (normalizedName.isBlank() || normalizedCategory.isBlank() ||
+        if (normalizedName.isBlank() ||
             !buyingPrice.isFinite() || buyingPrice < 0 ||
             !sellingPrice.isFinite() || sellingPrice <= 0 || quantity < 0 || minStock < 0 ||
             _products.value.any { it.id != productId && it.sku.isNotBlank() && it.sku.equals(normalizedSku, ignoreCase = true) }
@@ -859,7 +869,7 @@ class PosViewModel(
             stockQuantity = quantity,
             minStock = minStock,
             supplier = supplier.trim(),
-            iconType = normalizedCategory.lowercase(),
+            iconType = normalizedCategory.lowercase().ifBlank { "box" },
             imageUri = imageUri,
             shopId = currentProduct.shopId ?: activeShopId
         )
@@ -875,6 +885,26 @@ class PosViewModel(
         viewModelScope.launch {
             try {
                 service.upsertProduct(updatedProduct, activeShopId)
+            } finally {
+                pendingProductUpdates.remove(productId)
+            }
+        }
+        return true
+    }
+
+    // Delete Product
+    fun deleteProduct(productId: String): Boolean {
+        val target = _products.value.find { it.id == productId } ?: return false
+        _products.update { products -> products.filter { it.id != productId } }
+        storageManager.saveProducts(_products.value)
+        _cart.update { items -> items.filter { it.product.id != productId } }
+        application?.let { ProductImageStorage.deleteIfOwned(it, target.imageUri) }
+
+        val service = supabase ?: return true
+        pendingProductUpdates.add(productId)
+        viewModelScope.launch {
+            try {
+                service.deleteProduct(productId)
             } finally {
                 pendingProductUpdates.remove(productId)
             }
