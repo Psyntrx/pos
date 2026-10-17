@@ -176,7 +176,7 @@ class AuthViewModel(
             return
         }
 
-        val initialUserId = supabase.getUserId() ?: ""
+        val initialUserId = supabase?.getUserId() ?: ""
         val targetShopId = initialUserId.takeIf { it.isNotBlank() }
             ?: "shop_${state.email.substringBefore('@').ifBlank { "main" }}"
 
