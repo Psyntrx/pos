@@ -148,7 +148,7 @@ fun NotificationCenterScreen(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = if (unreadCount > 0) "$unreadCount unread ${if (unreadCount == 1) "alert" else "alerts"}" else "Inventory alerts and preferences",
+                    text = if (unreadCount > 0) "$unreadCount unread ${if (unreadCount == 1) "alert" else "alerts"}" else "Stock alerts and preferences",
                     color = if (unreadCount > 0) EmeraldBright else TextMuted,
                     fontSize = 12.sp,
                     fontWeight = if (unreadCount > 0) FontWeight.SemiBold else FontWeight.Normal
