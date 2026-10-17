@@ -292,10 +292,18 @@ class PosViewModel(
                         val currentMap = currentList.associateBy { it.id }
                         val remoteIds = remoteProducts.mapTo(mutableSetOf()) { it.id }
                         val refreshed = remoteProducts.map { remote ->
+                            val local = currentMap[remote.id]
+                            val mergedSku = local?.sku?.takeIf { it.isNotBlank() }
+                                ?: remote.sku.takeIf { it.isNotBlank() }
+                                ?: "SKU-${remote.id.takeLast(4).uppercase()}"
+                            val mergedImageUri = local?.imageUri ?: remote.imageUri
                             if (pendingProductUpdates.contains(remote.id)) {
-                                currentMap[remote.id] ?: remote
+                                currentMap[remote.id] ?: remote.copy(sku = mergedSku, imageUri = mergedImageUri)
                             } else {
-                                remote.copy(imageUri = currentMap[remote.id]?.imageUri)
+                                remote.copy(
+                                    sku = mergedSku,
+                                    imageUri = mergedImageUri
+                                )
                             }
                         }
                         refreshed + currentList.filter {
@@ -666,6 +674,29 @@ class PosViewModel(
         return newSale
     }
 
+    fun deleteSale(saleId: String) {
+        _salesHistory.update { list -> list.filterNot { it.id == saleId } }
+        storageManager.saveSales(_salesHistory.value)
+
+        val service = supabase ?: return
+        viewModelScope.launch {
+            service.deleteSale(saleId)
+        }
+    }
+
+    fun updateSale(updatedSale: Sale) {
+        _salesHistory.update { list ->
+            list.map { if (it.id == updatedSale.id) updatedSale else it }
+        }
+        storageManager.saveSales(_salesHistory.value)
+
+        val service = supabase ?: return
+        viewModelScope.launch {
+            val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+            service.upsertSale(updatedSale, activeShopId)
+        }
+    }
+
     fun dismissReceiptModal() {
         _completedSale.value = null
     }
@@ -805,12 +836,15 @@ class PosViewModel(
         val currentProduct = _products.value.find { it.id == productId } ?: return false
         val normalizedName = name.trim()
         val normalizedCategory = category.trim()
-        val normalizedSku = sku.trim()
-        val normalizedUnit = unit.trim()
-        if (normalizedName.isBlank() || normalizedCategory.isBlank() || normalizedSku.isBlank() ||
-            normalizedUnit.isBlank() || !buyingPrice.isFinite() || buyingPrice < 0 ||
+        val rawSku = sku.trim()
+        val normalizedSku = if (rawSku.isBlank()) {
+            currentProduct.sku.ifBlank { "SKU-${productId.takeLast(4).uppercase()}" }
+        } else rawSku
+        val normalizedUnit = unit.trim().ifBlank { "pcs" }
+        if (normalizedName.isBlank() || normalizedCategory.isBlank() ||
+            !buyingPrice.isFinite() || buyingPrice < 0 ||
             !sellingPrice.isFinite() || sellingPrice <= 0 || quantity < 0 || minStock < 0 ||
-            _products.value.any { it.id != productId && it.sku.equals(normalizedSku, ignoreCase = true) }
+            _products.value.any { it.id != productId && it.sku.isNotBlank() && it.sku.equals(normalizedSku, ignoreCase = true) }
         ) return false
 
         val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
@@ -859,10 +893,13 @@ class PosViewModel(
         supplier: String,
         employeeName: String
     ) {
+        if (quantityAdded <= 0) return
+
         _products.update { currentList ->
             currentList.map { p ->
                 if (p.id == productId) {
                     p.copy(
+                        stockQuantity = p.stockQuantity + quantityAdded,
                         buyingPrice = if (buyingPrice > 0) buyingPrice else p.buyingPrice,
                         sellingPrice = if (sellingPrice > 0) sellingPrice else p.sellingPrice,
                         supplier = if (supplier.isNotBlank()) supplier else p.supplier

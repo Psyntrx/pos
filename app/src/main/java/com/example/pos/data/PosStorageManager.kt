@@ -330,11 +330,14 @@ fun Product.toJson(): JSONObject {
 }
 
 fun JSONObject.toProduct(): Product {
+    val recordId = getString("id")
+    val rawSku = optString("sku", "")
+    val resolvedSku = if (rawSku.isBlank()) "SKU-${recordId.takeLast(4).uppercase()}" else rawSku
     return Product(
-        id = getString("id"),
+        id = recordId,
         name = getString("name"),
         category = getString("category"),
-        sku = getString("sku"),
+        sku = resolvedSku,
         unit = optString("unit", "pcs"),
         buyingPrice = getDouble("buyingPrice"),
         sellingPrice = getDouble("sellingPrice"),

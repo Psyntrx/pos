@@ -244,4 +244,75 @@ class PosViewModelProductTest {
         val cartItem = viewModel.cart.value.first { it.product.id == limitedProduct.id }
         assertEquals(2, cartItem.quantity)
     }
+
+    @Test
+    fun recordStockInIncrementsStockQuantity() {
+        val viewModel = PosViewModel(application, supabase = null)
+        viewModel.addProduct(
+            name = "Flour",
+            category = "Household",
+            sku = "FLOUR-01",
+            unit = "2kg",
+            buyingPrice = 100.0,
+            sellingPrice = 140.0,
+            quantity = 0,
+            minStock = 3,
+            supplier = ""
+        )
+        val product = viewModel.products.value.first { it.sku == "FLOUR-01" }
+        assertEquals(0, product.stockQuantity)
+
+        viewModel.recordStockIn(
+            productId = product.id,
+            quantityAdded = 15,
+            buyingPrice = 105.0,
+            sellingPrice = 145.0,
+            supplier = "New Supplier",
+            employeeName = "Owner"
+        )
+
+        val updated = viewModel.products.value.first { it.id == product.id }
+        assertEquals(15, updated.stockQuantity)
+        assertEquals(105.0, updated.buyingPrice, 0.001)
+        assertEquals(145.0, updated.sellingPrice, 0.001)
+        assertEquals("New Supplier", updated.supplier)
+    }
+
+    @Test
+    fun updateProductAllowsBlankSkuAndUpdatesQuantity() {
+        val viewModel = PosViewModel(application, supabase = null)
+        viewModel.addProduct(
+            name = "Sugar",
+            category = "Groceries",
+            sku = "SUGAR-01",
+            unit = "1kg",
+            buyingPrice = 120.0,
+            sellingPrice = 150.0,
+            quantity = 0,
+            minStock = 5,
+            supplier = ""
+        )
+        val product = viewModel.products.value.first { it.sku == "SUGAR-01" }
+        assertEquals(0, product.stockQuantity)
+
+        val success = viewModel.updateProduct(
+            productId = product.id,
+            name = "Sugar 1kg",
+            category = "Groceries",
+            sku = "",
+            unit = "1kg",
+            buyingPrice = 120.0,
+            sellingPrice = 155.0,
+            quantity = 25,
+            minStock = 5,
+            supplier = "Sweet Co"
+        )
+
+        assertTrue(success)
+        val updated = viewModel.products.value.first { it.id == product.id }
+        assertEquals(25, updated.stockQuantity)
+        assertTrue(updated.sku.isNotBlank())
+        assertEquals(155.0, updated.sellingPrice, 0.001)
+    }
 }
+
