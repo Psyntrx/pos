@@ -847,7 +847,7 @@ fun DashboardScreen(
                                 )
                             )
                             Text(
-                                text = sale.dateFormatted,
+                                text = formatSaleTimestamp(sale),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontSize = 10.sp,
                                     color = TextMuted
