@@ -167,13 +167,47 @@ class PosViewModel(
 
                 createInventoryNotification(InventoryAlertKind.OUT_OF_STOCK, outOfStock)
                 createInventoryNotification(InventoryAlertKind.LOW_STOCK, lowStock)
+
+                // Auto-mark notifications as read if all affected products are now healthy in stock
+                val currentNotifications = _notifications.value
+                val hasStaleUnread = currentNotifications.any { notif ->
+                    !notif.isRead && notif.productIds.isNotEmpty() && notif.productIds.all { id ->
+                        val p = current[id]
+                        p != null && !p.isLowStock
+                    }
+                }
+                if (hasStaleUnread) {
+                    _notifications.update { items ->
+                        items.map { notif ->
+                            if (!notif.isRead && notif.productIds.isNotEmpty()) {
+                                val allRestocked = notif.productIds.all { id ->
+                                    val p = current[id]
+                                    p != null && !p.isLowStock
+                                }
+                                if (allRestocked) notif.copy(isRead = true) else notif
+                            } else notif
+                        }
+                    }
+                    storageManager.saveNotifications(_notifications.value)
+                }
+
                 previous = current
             }
         }
     }
 
-    private fun createInventoryNotification(kind: InventoryAlertKind, products: List<Product>) {
+    private fun createInventoryNotification(kind: InventoryAlertKind, products: List<Product>, force: Boolean = false) {
         if (products.isEmpty()) return
+
+        // Prevent duplicate unread notifications for identical product sets and kind unless force is requested
+        if (!force) {
+            val currentUnread = _notifications.value.filter { !it.isRead && it.kind == kind }
+            val newProductIds = products.map { it.id }.toSet()
+            if (currentUnread.any { it.productIds.toSet() == newProductIds }) {
+                return
+            }
+        }
+
         val isOut = kind == InventoryAlertKind.OUT_OF_STOCK
         val title = when {
             isOut && products.size == 1 -> "${products.first().name} is out of stock"
@@ -185,7 +219,7 @@ class PosViewModel(
             if (products.size > 4) " and ${products.size - 4} more" else ""
         val message = if (isOut) "$names. Restock these items." else "$names. Check your inventory and restock soon."
         val notification = AppNotification(
-            id = "${kind.storageValue}_${System.currentTimeMillis()}",
+            id = "${kind.storageValue}_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(6)}",
             kind = kind,
             title = title,
             message = message,
@@ -234,12 +268,27 @@ class PosViewModel(
         } else {
             _products.value.take(2)
         }
-        val kind = if (sampleProducts.any { it.stockQuantity <= 0 }) {
-            InventoryAlertKind.OUT_OF_STOCK
+        if (sampleProducts.isEmpty()) {
+            val demoNotification = AppNotification(
+                id = "test_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(6)}",
+                kind = InventoryAlertKind.LOW_STOCK,
+                title = "Test stock alert",
+                message = "This is a test notification. Your notification system is working properly.",
+                productIds = emptyList()
+            )
+            _notifications.update { (listOf(demoNotification) + it).take(100) }
+            storageManager.saveNotifications(_notifications.value)
+            if (_systemNotificationsEnabled.value) {
+                application?.let { LowStockNotificationManager.show(it, demoNotification) }
+            }
         } else {
-            InventoryAlertKind.LOW_STOCK
+            val kind = if (sampleProducts.any { it.stockQuantity <= 0 }) {
+                InventoryAlertKind.OUT_OF_STOCK
+            } else {
+                InventoryAlertKind.LOW_STOCK
+            }
+            createInventoryNotification(kind, sampleProducts, force = true)
         }
-        createInventoryNotification(kind, sampleProducts)
     }
 
     fun clearNotifications() {
@@ -954,6 +1003,23 @@ class PosViewModel(
         )
         _stockInRecords.update { listOf(record) + it }
         storageManager.saveStockInRecords(_stockInRecords.value)
+
+        // Auto-resolve notifications for this product if its stock is now healthy
+        val restockedProduct = _products.value.find { it.id == productId }
+        if (restockedProduct != null && !restockedProduct.isLowStock) {
+            _notifications.update { items ->
+                items.map { notif ->
+                    if (!notif.isRead && productId in notif.productIds) {
+                        val allHealthy = notif.productIds.all { pId ->
+                            val p = _products.value.find { it.id == pId }
+                            p != null && !p.isLowStock
+                        }
+                        if (allHealthy) notif.copy(isRead = true) else notif
+                    } else notif
+                }
+            }
+            storageManager.saveNotifications(_notifications.value)
+        }
 
         // Asynchronously update product inventory and insert stock-in record in Supabase
         val updatedProduct = _products.value.find { it.id == productId }

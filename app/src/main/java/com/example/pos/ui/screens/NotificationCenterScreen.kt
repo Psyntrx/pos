@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -123,6 +124,7 @@ fun NotificationCenterScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
             .background(BgDark)
             .padding(horizontal = 18.dp, vertical = 10.dp)
     ) {
@@ -409,6 +411,7 @@ fun NotificationCenterScreen(
                 selectedNotification = null
             },
             onRestock = { productId ->
+                viewModel.markNotificationAsRead(currentNotification.id)
                 selectedNotification = null
                 onClose()
                 if (productId != null) {
