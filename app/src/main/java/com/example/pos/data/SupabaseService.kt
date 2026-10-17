@@ -462,13 +462,18 @@ class SupabaseService(
         }
     }
 
-    suspend fun updateProductStock(productId: String, newStock: Int): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun updateProductStock(productId: String, newStock: Int, shopId: String? = null): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val json = JSONObject().apply {
                 put("stock_quantity", newStock)
             }
+            val path = if (!shopId.isNullOrBlank()) {
+                "/rest/v1/products?id=eq.$productId&shop_id=eq.$shopId"
+            } else {
+                "/rest/v1/products?id=eq.$productId"
+            }
             val req = buildRequest(
-                path = "/rest/v1/products?id=eq.$productId",
+                path = path,
                 method = "PATCH",
                 bodyString = json.toString()
             )

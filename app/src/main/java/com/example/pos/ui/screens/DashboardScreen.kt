@@ -262,7 +262,7 @@ fun DashboardScreen(
                                             color = TextPrimary,
                                             fontSize = 13.sp
                                         ),
-                                        maxLines = 1,
+                                        maxLines = 2,
                                         overflow = TextOverflow.Ellipsis,
                                         modifier = Modifier.weight(1f, fill = false)
                                     )
@@ -289,12 +289,13 @@ fun DashboardScreen(
                                     text = latestAlert.message,
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         color = TextSecondary,
-                                        fontSize = 11.sp,
-                                        lineHeight = 14.sp
+                                        fontSize = 11.5.sp,
+                                        lineHeight = 15.sp
                                     ),
-                                    maxLines = 1,
+                                    maxLines = 3,
                                     overflow = TextOverflow.Ellipsis
                                 )
+
                             }
 
                             Spacer(modifier = Modifier.width(8.dp))
