@@ -465,20 +465,19 @@ fun RetailSyncHeader(
 
             Spacer(modifier = Modifier.width(10.dp))
 
-            // Notification Bell with Floating Count Badge (well-oriented & fully clickable!)
+            // Notification Bell with Floating Count Badge
             Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .clickable(onClick = onNotificationClick),
+                modifier = Modifier.padding(end = 6.dp, top = 4.dp),
                 contentAlignment = Alignment.Center
             ) {
+                // Bell Icon Circular Container with dedicated ripple
                 Box(
                     modifier = Modifier
-                        .size(38.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
                         .background(SurfaceDarkVariant)
-                        .border(1.dp, SurfaceBorder.copy(alpha = 0.8f), CircleShape),
+                        .border(1.dp, SurfaceBorder.copy(alpha = 0.8f), CircleShape)
+                        .clickable(onClick = onNotificationClick),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -494,12 +493,12 @@ fun RetailSyncHeader(
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .offset(x = 1.dp, y = (-1).dp)
+                            .offset(x = 5.dp, y = (-4).dp)
                             .defaultMinSize(minWidth = 18.dp, minHeight = 18.dp)
-                            .clip(CircleShape)
-                            .background(EmeraldBright)
-                            .border(1.5.dp, BgDark, CircleShape)
-                            .padding(horizontal = 4.dp, vertical = 1.dp),
+                            .background(EmeraldBright, shape = RoundedCornerShape(9.dp))
+                            .border(1.5.dp, BgDark, shape = RoundedCornerShape(9.dp))
+                            .clickable(onClick = onNotificationClick)
+                            .padding(horizontal = 5.dp, vertical = 1.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -508,7 +507,8 @@ fun RetailSyncHeader(
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
-                            lineHeight = 10.sp
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }

@@ -996,16 +996,18 @@ fun SettingsMenuItem(
                 if (badgeCount > 0) {
                     Box(
                         modifier = Modifier
-                            .clip(CircleShape)
-                            .background(EmeraldBright)
-                            .padding(horizontal = 7.dp, vertical = 2.dp),
+                            .defaultMinSize(minWidth = 20.dp, minHeight = 20.dp)
+                            .background(EmeraldBright, shape = RoundedCornerShape(10.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = if (badgeCount > 99) "99+" else badgeCount.toString(),
                             color = TextOnPrimary,
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                     Spacer(Modifier.width(8.dp))

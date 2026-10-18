@@ -326,6 +326,8 @@ fun Product.toJson(): JSONObject {
         put("iconType", iconType)
         put("imageUri", imageUri)
         put("shopId", shopId)
+        wholesalePrice?.let { put("wholesalePrice", it) }
+        wholesaleQuantity?.let { put("wholesaleQuantity", it) }
     }
 }
 
@@ -333,6 +335,12 @@ fun JSONObject.toProduct(): Product {
     val recordId = getString("id")
     val rawSku = optString("sku", "")
     val resolvedSku = if (rawSku.isBlank()) "SKU-${recordId.takeLast(4).uppercase()}" else rawSku
+    val parsedWholesalePrice = if (has("wholesalePrice") && !isNull("wholesalePrice")) {
+        optDouble("wholesalePrice", Double.NaN).takeIf { !it.isNaN() && it > 0 }
+    } else null
+    val parsedWholesaleQuantity = if (has("wholesaleQuantity") && !isNull("wholesaleQuantity")) {
+        optInt("wholesaleQuantity", -1).takeIf { it > 0 }
+    } else null
     return Product(
         id = recordId,
         name = getString("name"),
@@ -346,7 +354,9 @@ fun JSONObject.toProduct(): Product {
         supplier = optString("supplier", ""),
         iconType = optString("iconType", "box"),
         imageUri = optString("imageUri", "").takeIf { it.isNotBlank() && it != "null" },
-        shopId = optString("shopId", "").takeIf { it.isNotBlank() }
+        shopId = optString("shopId", "").takeIf { it.isNotBlank() },
+        wholesalePrice = parsedWholesalePrice,
+        wholesaleQuantity = parsedWholesaleQuantity
     )
 }
 

@@ -29,11 +29,13 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.LocalGroceryStore
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -339,7 +341,16 @@ fun ProductListItemCard(
                     fontWeight = FontWeight.Bold,
                     maxLines = 1
                 )
-                Text("per ${product.unit}", color = TextMuted, fontSize = 10.sp)
+                Text("Retail / ${product.unit}", color = TextMuted, fontSize = 10.sp)
+                if (product.hasWholesalePricing) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "WS: KSh ${String.format("%,.0f", product.wholesalePrice)} (≥${product.wholesaleQuantity})",
+                        color = WarningYellow,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
             Spacer(Modifier.width(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -377,6 +388,12 @@ private fun EditProductDialog(
     var unit by remember(product.id) { mutableStateOf(product.unit.ifBlank { "pcs" }) }
     var buyingPrice by remember(product.id) { mutableStateOf(product.buyingPrice.toString()) }
     var sellingPrice by remember(product.id) { mutableStateOf(product.sellingPrice.toString()) }
+    var wholesalePrice by remember(product.id) {
+        mutableStateOf(product.wholesalePrice?.let { if (it > 0) it.toString() else "" }.orEmpty())
+    }
+    var wholesaleQuantity by remember(product.id) {
+        mutableStateOf(product.wholesaleQuantity?.let { if (it > 0) it.toString() else "" }.orEmpty())
+    }
     var quantity by remember(product.id) { mutableStateOf(product.stockQuantity.toString()) }
     var minStock by remember(product.id) { mutableStateOf(product.minStock.toString()) }
     var supplier by remember(product.id) { mutableStateOf(product.supplier) }
@@ -386,11 +403,20 @@ private fun EditProductDialog(
 
     val parsedBuyingPrice = buyingPrice.toDoubleOrNull()
     val parsedSellingPrice = sellingPrice.toDoubleOrNull()
+    val parsedWholesalePrice = wholesalePrice.toDoubleOrNull()
+    val parsedWholesaleQuantity = wholesaleQuantity.toIntOrNull()
     val parsedQuantity = quantity.toIntOrNull()
     val parsedMinStock = minStock.toIntOrNull()
+
+    val hasWholesaleInput = wholesalePrice.isNotBlank() || wholesaleQuantity.isNotBlank()
+    val wholesaleValid = !hasWholesaleInput || (
+        parsedWholesalePrice != null && parsedWholesalePrice.isFinite() && parsedWholesalePrice > 0 &&
+        parsedWholesaleQuantity != null && parsedWholesaleQuantity >= 1
+    )
     val valid = name.isNotBlank() &&
         unit.isNotBlank() && parsedBuyingPrice != null && parsedBuyingPrice.isFinite() && parsedBuyingPrice >= 0 &&
         parsedSellingPrice != null && parsedSellingPrice.isFinite() && parsedSellingPrice > 0 &&
+        wholesaleValid &&
         parsedQuantity != null && parsedQuantity >= 0 && parsedMinStock != null && parsedMinStock >= 0
 
     AlertDialog(
@@ -406,7 +432,47 @@ private fun EditProductDialog(
                 ProductFormField(category, { category = it; saveError = null }, "Category (optional)", placeholder = "e.g. Groceries, Beverages")
                 ProductFormField(unit, { unit = it; saveError = null }, "Unit *", placeholder = "e.g. kg, pcs, bottle")
                 ProductFormField(buyingPrice, { buyingPrice = it; saveError = null }, "Cost price *", prefix = "KSh", keyboardType = KeyboardType.Decimal)
-                ProductFormField(sellingPrice, { sellingPrice = it; saveError = null }, "Selling price *", prefix = "KSh", keyboardType = KeyboardType.Decimal)
+                ProductFormField(sellingPrice, { sellingPrice = it; saveError = null }, "Retail price *", prefix = "KSh", keyboardType = KeyboardType.Decimal, supportingText = "Used in retail mode below wholesale qty")
+                ProductFormField(
+                    value = wholesalePrice,
+                    onValueChange = { wholesalePrice = it; saveError = null },
+                    label = "Wholesale price (optional)",
+                    placeholder = "e.g. 90.00",
+                    prefix = "KSh",
+                    keyboardType = KeyboardType.Decimal,
+                    supportingText = "Bulk price applied when threshold reached"
+                )
+                ProductFormField(
+                    value = wholesaleQuantity,
+                    onValueChange = { wholesaleQuantity = it.filter(Char::isDigit); saveError = null },
+                    label = "Wholesale min qty (optional)",
+                    placeholder = "e.g. 10",
+                    keyboardType = KeyboardType.Number,
+                    supportingText = "Order quantity threshold to trigger wholesale"
+                )
+                if (parsedWholesalePrice != null && parsedWholesalePrice > 0 && parsedWholesaleQuantity != null && parsedWholesaleQuantity >= 1) {
+                    val wsDiscount = if (parsedSellingPrice != null) parsedSellingPrice - parsedWholesalePrice else null
+                    Surface(
+                        color = EmeraldContainer,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(8.dp)
+                        ) {
+                            Icon(Icons.Default.Store, contentDescription = null, tint = EmeraldBright, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = "Wholesale active: KSh ${String.format("%,.0f", parsedWholesalePrice)} for orders ≥ $parsedWholesaleQuantity units" +
+                                    (if (wsDiscount != null && wsDiscount > 0) " (Save KSh ${String.format("%,.0f", wsDiscount)}/unit)" else ""),
+                                color = EmeraldBright,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
                 ProductFormField(quantity, { quantity = it.filter(Char::isDigit); saveError = null }, "Quantity *", keyboardType = KeyboardType.Number)
                 ProductFormField(minStock, { minStock = it.filter(Char::isDigit); saveError = null }, "Low-stock alert *", keyboardType = KeyboardType.Number)
                 ProductFormField(supplier, { supplier = it }, "Supplier", placeholder = "Optional")
@@ -432,7 +498,9 @@ private fun EditProductDialog(
                         quantity = parsedQuantity!!,
                         minStock = parsedMinStock!!,
                         supplier = supplier,
-                        imageUri = imageUri
+                        imageUri = imageUri,
+                        wholesalePrice = parsedWholesalePrice?.takeIf { it > 0 },
+                        wholesaleQuantity = parsedWholesaleQuantity?.takeIf { it > 0 }
                     )
                     if (saved) onDismiss() else saveError = "Could not update the product. Please try again."
                 }
@@ -554,6 +622,8 @@ fun AddProductScreen(
     var unit by remember { mutableStateOf("") }
     var buyingPrice by remember { mutableStateOf("") }
     var sellingPrice by remember { mutableStateOf("") }
+    var wholesalePrice by remember { mutableStateOf("") }
+    var wholesaleQuantity by remember { mutableStateOf("") }
     var quantity by remember { mutableStateOf("") }
     var minStock by remember { mutableStateOf("") }
     var supplier by remember { mutableStateOf("") }
@@ -563,17 +633,26 @@ fun AddProductScreen(
 
     val parsedBuyingPrice = buyingPrice.toDoubleOrNull()
     val parsedSellingPrice = sellingPrice.toDoubleOrNull()
+    val parsedWholesalePrice = wholesalePrice.toDoubleOrNull()
+    val parsedWholesaleQuantity = wholesaleQuantity.toIntOrNull()
     val parsedQuantity = quantity.toIntOrNull()
     val parsedMinStock = minStock.toIntOrNull()
+
     val nameError = attemptedSave && name.isBlank()
     val unitError = attemptedSave && unit.isBlank()
     val buyingPriceError = attemptedSave && (parsedBuyingPrice == null || !parsedBuyingPrice.isFinite() || parsedBuyingPrice < 0)
     val sellingPriceError = attemptedSave && (parsedSellingPrice == null || !parsedSellingPrice.isFinite() || parsedSellingPrice <= 0)
+    val hasWholesaleInput = wholesalePrice.isNotBlank() || wholesaleQuantity.isNotBlank()
+    val wholesalePriceError = attemptedSave && hasWholesaleInput && (parsedWholesalePrice == null || !parsedWholesalePrice.isFinite() || parsedWholesalePrice <= 0)
+    val wholesaleQuantityError = attemptedSave && hasWholesaleInput && (parsedWholesaleQuantity == null || parsedWholesaleQuantity < 1)
     val quantityError = attemptedSave && (parsedQuantity == null || parsedQuantity < 0)
     val minStockError = attemptedSave && (parsedMinStock == null || parsedMinStock < 0)
+
+    val wholesaleIsValid = !hasWholesaleInput || (!wholesalePriceError && !wholesaleQuantityError)
     val formIsValid = name.isNotBlank() &&
         unit.isNotBlank() && parsedBuyingPrice != null && parsedBuyingPrice.isFinite() && parsedBuyingPrice >= 0 &&
         parsedSellingPrice != null && parsedSellingPrice.isFinite() && parsedSellingPrice > 0 &&
+        wholesaleIsValid &&
         parsedQuantity != null && parsedQuantity >= 0 && parsedMinStock != null && parsedMinStock >= 0
 
     Column(
@@ -640,7 +719,7 @@ fun AddProductScreen(
             }
 
             Spacer(Modifier.height(14.dp))
-            FormSectionCard(title = "Pricing", subtitle = "Set your cost and selling price", icon = Icons.Default.AttachMoney) {
+            FormSectionCard(title = "Pricing & modes", subtitle = "Set retail and wholesale pricing", icon = Icons.Default.AttachMoney) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
                     ProductFormField(
                         value = buyingPrice,
@@ -656,15 +735,62 @@ fun AddProductScreen(
                     ProductFormField(
                         value = sellingPrice,
                         onValueChange = { sellingPrice = it; saveError = null },
-                        label = "Selling price *",
+                        label = "Retail price *",
                         placeholder = "0.00",
                         prefix = "KSh",
                         keyboardType = KeyboardType.Decimal,
                         isError = sellingPriceError,
-                        supportingText = if (sellingPriceError) "Enter a price above 0." else null,
+                        supportingText = if (sellingPriceError) "Enter a price above 0." else "Standard retail selling price",
                         modifier = Modifier.weight(1f)
                     )
                 }
+
+                Spacer(Modifier.height(14.dp))
+                HorizontalDivider(color = SurfaceBorder.copy(alpha = 0.5f), thickness = 1.dp)
+                Spacer(Modifier.height(12.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Store, contentDescription = null, tint = EmeraldBright, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Wholesale mode (bulk pricing)",
+                        color = TextPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    "Set wholesale price and quantity threshold. When sales reach or exceed this quantity, wholesale pricing applies automatically.",
+                    color = TextSecondary,
+                    fontSize = 11.sp
+                )
+                Spacer(Modifier.height(10.dp))
+
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+                    ProductFormField(
+                        value = wholesalePrice,
+                        onValueChange = { wholesalePrice = it; saveError = null },
+                        label = "Wholesale price",
+                        placeholder = "e.g. 90.00",
+                        prefix = "KSh",
+                        keyboardType = KeyboardType.Decimal,
+                        isError = wholesalePriceError,
+                        supportingText = if (wholesalePriceError) "Enter price > 0." else "Bulk price per unit",
+                        modifier = Modifier.weight(1f)
+                    )
+                    ProductFormField(
+                        value = wholesaleQuantity,
+                        onValueChange = { wholesaleQuantity = it.filter(Char::isDigit); saveError = null },
+                        label = "Wholesale min qty",
+                        placeholder = "e.g. 10",
+                        keyboardType = KeyboardType.Number,
+                        isError = wholesaleQuantityError,
+                        supportingText = if (wholesaleQuantityError) "Enter qty ≥ 1." else "Threshold qty (e.g. 10)",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
                 if (parsedBuyingPrice != null && parsedSellingPrice != null && parsedSellingPrice > 0) {
                     val margin = (parsedSellingPrice - parsedBuyingPrice) / parsedSellingPrice * 100
                     Spacer(Modifier.height(10.dp))
@@ -675,10 +801,45 @@ fun AddProductScreen(
                         Icon(Icons.Default.CheckCircle, contentDescription = null, tint = EmeraldBright, modifier = Modifier.size(17.dp))
                         Spacer(Modifier.width(7.dp))
                         Text(
-                            text = if (margin >= 0) "Gross margin  ${"%.1f".format(margin)}%" else "Selling price is below cost",
+                            text = if (margin >= 0) "Retail margin: ${"%.1f".format(margin)}%" else "Retail price is below cost",
                             color = if (margin >= 0) EmeraldBright else WarningYellow,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                if (parsedWholesalePrice != null && parsedWholesalePrice > 0 && parsedWholesaleQuantity != null && parsedWholesaleQuantity >= 1) {
+                    val wsCostDiff = if (parsedBuyingPrice != null) parsedWholesalePrice - parsedBuyingPrice else null
+                    val wsRetailDiscount = if (parsedSellingPrice != null) parsedSellingPrice - parsedWholesalePrice else null
+                    val isBelowCost = wsCostDiff != null && wsCostDiff < 0
+                    val isAboveRetail = wsRetailDiscount != null && wsRetailDiscount < 0
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isBelowCost || isAboveRetail) WarningContainer else SurfaceDarkVariant)
+                            .padding(11.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (isBelowCost || isAboveRetail) Icons.Default.WarningAmber else Icons.Default.Info,
+                            contentDescription = null,
+                            tint = if (isBelowCost || isAboveRetail) WarningYellow else EmeraldBright,
+                            modifier = Modifier.size(17.dp)
+                        )
+                        Spacer(Modifier.width(7.dp))
+                        Text(
+                            text = when {
+                                isBelowCost -> "Wholesale price is below cost (KSh ${"%.0f".format(parsedBuyingPrice)})"
+                                isAboveRetail -> "Wholesale price is higher than retail price (KSh ${"%.0f".format(parsedSellingPrice)})"
+                                wsRetailDiscount != null && wsRetailDiscount > 0 -> "Wholesale discount: KSh ${"%.0f".format(wsRetailDiscount)} off retail for orders ≥ $parsedWholesaleQuantity units"
+                                else -> "Wholesale pricing active for quantities ≥ $parsedWholesaleQuantity units"
+                            },
+                            color = if (isBelowCost || isAboveRetail) WarningYellow else TextSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
@@ -741,7 +902,9 @@ fun AddProductScreen(
                                 quantity = parsedQuantity!!,
                                 minStock = parsedMinStock!!,
                                 supplier = supplier.trim(),
-                                imageUri = imageUri
+                                imageUri = imageUri,
+                                wholesalePrice = parsedWholesalePrice?.takeIf { it > 0 },
+                                wholesaleQuantity = parsedWholesaleQuantity?.takeIf { it > 0 }
                             )
                             if (saved) onClose() else saveError = "Could not save this product. Please try again."
                         }
