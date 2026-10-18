@@ -363,23 +363,47 @@ class PosViewModel(
         lastSyncTime = now
 
         viewModelScope.launch {
-            // First: resolve active user email and current shop
             val activeEmail = storageManager.loadAuthSession()?.userEmail?.takeIf { it.isNotBlank() }
                 ?: _shop.value.email.takeIf { it.isNotBlank() }
 
-            var currentShop = _shop.value
-            service.getShop(
-                userEmail = activeEmail,
-                shopId = currentShop.id.takeIf { it != "shop_default" && it != "shop_1" }
-            ).onSuccess { remoteShop ->
-                if (remoteShop != null) {
-                    currentShop = remoteShop
-                    _shop.value = remoteShop
-                    storageManager.saveShop(remoteShop)
+            val isEmployee = storageManager.loadCurrentUserRole() == "EMPLOYEE" || !_isOwner.value
+            var activeShopId: String? = null
+
+            if (isEmployee) {
+                val emp = _currentEmployee.value
+                    ?: (if (!activeEmail.isNullOrBlank()) service.getEmployeeByEmail(activeEmail).getOrNull() else null)
+                if (emp != null) {
+                    _currentEmployee.value = emp
+                    _isOwner.value = false
+                    activeShopId = emp.shopId
+                    if (!activeShopId.isNullOrBlank() && (_shop.value.id == "shop_default" || _shop.value.id == "shop_1" || _shop.value.id.isBlank())) {
+                        service.getShop(shopId = activeShopId).onSuccess { remoteShop ->
+                            if (remoteShop != null) {
+                                _shop.value = remoteShop
+                                storageManager.saveShop(remoteShop)
+                            }
+                        }
+                    }
                 }
+            } else {
+                var currentShop = _shop.value
+                service.getShop(
+                    userEmail = activeEmail,
+                    shopId = currentShop.id.takeIf { it != "shop_default" && it != "shop_1" }
+                ).onSuccess { remoteShop ->
+                    if (remoteShop != null) {
+                        currentShop = remoteShop
+                        _shop.value = remoteShop
+                        storageManager.saveShop(remoteShop)
+                    }
+                }
+                activeShopId = currentShop.id.takeIf { it != "shop_default" && it != "shop_1" }
             }
 
-            val activeShopId = currentShop.id.takeIf { it != "shop_default" }
+            if (activeShopId.isNullOrBlank()) {
+                // Never query unpartitioned cross-tenant data without an active shop ID
+                return@launch
+            }
 
             // 1. Fetch live products from Supabase scoped to activeShopId
             service.getProducts(activeShopId).onSuccess { remoteProducts ->
@@ -450,18 +474,20 @@ class PosViewModel(
                 }
             }
 
-            // 6. Fetch shop info if any
-            val userEmail = storageManager.loadRememberedEmail() ?: _shop.value.email
-            service.getShop(userEmail).onSuccess { remoteShop ->
-                if (remoteShop != null && remoteShop.name.isNotBlank()) {
-                    _shop.value = remoteShop
-                    storageManager.saveShop(remoteShop)
+            // 6. Fetch shop info if owner
+            if (!isEmployee) {
+                val userEmail = storageManager.loadRememberedEmail() ?: _shop.value.email
+                service.getShop(userEmail).onSuccess { remoteShop ->
+                    if (remoteShop != null && remoteShop.name.isNotBlank()) {
+                        _shop.value = remoteShop
+                        storageManager.saveShop(remoteShop)
+                    }
                 }
             }
 
             // 7. Fetch employees scoped to activeShopId
             service.getEmployees(activeShopId).onSuccess { remoteEmployees ->
-                if (remoteEmployees.isNotEmpty() || activeShopId != null) {
+                if (remoteEmployees.isNotEmpty()) {
                     _employees.value = remoteEmployees
                     storageManager.saveEmployees(remoteEmployees)
                     val activeId = storageManager.loadActiveEmployeeId()
@@ -520,38 +546,52 @@ class PosViewModel(
         viewModelScope.launch {
             val service = supabase
             if (service != null) {
-                var remoteShop = service.getShop(userEmail = email).getOrNull()
+                // Check if user is a shop owner first
+                val remoteShop = service.getShop(userEmail = email).getOrNull()
+                val matchedEmp = if (remoteShop == null) {
+                    service.getEmployeeByEmail(email).getOrNull()
+                } else null
+
                 if (remoteShop != null) {
+                    // Owner Login
+                    _isOwner.value = true
+                    _currentEmployee.value = null
                     _shop.value = remoteShop
                     storageManager.saveShop(remoteShop)
-                }
-                val activeShopId = remoteShop?.id ?: _shop.value.id.takeIf { it != "shop_default" }
-                val remoteEmployees = service.getEmployees(activeShopId).getOrNull() ?: emptyList()
-                if (remoteEmployees.isNotEmpty()) {
+                    storageManager.saveCurrentUserRole("OWNER")
+                    storageManager.saveActiveEmployeeId(null)
+                    _currentScreen.value = "main"
+
+                    val remoteEmployees = service.getEmployees(remoteShop.id).getOrNull() ?: emptyList()
                     _employees.value = remoteEmployees
                     storageManager.saveEmployees(remoteEmployees)
-                }
-
-                // Resolve owner vs employee role
-                val matchedEmp = remoteEmployees.find { it.email.equals(email, ignoreCase = true) }
-                val isShopOwner = (remoteShop != null && remoteShop.email.equals(email, ignoreCase = true)) ||
-                        (matchedEmp == null && storageManager.loadCurrentUserRole() == "OWNER")
-
-                if (matchedEmp != null && !matchedEmp.isOwner && !isShopOwner) {
+                } else if (matchedEmp != null) {
+                    // Employee Login
                     _isOwner.value = false
                     _currentEmployee.value = matchedEmp
                     storageManager.saveCurrentUserRole("EMPLOYEE")
                     storageManager.saveActiveEmployeeId(matchedEmp.id)
+
+                    val empShopId = matchedEmp.shopId
+                    if (!empShopId.isNullOrBlank()) {
+                        val empShop = service.getShop(shopId = empShopId).getOrNull()
+                        if (empShop != null) {
+                            _shop.value = empShop
+                            storageManager.saveShop(empShop)
+                        } else {
+                            _shop.value = Shop(id = empShopId, name = "Store POS")
+                            storageManager.saveShop(_shop.value)
+                        }
+                    }
+
                     if (matchedEmp.status == "PENDING") {
                         _currentScreen.value = "employee_waiting_approval"
                     } else {
                         _currentScreen.value = "main"
                     }
                 } else {
-                    _isOwner.value = true
-                    _currentEmployee.value = null
-                    storageManager.saveCurrentUserRole("OWNER")
-                    storageManager.saveActiveEmployeeId(null)
+                    val role = storageManager.loadCurrentUserRole()
+                    _isOwner.value = (role != "EMPLOYEE")
                     _currentScreen.value = "main"
                 }
 

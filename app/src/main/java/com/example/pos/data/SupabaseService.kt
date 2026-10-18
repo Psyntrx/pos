@@ -281,7 +281,7 @@ class SupabaseService(
             val queryPath = when {
                 !shopId.isNullOrBlank() -> "/rest/v1/shops?id=eq.$shopId&select=*&limit=1"
                 !resolvedEmail.isNullOrBlank() -> "/rest/v1/shops?email=eq.$resolvedEmail&select=*&limit=1"
-                else -> "/rest/v1/shops?select=*&order=created_at.desc&limit=1"
+                else -> return@withContext Result.success(null)
             }
             val req = buildRequest(queryPath)
             client.newCall(req).execute().use { resp ->
@@ -378,7 +378,10 @@ class SupabaseService(
     // ==========================================
     suspend fun getProducts(shopId: String? = null): Result<List<Product>> = withContext(Dispatchers.IO) {
         try {
-            val filter = if (!shopId.isNullOrBlank()) "shop_id=eq.$shopId&" else ""
+            if (shopId.isNullOrBlank()) {
+                return@withContext Result.success(emptyList())
+            }
+            val filter = "shop_id=eq.$shopId&"
             val req = buildRequest("/rest/v1/products?${filter}select=*&order=created_at.asc")
             client.newCall(req).execute().use { resp ->
                 val str = resp.body?.string().orEmpty()
@@ -495,7 +498,10 @@ class SupabaseService(
     // ==========================================
     suspend fun getSales(shopId: String? = null): Result<List<Sale>> = withContext(Dispatchers.IO) {
         try {
-            val filter = if (!shopId.isNullOrBlank()) "shop_id=eq.$shopId&" else ""
+            if (shopId.isNullOrBlank()) {
+                return@withContext Result.success(emptyList())
+            }
+            val filter = "shop_id=eq.$shopId&"
             val req = buildRequest("/rest/v1/sales?${filter}select=*&order=created_at.desc")
             client.newCall(req).execute().use { resp ->
                 val str = resp.body?.string().orEmpty()
@@ -686,7 +692,10 @@ class SupabaseService(
     // ==========================================
     suspend fun getStockInRecords(shopId: String? = null): Result<List<StockInRecord>> = withContext(Dispatchers.IO) {
         try {
-            val filter = if (!shopId.isNullOrBlank()) "shop_id=eq.$shopId&" else ""
+            if (shopId.isNullOrBlank()) {
+                return@withContext Result.success(emptyList())
+            }
+            val filter = "shop_id=eq.$shopId&"
             val req = buildRequest("/rest/v1/stock_in_records?${filter}select=*&order=created_at.desc")
             client.newCall(req).execute().use { resp ->
                 val str = resp.body?.string().orEmpty()
@@ -766,7 +775,10 @@ class SupabaseService(
     // ==========================================
     suspend fun getExpenses(shopId: String? = null): Result<List<Expense>> = withContext(Dispatchers.IO) {
         try {
-            val filter = if (!shopId.isNullOrBlank()) "shop_id=eq.$shopId&" else ""
+            if (shopId.isNullOrBlank()) {
+                return@withContext Result.success(emptyList())
+            }
+            val filter = "shop_id=eq.$shopId&"
             val req = buildRequest("/rest/v1/expenses?${filter}select=*&order=created_at.desc")
             client.newCall(req).execute().use { resp ->
                 val str = resp.body?.string().orEmpty()
@@ -871,7 +883,10 @@ class SupabaseService(
     // ==========================================
     suspend fun getCustomerCredits(shopId: String? = null): Result<List<CustomerCredit>> = withContext(Dispatchers.IO) {
         try {
-            val filter = if (!shopId.isNullOrBlank()) "shop_id=eq.$shopId&" else ""
+            if (shopId.isNullOrBlank()) {
+                return@withContext Result.success(emptyList())
+            }
+            val filter = "shop_id=eq.$shopId&"
             val req = buildRequest("/rest/v1/customer_credits?${filter}select=*&order=created_at.desc")
             client.newCall(req).execute().use { resp ->
                 val str = resp.body?.string().orEmpty()
@@ -937,9 +952,70 @@ class SupabaseService(
     // ==========================================
     // EMPLOYEES
     // ==========================================
+    fun parseEmployeeJson(obj: JSONObject): Employee {
+        val isOwner = obj.optBoolean("is_owner", false)
+        val rawRole = obj.optString("role", if (isOwner) "Owner" else "Cashier")
+
+        var displayRole = rawRole
+        var status = if (isOwner) "ACTIVE" else "ACTIVE"
+        var perms: List<String> = if (isOwner) EmployeePermissions.ALL_PERMISSIONS else listOf(
+            EmployeePermissions.PERM_RECORD_SALES,
+            EmployeePermissions.PERM_STOCK_IN
+        )
+        var authUid: String? = null
+
+        if (rawRole.contains("||")) {
+            val parts = rawRole.split("||")
+            displayRole = parts[0]
+            parts.forEach { part ->
+                when {
+                    part.startsWith("status:") -> status = part.removePrefix("status:")
+                    part.startsWith("perms:") -> {
+                        val pStr = part.removePrefix("perms:")
+                        if (pStr.isNotBlank()) perms = pStr.split(",").map { it.trim() }
+                    }
+                    part.startsWith("authUid:") -> authUid = part.removePrefix("authUid:").takeIf { it.isNotBlank() }
+                }
+            }
+        }
+
+        return Employee(
+            id = obj.optString("id"),
+            name = obj.optString("name"),
+            role = displayRole,
+            phone = obj.optString("phone"),
+            email = obj.optString("email"),
+            isOwner = isOwner,
+            shopId = obj.optString("shop_id", "").takeIf { it.isNotBlank() },
+            status = status,
+            permissions = perms,
+            authUserId = authUid
+        )
+    }
+
+    suspend fun getEmployeeByEmail(email: String): Result<Employee?> = withContext(Dispatchers.IO) {
+        try {
+            val cleanEmail = email.trim()
+            if (cleanEmail.isBlank()) return@withContext Result.success(null)
+            val req = buildRequest("/rest/v1/employees?email=eq.$cleanEmail&select=*&limit=1")
+            client.newCall(req).execute().use { resp ->
+                val str = resp.body?.string().orEmpty()
+                if (!resp.isSuccessful) return@withContext Result.failure(Exception("Failed to fetch employee"))
+                val arr = JSONArray(str)
+                if (arr.length() == 0) return@withContext Result.success(null)
+                Result.success(parseEmployeeJson(arr.getJSONObject(0)))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun getEmployees(shopId: String? = null): Result<List<Employee>> = withContext(Dispatchers.IO) {
         try {
-            val filter = if (!shopId.isNullOrBlank()) "shop_id=eq.$shopId&" else ""
+            if (shopId.isNullOrBlank()) {
+                return@withContext Result.success(emptyList())
+            }
+            val filter = "shop_id=eq.$shopId&"
             val req = buildRequest("/rest/v1/employees?${filter}select=*&order=created_at.asc")
             client.newCall(req).execute().use { resp ->
                 val str = resp.body?.string().orEmpty()
@@ -947,47 +1023,7 @@ class SupabaseService(
                 val arr = JSONArray(str)
                 val list = mutableListOf<Employee>()
                 for (i in 0 until arr.length()) {
-                    val obj = arr.getJSONObject(i)
-                    val isOwner = obj.optBoolean("is_owner", false)
-                    val rawRole = obj.optString("role", if (isOwner) "Owner" else "Cashier")
-
-                    var displayRole = rawRole
-                    var status = if (isOwner) "ACTIVE" else "ACTIVE"
-                    var perms: List<String> = if (isOwner) EmployeePermissions.ALL_PERMISSIONS else listOf(
-                        EmployeePermissions.PERM_RECORD_SALES,
-                        EmployeePermissions.PERM_STOCK_IN
-                    )
-                    var authUid: String? = null
-
-                    if (rawRole.contains("||")) {
-                        val parts = rawRole.split("||")
-                        displayRole = parts[0]
-                        parts.forEach { part ->
-                            when {
-                                part.startsWith("status:") -> status = part.removePrefix("status:")
-                                part.startsWith("perms:") -> {
-                                    val pStr = part.removePrefix("perms:")
-                                    if (pStr.isNotBlank()) perms = pStr.split(",").map { it.trim() }
-                                }
-                                part.startsWith("authUid:") -> authUid = part.removePrefix("authUid:").takeIf { it.isNotBlank() }
-                            }
-                        }
-                    }
-
-                    list.add(
-                        Employee(
-                            id = obj.optString("id"),
-                            name = obj.optString("name"),
-                            role = displayRole,
-                            phone = obj.optString("phone"),
-                            email = obj.optString("email"),
-                            isOwner = isOwner,
-                            shopId = obj.optString("shop_id", "").takeIf { it.isNotBlank() },
-                            status = status,
-                            permissions = perms,
-                            authUserId = authUid
-                        )
-                    )
+                    list.add(parseEmployeeJson(arr.getJSONObject(i)))
                 }
                 Result.success(list)
             }
