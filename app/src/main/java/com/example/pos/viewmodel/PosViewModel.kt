@@ -346,12 +346,21 @@ class PosViewModel(
                                 ?: remote.sku.takeIf { it.isNotBlank() }
                                 ?: "SKU-${remote.id.takeLast(4).uppercase()}"
                             val mergedImageUri = local?.imageUri ?: remote.imageUri
+                            val mergedWholesalePrice = local?.wholesalePrice ?: remote.wholesalePrice
+                            val mergedWholesaleQuantity = local?.wholesaleQuantity ?: remote.wholesaleQuantity
                             if (pendingProductUpdates.contains(remote.id)) {
-                                currentMap[remote.id] ?: remote.copy(sku = mergedSku, imageUri = mergedImageUri)
+                                currentMap[remote.id] ?: remote.copy(
+                                    sku = mergedSku,
+                                    imageUri = mergedImageUri,
+                                    wholesalePrice = mergedWholesalePrice,
+                                    wholesaleQuantity = mergedWholesaleQuantity
+                                )
                             } else {
                                 remote.copy(
                                     sku = mergedSku,
-                                    imageUri = mergedImageUri
+                                    imageUri = mergedImageUri,
+                                    wholesalePrice = mergedWholesalePrice,
+                                    wholesaleQuantity = mergedWholesaleQuantity
                                 )
                             }
                         }
@@ -593,6 +602,28 @@ class PosViewModel(
                     currentCart.filterNot { it.product.id == productId }
                 }
             } else currentCart
+        }
+    }
+
+    fun setCartQuantity(productId: String, quantity: Int) {
+        if (quantity <= 0) {
+            _cart.update { currentCart -> currentCart.filterNot { it.product.id == productId } }
+            return
+        }
+        val product = _products.value.find { it.id == productId } ?: return
+        if (product.stockQuantity <= 0) return
+        val clampedQty = quantity.coerceAtMost(product.stockQuantity)
+        if (clampedQty <= 0) return
+
+        _cart.update { currentCart ->
+            val existingIndex = currentCart.indexOfFirst { it.product.id == productId }
+            if (existingIndex >= 0) {
+                currentCart.toMutableList().apply {
+                    this[existingIndex] = currentCart[existingIndex].copy(quantity = clampedQty)
+                }
+            } else {
+                currentCart + CartItem(product, clampedQty)
+            }
         }
     }
 
@@ -980,7 +1011,9 @@ class PosViewModel(
     fun addProduct(
         name: String, category: String = "", sku: String = "", unit: String,
         buyingPrice: Double, sellingPrice: Double, quantity: Int, minStock: Int, supplier: String,
-        imageUri: String? = null
+        imageUri: String? = null,
+        wholesalePrice: Double? = null,
+        wholesaleQuantity: Int? = null
     ): Boolean {
         val normalizedName = name.trim()
         val normalizedCategory = category.trim()
@@ -996,9 +1029,15 @@ class PosViewModel(
             cand
         } else rawSku
         val normalizedUnit = unit.trim().ifBlank { "pcs" }
+        val hasWholesaleInput = wholesalePrice != null || wholesaleQuantity != null
+        val wholesaleIsValid = !hasWholesaleInput || (
+            wholesalePrice != null && wholesalePrice.isFinite() && wholesalePrice > 0 &&
+            wholesaleQuantity != null && wholesaleQuantity >= 1
+        )
         if (normalizedName.isBlank() ||
             !buyingPrice.isFinite() || buyingPrice < 0 ||
             !sellingPrice.isFinite() || sellingPrice <= 0 || quantity < 0 || minStock < 0 ||
+            !wholesaleIsValid ||
             _products.value.any { it.sku.equals(normalizedSku, ignoreCase = true) }
         ) return false
 
@@ -1016,7 +1055,9 @@ class PosViewModel(
             supplier = supplier.trim(),
             iconType = normalizedCategory.lowercase().ifBlank { "box" },
             imageUri = imageUri,
-            shopId = activeShopId
+            shopId = activeShopId,
+            wholesalePrice = wholesalePrice?.takeIf { it > 0 },
+            wholesaleQuantity = wholesaleQuantity?.takeIf { it > 0 }
         )
         _products.update { listOf(newProduct) + it }
         storageManager.saveProducts(_products.value)
@@ -1036,7 +1077,9 @@ class PosViewModel(
         productId: String,
         name: String, category: String = "", sku: String = "", unit: String,
         buyingPrice: Double, sellingPrice: Double, quantity: Int, minStock: Int, supplier: String,
-        imageUri: String? = currentProductImageUri(productId)
+        imageUri: String? = currentProductImageUri(productId),
+        wholesalePrice: Double? = null,
+        wholesaleQuantity: Int? = null
     ): Boolean {
         val currentProduct = _products.value.find { it.id == productId } ?: return false
         val normalizedName = name.trim()
@@ -1046,9 +1089,15 @@ class PosViewModel(
             currentProduct.sku.ifBlank { "SKU-${productId.takeLast(4).uppercase()}" }
         } else rawSku
         val normalizedUnit = unit.trim().ifBlank { "pcs" }
+        val hasWholesaleInput = wholesalePrice != null || wholesaleQuantity != null
+        val wholesaleIsValid = !hasWholesaleInput || (
+            wholesalePrice != null && wholesalePrice.isFinite() && wholesalePrice > 0 &&
+            wholesaleQuantity != null && wholesaleQuantity >= 1
+        )
         if (normalizedName.isBlank() ||
             !buyingPrice.isFinite() || buyingPrice < 0 ||
             !sellingPrice.isFinite() || sellingPrice <= 0 || quantity < 0 || minStock < 0 ||
+            !wholesaleIsValid ||
             _products.value.any { it.id != productId && it.sku.isNotBlank() && it.sku.equals(normalizedSku, ignoreCase = true) }
         ) return false
 
@@ -1065,7 +1114,9 @@ class PosViewModel(
             supplier = supplier.trim(),
             iconType = normalizedCategory.lowercase().ifBlank { "box" },
             imageUri = imageUri,
-            shopId = currentProduct.shopId ?: activeShopId
+            shopId = currentProduct.shopId ?: activeShopId,
+            wholesalePrice = wholesalePrice?.takeIf { it > 0 },
+            wholesaleQuantity = wholesaleQuantity?.takeIf { it > 0 }
         )
         _products.update { products -> products.map { if (it.id == productId) updatedProduct else it } }
         storageManager.saveProducts(_products.value)

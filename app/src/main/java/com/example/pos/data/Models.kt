@@ -29,9 +29,19 @@ data class Product(
     val supplier: String = "",
     val iconType: String = "box",
     val imageUri: String? = null,
-    val shopId: String? = null
+    val shopId: String? = null,
+    val wholesalePrice: Double? = null,
+    val wholesaleQuantity: Int? = null
 ) {
     val isLowStock: Boolean get() = stockQuantity <= minStock
+    val retailPrice: Double get() = sellingPrice
+    val hasWholesalePricing: Boolean get() = (wholesalePrice ?: 0.0) > 0.0 && (wholesaleQuantity ?: 0) > 0
+
+    fun isWholesaleFor(quantity: Int): Boolean =
+        hasWholesalePricing && quantity >= (wholesaleQuantity ?: Int.MAX_VALUE)
+
+    fun priceForQuantity(quantity: Int): Double =
+        if (isWholesaleFor(quantity)) (wholesalePrice ?: sellingPrice) else sellingPrice
 }
 
 enum class InventoryAlertKind(val storageValue: String, val label: String) {
@@ -59,7 +69,11 @@ data class CartItem(
     val product: Product,
     val quantity: Int
 ) {
-    val totalPrice: Double get() = product.sellingPrice * quantity
+    val isWholesale: Boolean get() = product.isWholesaleFor(quantity)
+    val unitPrice: Double get() = product.priceForQuantity(quantity)
+    val totalPrice: Double get() = unitPrice * quantity
+    val regularTotalPrice: Double get() = product.sellingPrice * quantity
+    val wholesaleSavings: Double get() = if (isWholesale) (regularTotalPrice - totalPrice).coerceAtLeast(0.0) else 0.0
 }
 
 @Serializable

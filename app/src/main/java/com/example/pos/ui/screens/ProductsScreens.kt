@@ -244,14 +244,29 @@ fun LegacyProductListItemCard(product: Product) {
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    Text(
-                        text = "KSh ${String.format("%,.0f", product.sellingPrice)}",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = EmeraldBright,
-                            fontSize = 14.sp
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "KSh ${String.format("%,.0f", product.sellingPrice)}",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = EmeraldBright,
+                                fontSize = 14.sp
+                            )
                         )
-                    )
+                        if (product.hasWholesalePricing) {
+                            Text(
+                                text = "WS: KSh ${String.format("%,.0f", product.wholesalePrice)} (≥${product.wholesaleQuantity})",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = EmeraldBright.copy(alpha = 0.85f),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            )
+                        }
+                    }
                 }
             }
 
@@ -276,6 +291,8 @@ fun LegacyAddProductScreen(
     var unit by remember { mutableStateOf("pcs") }
     var buyingPrice by remember { mutableStateOf("") }
     var sellingPrice by remember { mutableStateOf("") }
+    var wholesalePrice by remember { mutableStateOf("") }
+    var wholesaleQuantity by remember { mutableStateOf("") }
     var quantity by remember { mutableStateOf("") }
     var minStock by remember { mutableStateOf("10") }
     var supplier by remember { mutableStateOf("") }
@@ -419,7 +436,36 @@ fun LegacyAddProductScreen(
                 OutlinedTextField(
                     value = sellingPrice,
                     onValueChange = { sellingPrice = it },
-                    label = { Text("Selling Price") },
+                    label = { Text("Retail Price *") },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp),
+                    textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                    colors = com.example.pos.ui.components.posTextFieldColors(),
+                    singleLine = true
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
+                    value = wholesalePrice,
+                    onValueChange = { wholesalePrice = it },
+                    label = { Text("Wholesale Price") },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp),
+                    textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                    colors = com.example.pos.ui.components.posTextFieldColors(),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = wholesaleQuantity,
+                    onValueChange = { wholesaleQuantity = it.filter(Char::isDigit) },
+                    label = { Text("Wholesale Min Qty") },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(14.dp),
                     textStyle = LocalTextStyle.current.copy(color = TextPrimary),
@@ -485,7 +531,9 @@ fun LegacyAddProductScreen(
                             sellingPrice = sellingPrice.toDoubleOrNull() ?: 150.0,
                             quantity = quantity.toIntOrNull() ?: 10,
                             minStock = minStock.toIntOrNull() ?: 5,
-                            supplier = supplier
+                            supplier = supplier,
+                            wholesalePrice = wholesalePrice.toDoubleOrNull()?.takeIf { it > 0 },
+                            wholesaleQuantity = wholesaleQuantity.toIntOrNull()?.takeIf { it > 0 }
                         )
                         onClose()
                     }

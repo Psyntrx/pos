@@ -56,7 +56,7 @@ object CreditLedgerUtils {
         if (items.isEmpty()) return null
         var total = BigDecimal.ZERO
         items.forEach { item ->
-            val unitPrice = normalizeMoney(item.product.sellingPrice) ?: return null
+            val unitPrice = normalizeMoney(item.unitPrice) ?: return null
             if (unitPrice <= 0.0 || item.quantity <= 0) return null
             total = total.add(BigDecimal.valueOf(unitPrice).multiply(BigDecimal.valueOf(item.quantity.toLong())))
         }

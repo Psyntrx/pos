@@ -387,6 +387,8 @@ class SupabaseService(
                 val list = mutableListOf<Product>()
                 for (i in 0 until arr.length()) {
                     val obj = arr.getJSONObject(i)
+                    val wholesalePrice = obj.optDouble("wholesale_price", Double.NaN).takeIf { !it.isNaN() && it > 0 }
+                    val wholesaleQuantity = obj.optInt("wholesale_quantity", -1).takeIf { it > 0 }
                     list.add(
                         Product(
                             id = obj.optString("id"),
@@ -401,7 +403,9 @@ class SupabaseService(
                             supplier = obj.optString("supplier", ""),
                             iconType = obj.optString("icon_type", "box"),
                             imageUri = obj.optString("image_uri", "").takeIf { it.isNotBlank() && it != "null" },
-                            shopId = obj.optString("shop_id", "").takeIf { it.isNotBlank() }
+                            shopId = obj.optString("shop_id", "").takeIf { it.isNotBlank() },
+                            wholesalePrice = wholesalePrice,
+                            wholesaleQuantity = wholesaleQuantity
                         )
                     )
                 }
@@ -419,8 +423,8 @@ class SupabaseService(
                 put("id", product.id)
                 put("name", product.name)
                 put("category", product.category)
-                // Note: 'sku' and 'image_uri' are retained in local offline storage because the remote
-                // Supabase 'products' table schema lacks these columns; sending them returns HTTP 400 (PGRST204).
+                // Note: 'sku', 'image_uri', 'wholesale_price', and 'wholesale_quantity' are retained in local offline storage
+                // because the remote Supabase 'products' table schema lacks these columns; sending them returns HTTP 400 (PGRST204).
                 put("unit", product.unit)
                 put("buying_price", product.buyingPrice)
                 put("selling_price", product.sellingPrice)

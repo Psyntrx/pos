@@ -597,6 +597,152 @@ class PosViewModelProductTest {
         assertEquals(200.0, creditSale.paidAmount, 0.001)
         assertEquals(800.0, creditSale.balance, 0.001)
     }
+
+    @Test
+    fun addProductWithRetailAndWholesalePricingSavesCorrectly() {
+        val viewModel = PosViewModel(application, supabase = null)
+        val saved = viewModel.addProduct(
+            name = "Sugar 1kg",
+            category = "Groceries",
+            sku = "SUGAR-01",
+            unit = "kg",
+            buyingPrice = 120.0,
+            sellingPrice = 150.0,
+            quantity = 50,
+            minStock = 5,
+            supplier = "Sweet Mills",
+            wholesalePrice = 135.0,
+            wholesaleQuantity = 10
+        )
+        assertTrue(saved)
+
+        val product = viewModel.products.value.first { it.sku == "SUGAR-01" }
+        assertEquals(150.0, product.retailPrice, 0.001)
+        assertEquals(150.0, product.sellingPrice, 0.001)
+        assertEquals(135.0, product.wholesalePrice!!, 0.001)
+        assertEquals(10, product.wholesaleQuantity!!)
+        assertTrue(product.hasWholesalePricing)
+
+        // Threshold checks
+        assertFalse(product.isWholesaleFor(1))
+        assertFalse(product.isWholesaleFor(9))
+        assertTrue(product.isWholesaleFor(10))
+        assertTrue(product.isWholesaleFor(25))
+
+        // Price checks
+        assertEquals(150.0, product.priceForQuantity(1), 0.001)
+        assertEquals(150.0, product.priceForQuantity(9), 0.001)
+        assertEquals(135.0, product.priceForQuantity(10), 0.001)
+        assertEquals(135.0, product.priceForQuantity(25), 0.001)
+    }
+
+    @Test
+    fun cartAutomaticallySwitchesToWholesalePriceWhenThresholdReached() {
+        val viewModel = PosViewModel(application, supabase = null)
+        viewModel.addProduct(
+            name = "Soap Bar",
+            category = "Household",
+            sku = "SOAP-01",
+            unit = "pcs",
+            buyingPrice = 30.0,
+            sellingPrice = 50.0,
+            quantity = 100,
+            minStock = 10,
+            supplier = "Clean Co",
+            wholesalePrice = 40.0,
+            wholesaleQuantity = 5
+        )
+        val product = viewModel.products.value.first { it.sku == "SOAP-01" }
+
+        // Add 4 items (below threshold 5) -> Retail mode
+        repeat(4) { viewModel.addToCart(product) }
+        val cartItemRetail = viewModel.cart.value.first { it.product.id == product.id }
+        assertEquals(4, cartItemRetail.quantity)
+        assertFalse(cartItemRetail.isWholesale)
+        assertEquals(50.0, cartItemRetail.unitPrice, 0.001)
+        assertEquals(200.0, cartItemRetail.totalPrice, 0.001)
+        assertEquals(0.0, cartItemRetail.wholesaleSavings, 0.001)
+
+        // Add 5th item -> reaches threshold 5 -> switches automatically to Wholesale mode!
+        viewModel.addToCart(product)
+        val cartItemWholesale = viewModel.cart.value.first { it.product.id == product.id }
+        assertEquals(5, cartItemWholesale.quantity)
+        assertTrue(cartItemWholesale.isWholesale)
+        assertEquals(40.0, cartItemWholesale.unitPrice, 0.001)
+        assertEquals(200.0, cartItemWholesale.totalPrice, 0.001) // 5 * 40 = 200
+        assertEquals(50.0, cartItemWholesale.wholesaleSavings, 0.001) // (50 - 40) * 5 = 50 saved
+    }
+
+    @Test
+    fun setCartQuantityDirectlyUpdatesModeAndSavings() {
+        val viewModel = PosViewModel(application, supabase = null)
+        viewModel.addProduct(
+            name = "Mineral Water",
+            category = "Beverages",
+            sku = "WATER-01",
+            unit = "bottle",
+            buyingPrice = 20.0,
+            sellingPrice = 35.0,
+            quantity = 100,
+            minStock = 5,
+            supplier = "Springs",
+            wholesalePrice = 28.0,
+            wholesaleQuantity = 12
+        )
+        val product = viewModel.products.value.first { it.sku == "WATER-01" }
+
+        // Set quantity directly to 20 (>= 12) -> Wholesale mode
+        viewModel.setCartQuantity(product.id, 20)
+        val cartItem = viewModel.cart.value.first { it.product.id == product.id }
+        assertEquals(20, cartItem.quantity)
+        assertTrue(cartItem.isWholesale)
+        assertEquals(28.0, cartItem.unitPrice, 0.001)
+        assertEquals(560.0, cartItem.totalPrice, 0.001)
+        assertEquals(140.0, cartItem.wholesaleSavings, 0.001) // (35 - 28) * 20 = 140
+
+        // Set quantity to 5 (< 12) -> Retail mode
+        viewModel.setCartQuantity(product.id, 5)
+        val cartItemReduced = viewModel.cart.value.first { it.product.id == product.id }
+        assertEquals(5, cartItemReduced.quantity)
+        assertFalse(cartItemReduced.isWholesale)
+        assertEquals(35.0, cartItemReduced.unitPrice, 0.001)
+        assertEquals(175.0, cartItemReduced.totalPrice, 0.001)
+        assertEquals(0.0, cartItemReduced.wholesaleSavings, 0.001)
+    }
+
+    @Test
+    fun completeSaleWithWholesaleItemsCalculatesCorrectTotalAndDeductsStock() {
+        val viewModel = PosViewModel(application, supabase = null)
+        viewModel.addProduct(
+            name = "Cement 50kg",
+            category = "Hardware",
+            sku = "CEMENT-01",
+            unit = "bag",
+            buyingPrice = 650.0,
+            sellingPrice = 750.0,
+            quantity = 50,
+            minStock = 10,
+            supplier = "Bamburi",
+            wholesalePrice = 700.0,
+            wholesaleQuantity = 10
+        )
+        val product = viewModel.products.value.first { it.sku == "CEMENT-01" }
+
+        // Customer buys 10 bags (wholesale)
+        viewModel.setCartQuantity(product.id, 10)
+        val sale = viewModel.completeSale(paymentMethod = "Cash", customerName = "Builder Bob")
+
+        // Total should be 10 * 700 = 7000 (not 7500)
+        assertEquals(7000.0, sale.totalAmount, 0.001)
+        assertEquals(1, sale.items.size)
+        assertTrue(sale.items.first().isWholesale)
+        assertEquals(700.0, sale.items.first().unitPrice, 0.001)
+        assertEquals(500.0, sale.items.first().wholesaleSavings, 0.001)
+
+        // Inventory should be 40 left (50 - 10)
+        assertEquals(40, viewModel.products.value.first { it.id == product.id }.stockQuantity)
+    }
 }
+
 
 
