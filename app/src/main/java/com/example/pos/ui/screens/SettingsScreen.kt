@@ -22,6 +22,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
@@ -36,6 +38,8 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Store
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Offset
@@ -43,6 +47,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
+import com.example.pos.data.Employee
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -82,14 +87,20 @@ fun SettingsScreen(
     onOpenEmployees: () -> Unit,
     onOpenCreditReminders: () -> Unit,
     onOpenExpenses: () -> Unit,
-    onOpenNotifications: () -> Unit
+    onOpenNotifications: () -> Unit,
+    onOpenApprovals: () -> Unit = {}
 ) {
+    val isOwner by viewModel.isOwner.collectAsState()
+    val currentEmployee by viewModel.currentEmployee.collectAsState()
+    val totalPendingCount by viewModel.totalPendingCount.collectAsState()
     val shop by viewModel.shop.collectAsState()
     val notifications by viewModel.notifications.collectAsState()
     val unreadNotificationsCount = notifications.count { !it.isRead }
     var showShopEditor by remember { mutableStateOf(false) }
     var showPhotoPreview by remember { mutableStateOf(false) }
     var photoBeingEdited by remember { mutableStateOf<Bitmap?>(null) }
+    var copyFeedback by remember { mutableStateOf(false) }
+    val clipboardManager = LocalClipboardManager.current
     val context = androidx.compose.ui.platform.LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -139,11 +150,101 @@ fun SettingsScreen(
 
         ProfileHeaderCard(
             shop = shop,
+            isOwner = isOwner,
+            currentEmployee = currentEmployee,
             photoUri = profilePhotoUri,
             onChangePhoto = { photoPicker.launch(arrayOf("image/*")) },
             onPreviewPhoto = { showPhotoPreview = true },
             onRemovePhoto = { onProfilePhotoChange(null) }
         )
+
+        if (isOwner) {
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Shop Code Sharing Card for Store Owner
+            SurfaceCard(
+                modifier = Modifier.fillMaxWidth(),
+                backgroundColor = SurfaceDark,
+                borderColor = EmeraldBright.copy(alpha = 0.35f),
+                cornerRadius = 20.dp
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Shop Code for Staff",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary,
+                                    fontSize = 15.sp
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Share with employees so they can register their app",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = TextSecondary,
+                                    fontSize = 11.sp
+                                )
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(EmeraldContainer)
+                                .clickable {
+                                    clipboardManager.setText(AnnotatedString(shop.id))
+                                    copyFeedback = true
+                                }
+                                .padding(horizontal = 12.dp, vertical = 7.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Copy code",
+                                    tint = EmeraldBright,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = if (copyFeedback) "Copied!" else "Copy",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = EmeraldBright,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(SurfaceDarkVariant)
+                            .border(1.dp, SurfaceBorder, RoundedCornerShape(10.dp))
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = shop.id,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                color = EmeraldBright,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
+                            )
+                        )
+                    }
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(22.dp))
         SettingsSectionLabel("PREFERENCES")
@@ -163,23 +264,38 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(9.dp))
 
         // Settings Menu Items
-        SettingsMenuItem(
-            label = "Shop Information",
-            icon = Icons.Default.Store,
-            onClick = { showShopEditor = true }
-        )
+        if (isOwner) {
+            SettingsMenuItem(
+                label = "Approvals Center",
+                icon = Icons.Default.VerifiedUser,
+                badgeCount = totalPendingCount,
+                onClick = onOpenApprovals
+            )
 
-        SettingsMenuItem(
-            label = "Employees & Permissions",
-            icon = Icons.Default.People,
-            onClick = onOpenEmployees
-        )
+            SettingsMenuItem(
+                label = "Shop Information",
+                icon = Icons.Default.Store,
+                onClick = { showShopEditor = true }
+            )
 
-        SettingsMenuItem(
-            label = "Expenses Tracker",
-            icon = Icons.Default.Receipt,
-            onClick = onOpenExpenses
-        )
+            SettingsMenuItem(
+                label = "Employees & Permissions",
+                icon = Icons.Default.People,
+                onClick = onOpenEmployees
+            )
+
+            SettingsMenuItem(
+                label = "Expenses Tracker",
+                icon = Icons.Default.Receipt,
+                onClick = onOpenExpenses
+            )
+        } else if (viewModel.canRecordExpense()) {
+            SettingsMenuItem(
+                label = "Expenses Tracker",
+                icon = Icons.Default.Receipt,
+                onClick = onOpenExpenses
+            )
+        }
 
         SettingsMenuItem(
             label = "Notifications & alerts",
@@ -188,11 +304,13 @@ fun SettingsScreen(
             onClick = onOpenNotifications
         )
 
-        SettingsMenuItem(
-            label = "Credit Reminders",
-            icon = Icons.Default.Receipt,
-            onClick = onOpenCreditReminders
-        )
+        if (isOwner || viewModel.canIssueCredit()) {
+            SettingsMenuItem(
+                label = "Credit Reminders",
+                icon = Icons.Default.Receipt,
+                onClick = onOpenCreditReminders
+            )
+        }
 
         Spacer(modifier = Modifier.height(14.dp))
         SettingsSectionLabel("SUPPORT")
@@ -291,11 +409,17 @@ private fun SettingsSectionLabel(text: String) {
 @Composable
 private fun ProfileHeaderCard(
     shop: Shop,
+    isOwner: Boolean = true,
+    currentEmployee: Employee? = null,
     photoUri: String?,
     onChangePhoto: () -> Unit,
     onPreviewPhoto: () -> Unit,
     onRemovePhoto: () -> Unit
 ) {
+    val displayName = if (isOwner) shop.ownerName else currentEmployee?.name ?: shop.ownerName
+    val displayEmail = if (isOwner) shop.email else currentEmployee?.email ?: shop.email
+    val displayRole = if (isOwner) "Store owner" else "Staff (${currentEmployee?.role ?: "Cashier"})"
+
     SurfaceCard(
         modifier = Modifier.fillMaxWidth(),
         backgroundColor = SurfaceDark,
@@ -310,7 +434,7 @@ private fun ProfileHeaderCard(
                     onClick = if (photoUri != null) onPreviewPhoto else onChangePhoto
                 ) {
                     Text(
-                        shop.ownerName.firstOrNull()?.uppercase() ?: "?",
+                        displayName.firstOrNull()?.uppercase() ?: "?",
                         color = EmeraldPrimary,
                         fontSize = 25.sp,
                         fontWeight = FontWeight.Bold
@@ -331,10 +455,10 @@ private fun ProfileHeaderCard(
             }
             Spacer(Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(shop.ownerName, color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Text(displayName, color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(2.dp))
-                Text("Store owner", color = EmeraldBright, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                Text(shop.email, color = TextSecondary, fontSize = 11.sp, maxLines = 1)
+                Text(displayRole, color = EmeraldBright, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Text(displayEmail, color = TextSecondary, fontSize = 11.sp, maxLines = 1)
             }
         }
         Spacer(Modifier.height(14.dp))

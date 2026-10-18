@@ -147,6 +147,22 @@ data class CustomerCredit(
     val timestamp: Long = createdAt
 )
 
+object EmployeePermissions {
+    const val PERM_RECORD_SALES = "record_sales"
+    const val PERM_STOCK_IN = "stock_in"
+    const val PERM_NEW_PRODUCT = "new_product"
+    const val PERM_CREDIT_SALES = "credit_sales"
+    const val PERM_RECORD_EXPENSES = "record_expenses"
+
+    val ALL_PERMISSIONS = listOf(
+        PERM_RECORD_SALES,
+        PERM_STOCK_IN,
+        PERM_NEW_PRODUCT,
+        PERM_CREDIT_SALES,
+        PERM_RECORD_EXPENSES
+    )
+}
+
 @Serializable
 data class Employee(
     val id: String,
@@ -155,6 +171,29 @@ data class Employee(
     val phone: String,
     val email: String,
     val isOwner: Boolean = false,
+    val shopId: String? = null,
+    val status: String = if (isOwner) "ACTIVE" else "PENDING",
+    val permissions: List<String> = if (isOwner) EmployeePermissions.ALL_PERMISSIONS else listOf(
+        EmployeePermissions.PERM_RECORD_SALES,
+        EmployeePermissions.PERM_STOCK_IN
+    ),
+    val authUserId: String? = null,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@Serializable
+data class ApprovalRequest(
+    val id: String,
+    val type: String, // "NEW_PRODUCT", "STOCK_IN", "CREDIT_SALE", "EXPENSE", "SALE_EDIT"
+    val requesterId: String,
+    val requesterName: String,
+    val title: String,
+    val description: String,
+    val payloadJson: String,
+    val status: String = "PENDING", // "PENDING", "APPROVED", "REJECTED"
+    val createdAt: Long = System.currentTimeMillis(),
+    val reviewedAt: Long? = null,
+    val reviewedBy: String? = null,
     val shopId: String? = null
 )
 

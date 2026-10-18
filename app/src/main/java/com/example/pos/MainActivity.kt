@@ -25,6 +25,7 @@ import com.example.pos.data.PosStorageManager
 import com.example.pos.data.SupabaseClient
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import com.example.pos.ui.screens.EmployeeWaitingApprovalScreen
 import com.example.pos.ui.screens.ForgotPasswordScreen
 import com.example.pos.ui.screens.LoginScreen
 import com.example.pos.ui.screens.MainContainerScreen
@@ -140,17 +141,37 @@ class MainActivity : ComponentActivity() {
                             authViewModel = authViewModel,
                             onRegisterSuccess = {
                                 val regState = authViewModel.registerState.value
-                                posViewModel.registerShop(
-                                    shopName = regState.shopName,
-                                    ownerName = regState.ownerName,
-                                    email = regState.email,
-                                    phone = regState.phone,
-                                    address = regState.address,
-                                    category = regState.category
-                                )
+                                if (regState.isEmployeeSignup) {
+                                    val resolvedUserId = SupabaseClient.service.getUserId()
+                                    posViewModel.registerEmployee(
+                                        shopId = regState.targetShopId,
+                                        name = regState.ownerName,
+                                        phone = regState.phone,
+                                        email = regState.email,
+                                        authUserId = resolvedUserId
+                                    )
+                                } else {
+                                    posViewModel.registerShop(
+                                        shopName = regState.shopName,
+                                        ownerName = regState.ownerName,
+                                        email = regState.email,
+                                        phone = regState.phone,
+                                        address = regState.address,
+                                        category = regState.category
+                                    )
+                                }
                             },
                             onNavigateToStep1 = {
                                 posViewModel.navigateTo("register_step1")
+                            }
+                        )
+                        "employee_waiting_approval" -> EmployeeWaitingApprovalScreen(
+                            viewModel = posViewModel,
+                            onApproved = {
+                                posViewModel.navigateTo("main")
+                            },
+                            onLogout = {
+                                posViewModel.logout()
                             }
                         )
                         else -> MainContainerScreen(

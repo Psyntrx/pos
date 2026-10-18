@@ -34,6 +34,9 @@ import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.LocalGroceryStore
+import androidx.compose.material.icons.filled.HourglassTop
+import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.ShoppingBag
@@ -87,9 +90,13 @@ fun DashboardScreen(
     onOpenCreditSales: () -> Unit,
     onOpenExpenses: () -> Unit,
     onOpenNotifications: () -> Unit,
+    onOpenApprovals: () -> Unit = {},
     hasUnreadNotifications: Boolean = false,
     unreadNotificationsCount: Int = if (hasUnreadNotifications) 1 else 0
 ) {
+    val isOwner by viewModel.isOwner.collectAsState()
+    val totalPendingCount by viewModel.totalPendingCount.collectAsState()
+    val currentEmployee by viewModel.currentEmployee.collectAsState()
     val shop by viewModel.shop.collectAsState()
     val products by viewModel.products.collectAsState()
     val salesHistory by viewModel.salesHistory.collectAsState()
@@ -348,6 +355,88 @@ fun DashboardScreen(
                 }
             }
 
+            // Live Approvals Alert Banner for Store Owner
+            if (isOwner && totalPendingCount > 0) {
+                SurfaceCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 14.dp)
+                        .clickable { onOpenApprovals() },
+                    backgroundColor = SurfaceDark,
+                    borderColor = WarningYellow.copy(alpha = 0.5f),
+                    cornerRadius = 20.dp
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(WarningYellow.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.HourglassTop,
+                                contentDescription = null,
+                                tint = WarningYellow,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Approvals Queue",
+                                    color = TextPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(WarningYellow)
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "$totalPendingCount pending",
+                                        color = Color.Black,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "New products, restocks, credit sales, or staff signups",
+                                color = TextSecondary,
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(WarningYellow)
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = "Review",
+                                color = Color.Black,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+            }
+
             // 1. Today's Sales Hero Card with Interactive Doughnut Chart
             SurfaceCard(
                 modifier = Modifier.fillMaxWidth(),
@@ -392,7 +481,7 @@ fun DashboardScreen(
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(6.dp))
-                                            .clickable { showTargetDialog = true }
+                                            .then(if (isOwner) Modifier.clickable { showTargetDialog = true } else Modifier)
                                     ) {
                                         Text(
                                             text = "Target: KSh ${String.format("%,.0f", dailyTarget)}",
@@ -401,13 +490,15 @@ fun DashboardScreen(
                                                 fontSize = 11.sp
                                             )
                                         )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Icon(
-                                            imageVector = Icons.Default.Edit,
-                                            contentDescription = "Edit target",
-                                            tint = EmeraldBright,
-                                            modifier = Modifier.size(12.dp)
-                                        )
+                                        if (isOwner) {
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Icon(
+                                                imageVector = Icons.Default.Edit,
+                                                contentDescription = "Edit target",
+                                                tint = EmeraldBright,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                        }
                                     }
                                     Text(
                                         text = "${(animatedTargetProgress * 100).toInt()}%",
@@ -543,64 +634,121 @@ fun DashboardScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 2. Metrics 2x2 Grid (Financial Snapshot)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Gross Profit
-                FinancialCard(
-                    title = "Gross Profit",
-                    value = "KSh ${String.format("%,.0f", grossProfit)}",
-                    badgeText = "Gross",
-                    badgeColor = EmeraldBright,
-                    badgeBgColor = EmeraldContainer,
-                    icon = Icons.AutoMirrored.Filled.TrendingUp,
-                    modifier = Modifier.weight(1f)
-                )
+            // 2. Metrics 2x2 Grid (Financial Snapshot for Owner vs Operational Snapshot for Staff)
+            if (isOwner) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Gross Profit
+                    FinancialCard(
+                        title = "Gross Profit",
+                        value = "KSh ${String.format("%,.0f", grossProfit)}",
+                        badgeText = "Gross",
+                        badgeColor = EmeraldBright,
+                        badgeBgColor = EmeraldContainer,
+                        icon = Icons.AutoMirrored.Filled.TrendingUp,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                // Expenses (Clickable to open Expenses Modal)
-                FinancialCard(
-                    title = "Expenses",
-                    value = "KSh ${String.format("%,.0f", totalExpenses)}",
-                    badgeText = "Track",
-                    badgeColor = TextSecondary,
-                    badgeBgColor = SurfaceDarkVariant,
-                    icon = Icons.AutoMirrored.Outlined.ReceiptLong,
-                    onClick = onOpenExpenses,
-                    modifier = Modifier.weight(1f)
-                )
-            }
+                    // Expenses (Clickable to open Expenses Modal)
+                    FinancialCard(
+                        title = "Expenses",
+                        value = "KSh ${String.format("%,.0f", totalExpenses)}",
+                        badgeText = "Track",
+                        badgeColor = TextSecondary,
+                        badgeBgColor = SurfaceDarkVariant,
+                        icon = Icons.AutoMirrored.Outlined.ReceiptLong,
+                        onClick = onOpenExpenses,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
 
-            Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Net Profit (Prominently styled)
-                FinancialCard(
-                    title = "Net Profit",
-                    value = "KSh ${String.format("%,.0f", netProfit)}",
-                    badgeText = "+ 18%",
-                    badgeColor = EmeraldBright,
-                    badgeBgColor = EmeraldContainer,
-                    icon = Icons.Default.AccountBalanceWallet,
-                    highlightBorder = true,
-                    modifier = Modifier.weight(1f)
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Net Profit (Prominently styled)
+                    FinancialCard(
+                        title = "Net Profit",
+                        value = "KSh ${String.format("%,.0f", netProfit)}",
+                        badgeText = "+ 18%",
+                        badgeColor = EmeraldBright,
+                        badgeBgColor = EmeraldContainer,
+                        icon = Icons.Default.AccountBalanceWallet,
+                        highlightBorder = true,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                // Transactions
-                FinancialCard(
-                    title = "Transactions",
-                    value = "$totalTransactions sales",
-                    badgeText = "Today",
-                    badgeColor = TextMuted,
-                    badgeBgColor = SurfaceDarkVariant,
-                    icon = Icons.Outlined.Receipt,
-                    onClick = { onNavigateToTab(3) },
-                    modifier = Modifier.weight(1f)
-                )
+                    // Transactions
+                    FinancialCard(
+                        title = "Transactions",
+                        value = "$totalTransactions sales",
+                        badgeText = "Today",
+                        badgeColor = TextMuted,
+                        badgeBgColor = SurfaceDarkVariant,
+                        icon = Icons.Outlined.Receipt,
+                        onClick = { onNavigateToTab(3) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            } else {
+                // Employee View (Hides cost prices, profits, and expenses)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    FinancialCard(
+                        title = "Transactions",
+                        value = "$totalTransactions sales",
+                        badgeText = "Today",
+                        badgeColor = EmeraldBright,
+                        badgeBgColor = EmeraldContainer,
+                        icon = Icons.Outlined.Receipt,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    FinancialCard(
+                        title = "Catalog Items",
+                        value = "${products.size} products",
+                        badgeText = "Catalog",
+                        badgeColor = TextSecondary,
+                        badgeBgColor = SurfaceDarkVariant,
+                        icon = Icons.Default.Inventory2,
+                        onClick = { onNavigateToTab(2) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    FinancialCard(
+                        title = "Stock Health",
+                        value = "${products.count { !it.isLowStock }} healthy",
+                        badgeText = "In Stock",
+                        badgeColor = EmeraldBright,
+                        badgeBgColor = EmeraldContainer,
+                        icon = Icons.Default.CheckCircle,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    FinancialCard(
+                        title = "Low Stock Alerts",
+                        value = "${lowStockProducts.size} items",
+                        badgeText = if (lowStockProducts.isEmpty()) "Optimal" else "Low Stock",
+                        badgeColor = if (lowStockProducts.isEmpty()) EmeraldBright else WarningYellow,
+                        badgeBgColor = if (lowStockProducts.isEmpty()) EmeraldContainer else WarningContainer,
+                        icon = Icons.Default.WarningAmber,
+                        onClick = onOpenNotifications,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -648,19 +796,32 @@ fun DashboardScreen(
                     onClick = { onOpenStockIn(null) }
                 )
 
-                // "Expenses" Pill
-                SecondaryActionPill(
-                    label = "Expenses",
-                    icon = Icons.Default.Receipt,
-                    onClick = onOpenExpenses
-                )
+                if (isOwner) {
+                    // Owner Approvals Queue
+                    SecondaryActionPill(
+                        label = if (totalPendingCount > 0) "Approvals ($totalPendingCount)" else "Approvals",
+                        icon = Icons.Default.VerifiedUser,
+                        onClick = onOpenApprovals
+                    )
+                }
 
-                // "Credit" Pill
-                SecondaryActionPill(
-                    label = "Credit",
-                    icon = Icons.Default.CreditCard,
-                    onClick = onOpenCreditSales
-                )
+                // "Expenses" Pill (Visible to Owner, or Employee with expense permission)
+                if (isOwner || viewModel.canRecordExpense()) {
+                    SecondaryActionPill(
+                        label = "Expenses",
+                        icon = Icons.Default.Receipt,
+                        onClick = onOpenExpenses
+                    )
+                }
+
+                // "Credit" Pill (Visible to Owner, or Employee with credit permission)
+                if (isOwner || viewModel.canIssueCredit()) {
+                    SecondaryActionPill(
+                        label = "Credit",
+                        icon = Icons.Default.CreditCard,
+                        onClick = onOpenCreditSales
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(22.dp))

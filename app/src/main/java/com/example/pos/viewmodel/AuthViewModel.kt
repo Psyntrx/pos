@@ -3,6 +3,8 @@ package com.example.pos.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pos.data.AuthSession
+import com.example.pos.data.Employee
+import com.example.pos.data.EmployeePermissions
 import com.example.pos.data.PosStorageManager
 import com.example.pos.data.Shop
 import com.example.pos.data.SupabaseClient
@@ -33,6 +35,10 @@ data class RegisterUiState(
     val passwordVisible: Boolean = false,
     val confirmPasswordVisible: Boolean = false,
 
+    // Role & Employee Signup
+    val isEmployeeSignup: Boolean = false,
+    val targetShopId: String = "",
+
     // UI Status
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
@@ -48,8 +54,12 @@ data class RegisterUiState(
     // Step 1 Validation
     val isEmailValid: Boolean get() = isValidEmail(email)
     val isStep1Valid: Boolean get() =
-        shopName.isNotBlank() && ownerName.isNotBlank() && phone.isNotBlank() &&
-                isEmailValid && category.isNotBlank() && address.isNotBlank()
+        if (isEmployeeSignup) {
+            targetShopId.isNotBlank() && ownerName.isNotBlank() && phone.isNotBlank() && isEmailValid
+        } else {
+            shopName.isNotBlank() && ownerName.isNotBlank() && phone.isNotBlank() &&
+                    isEmailValid && category.isNotBlank() && address.isNotBlank()
+        }
 
     // Step 2 Password Validation
     val isMinLengthValid: Boolean get() = password.length >= 8
@@ -134,6 +144,29 @@ class AuthViewModel(
         }
     }
 
+    fun setEmployeeSignup(isEmployee: Boolean) {
+        _registerState.update {
+            it.copy(isEmployeeSignup = isEmployee, errorMessage = null)
+        }
+    }
+
+    fun updateEmployeeStep1Data(
+        targetShopId: String,
+        name: String,
+        phone: String,
+        email: String
+    ) {
+        _registerState.update {
+            it.copy(
+                targetShopId = targetShopId,
+                ownerName = name,
+                phone = phone,
+                email = email,
+                errorMessage = null
+            )
+        }
+    }
+
     // -------------------------------------------------------------
     // Register Step 2 Actions
     // -------------------------------------------------------------
@@ -167,7 +200,10 @@ class AuthViewModel(
         }
     }
 
-    fun submitRegistration(onSuccess: (Shop) -> Unit) {
+    fun submitRegistration(
+        onSuccess: (Shop) -> Unit,
+        onEmployeeSuccess: ((Employee) -> Unit)? = null
+    ) {
         val state = _registerState.value
         if (!state.canSubmit) {
             _registerState.update {
@@ -176,6 +212,54 @@ class AuthViewModel(
             return
         }
 
+        if (state.isEmployeeSignup) {
+            // Employee Registration Flow
+            _registerState.update { it.copy(isLoading = true, errorMessage = null) }
+            val meta = mapOf(
+                "full_name" to state.ownerName.trim(),
+                "phone" to state.phone.trim(),
+                "role" to "EMPLOYEE",
+                "shop_id" to state.targetShopId.trim()
+            )
+            viewModelScope.launch {
+                val result = supabase?.signUp(state.email.trim(), state.password, meta)
+                val resolvedUserId = supabase?.getUserId()
+                    ?: result?.getOrNull()?.let { supabase.extractUserId(it) }
+
+                val emp = Employee(
+                    id = "emp_${System.currentTimeMillis()}",
+                    name = state.ownerName.trim(),
+                    role = "Cashier",
+                    phone = state.phone.trim(),
+                    email = state.email.trim(),
+                    isOwner = false,
+                    shopId = state.targetShopId.trim(),
+                    status = "PENDING",
+                    permissions = listOf(
+                        EmployeePermissions.PERM_RECORD_SALES,
+                        EmployeePermissions.PERM_STOCK_IN
+                    ),
+                    authUserId = resolvedUserId
+                )
+
+                if (supabase != null) {
+                    supabase.upsertEmployee(emp, state.targetShopId.trim())
+                }
+
+                storageManager?.saveCurrentUserRole("EMPLOYEE")
+                storageManager?.saveActiveEmployeeId(emp.id)
+
+                _registerState.update {
+                    it.copy(isLoading = false, isRegisteredSuccessfully = true)
+                }
+
+                onEmployeeSuccess?.invoke(emp)
+                    ?: onSuccess(Shop(id = state.targetShopId.trim(), name = "Shop ${state.targetShopId.trim()}"))
+            }
+            return
+        }
+
+        // Owner Registration Flow
         val initialUserId = supabase?.getUserId() ?: ""
         val targetShopId = initialUserId.takeIf { it.isNotBlank() }
             ?: "shop_${state.email.substringBefore('@').ifBlank { "main" }}"
@@ -189,6 +273,8 @@ class AuthViewModel(
             address = state.address.trim(),
             category = state.category.trim()
         )
+
+        storageManager?.saveCurrentUserRole("OWNER")
 
         if (supabase == null) {
             _registerState.update { it.copy(isLoading = false, isRegisteredSuccessfully = true) }
@@ -220,6 +306,7 @@ class AuthViewModel(
                     }
                     // Ensure the shop is persisted in Supabase shops table
                     supabase.saveShop(finalShop)
+                    storageManager?.saveCurrentUserRole("OWNER")
                     _registerState.update {
                         it.copy(isLoading = false, isRegisteredSuccessfully = true)
                     }

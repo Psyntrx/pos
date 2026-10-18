@@ -746,6 +746,21 @@ class SupabaseService(
         }
     }
 
+    suspend fun deleteStockInRecord(recordId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val req = buildRequest(
+                path = "/rest/v1/stock_in_records?id=eq.$recordId",
+                method = "DELETE"
+            )
+            client.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) Result.success(Unit)
+                else Result.failure(Exception("Failed to delete stock in record (${resp.code})"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     // ==========================================
     // EXPENSES
     // ==========================================
@@ -933,15 +948,44 @@ class SupabaseService(
                 val list = mutableListOf<Employee>()
                 for (i in 0 until arr.length()) {
                     val obj = arr.getJSONObject(i)
+                    val isOwner = obj.optBoolean("is_owner", false)
+                    val rawRole = obj.optString("role", if (isOwner) "Owner" else "Cashier")
+
+                    var displayRole = rawRole
+                    var status = if (isOwner) "ACTIVE" else "ACTIVE"
+                    var perms: List<String> = if (isOwner) EmployeePermissions.ALL_PERMISSIONS else listOf(
+                        EmployeePermissions.PERM_RECORD_SALES,
+                        EmployeePermissions.PERM_STOCK_IN
+                    )
+                    var authUid: String? = null
+
+                    if (rawRole.contains("||")) {
+                        val parts = rawRole.split("||")
+                        displayRole = parts[0]
+                        parts.forEach { part ->
+                            when {
+                                part.startsWith("status:") -> status = part.removePrefix("status:")
+                                part.startsWith("perms:") -> {
+                                    val pStr = part.removePrefix("perms:")
+                                    if (pStr.isNotBlank()) perms = pStr.split(",").map { it.trim() }
+                                }
+                                part.startsWith("authUid:") -> authUid = part.removePrefix("authUid:").takeIf { it.isNotBlank() }
+                            }
+                        }
+                    }
+
                     list.add(
                         Employee(
                             id = obj.optString("id"),
                             name = obj.optString("name"),
-                            role = obj.optString("role"),
+                            role = displayRole,
                             phone = obj.optString("phone"),
                             email = obj.optString("email"),
-                            isOwner = obj.optBoolean("is_owner", false),
-                            shopId = obj.optString("shop_id", "").takeIf { it.isNotBlank() }
+                            isOwner = isOwner,
+                            shopId = obj.optString("shop_id", "").takeIf { it.isNotBlank() },
+                            status = status,
+                            permissions = perms,
+                            authUserId = authUid
                         )
                     )
                 }
@@ -955,10 +999,19 @@ class SupabaseService(
     suspend fun upsertEmployee(employee: Employee, shopId: String? = null): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val resolvedShopId = shopId ?: employee.shopId
+            val encodedRole = buildString {
+                append(employee.role.substringBefore("||"))
+                append("||status:").append(employee.status)
+                append("||perms:").append(employee.permissions.joinToString(","))
+                if (!employee.authUserId.isNullOrBlank()) {
+                    append("||authUid:").append(employee.authUserId)
+                }
+            }
+
             val json = JSONObject().apply {
                 put("id", employee.id)
                 put("name", employee.name)
-                put("role", employee.role)
+                put("role", encodedRole)
                 put("phone", employee.phone)
                 put("email", employee.email)
                 put("is_owner", employee.isOwner)

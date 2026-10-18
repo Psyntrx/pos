@@ -552,6 +552,7 @@ fun StockInScreen(
     initialProductId: String? = null,
     onClose: () -> Unit
 ) {
+    val isOwner by viewModel.isOwner.collectAsState()
     val products by viewModel.products.collectAsState()
     val shop by viewModel.shop.collectAsState()
 
@@ -767,8 +768,13 @@ fun StockInScreen(
                                             }
                                         }
                                         Spacer(modifier = Modifier.height(2.dp))
+                                        val priceDetails = if (isOwner) {
+                                            "${prod.category} • SKU: ${prod.sku} • Buy: KSh ${prod.buyingPrice.toInt()} • Sell: KSh ${prod.sellingPrice.toInt()}"
+                                        } else {
+                                            "${prod.category} • SKU: ${prod.sku} • Sell: KSh ${prod.sellingPrice.toInt()}"
+                                        }
                                         Text(
-                                            text = "${prod.category} • SKU: ${prod.sku} • Buy: KSh ${prod.buyingPrice.toInt()} • Sell: KSh ${prod.sellingPrice.toInt()}",
+                                            text = priceDetails,
                                             style = MaterialTheme.typography.bodySmall.copy(
                                                 color = TextSecondary,
                                                 fontSize = 11.sp
@@ -905,15 +911,17 @@ fun StockInScreen(
                 },
                 label = { Text("Buying Price / Cost (KSh)", color = TextSecondary) },
                 placeholder = { Text(selectedProduct?.buyingPrice?.toString() ?: "0.0", color = TextMuted) },
-                supportingText = {
-                    selectedProduct?.let {
-                        Text(
-                            text = "Current: KSh ${it.buyingPrice}. Modifying updates the product cost.",
-                            color = TextMuted,
-                            fontSize = 11.sp
-                        )
+                supportingText = if (isOwner) {
+                    {
+                        selectedProduct?.let {
+                            Text(
+                                text = "Current: KSh ${it.buyingPrice}. Modifying updates the product cost.",
+                                color = TextMuted,
+                                fontSize = 11.sp
+                            )
+                        }
                     }
-                },
+                } else null,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
@@ -1053,7 +1061,7 @@ fun StockInScreen(
 
             // 8. Submit Button
             PrimaryGreenButton(
-                text = "Record Stock In",
+                text = if (isOwner) "Record Stock In" else "Submit Stock In for Owner Approval",
                 onClick = {
                     val prod = selectedProduct ?: filteredProducts.firstOrNull()
                     if (prod == null) {
@@ -1077,7 +1085,7 @@ fun StockInScreen(
                         buyingPrice = finalBuying,
                         sellingPrice = finalSelling,
                         supplier = finalSupplier,
-                        employeeName = shop.ownerName.ifBlank { "Store Owner" }
+                        employeeName = if (isOwner) shop.ownerName.ifBlank { "Store Owner" } else viewModel.currentEmployee.value?.name ?: "Employee"
                     )
 
                     onClose()

@@ -40,6 +40,7 @@ import com.example.pos.ui.components.AbstractBlobHeader
 import com.example.pos.ui.components.GoogleIcon
 import com.example.pos.ui.components.PrimaryGreenButton
 import com.example.pos.ui.components.posTextFieldColors
+import com.example.pos.data.Employee
 import com.example.pos.ui.theme.*
 import com.example.pos.viewmodel.AuthViewModel
 
@@ -147,147 +148,152 @@ fun RegisterShopStep1Screen(
 
 
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                val shopCategories = remember {
-                    listOf(
-                        "Retail & Grocery",
-                        "Supermarket / Minimart",
-                        "Electronics & Tech",
-                        "Fashion, Clothes & Apparel",
-                        "Pharmacy & Chemist",
-                        "Hardware & Building Materials",
-                        "Beauty, Cosmetics & Salon",
-                        "Restaurant, Cafe & Eatery",
-                        "Wholesale & Distribution",
-                        "General Store & Kiosk",
-                        "Bakery & Pastries",
-                        "Butchery & Fresh Meat",
-                        "Wines, Spirits & Beverages",
-                        "Bookshop & Stationery",
-                        "Automotive & Spare Parts",
-                        "Agrovet & Farming Inputs",
-                        "Other / Services"
-                    )
+                // ── Role Selector Tab (Owner vs Employee) ────────────────────────
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(SurfaceDarkVariant)
+                        .padding(4.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (!registerState.isEmployeeSignup) EmeraldBright else Color.Transparent)
+                            .clickable { authViewModel.setEmployeeSignup(false) }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Store Owner",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = if (!registerState.isEmployeeSignup) Color.Black else TextSecondary
+                            )
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (registerState.isEmployeeSignup) EmeraldBright else Color.Transparent)
+                            .clickable { authViewModel.setEmployeeSignup(true) }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Staff / Employee",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = if (registerState.isEmployeeSignup) Color.Black else TextSecondary
+                            )
+                        )
+                    }
                 }
-                var categoryExpanded by remember { mutableStateOf(false) }
 
-                // Shop Name
-                OutlinedTextField(
-                    value = registerState.shopName,
-                    onValueChange = {
-                        authViewModel.updateStep1Data(
-                            it, registerState.ownerName, registerState.phone,
-                            registerState.email, registerState.category, registerState.address
-                        )
-                    },
-                    label = { Text("Shop Name") },
-                    placeholder = { Text("e.g. Acme Supermarket") },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.Storefront, contentDescription = null, tint = EmeraldBright)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    textStyle = LocalTextStyle.current.copy(color = TextPrimary),
-                    colors = posTextFieldColors(),
-                    singleLine = true
-                )
+                Spacer(modifier = Modifier.height(20.dp))
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Owner Name
-                OutlinedTextField(
-                    value = registerState.ownerName,
-                    onValueChange = {
-                        authViewModel.updateStep1Data(
-                            registerState.shopName, it, registerState.phone,
-                            registerState.email, registerState.category, registerState.address
-                        )
-                    },
-                    label = { Text("Full Name / Owner") },
-                    placeholder = { Text("e.g. John Doe") },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.Person, contentDescription = null, tint = EmeraldBright)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    textStyle = LocalTextStyle.current.copy(color = TextPrimary),
-                    colors = posTextFieldColors(),
-                    singleLine = true
-                )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Email Address
-                OutlinedTextField(
-                    value = registerState.email,
-                    onValueChange = {
-                        authViewModel.updateStep1Data(
-                            registerState.shopName, registerState.ownerName, registerState.phone,
-                            it, registerState.category, registerState.address
-                        )
-                    },
-                    label = { Text("Email Address") },
-                    placeholder = { Text("e.g. contact@myshop.com") },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.Email, contentDescription = null, tint = EmeraldBright)
-                    },
-                    isError = registerState.email.isNotBlank() && !registerState.isEmailValid,
-                    supportingText = {
-                        if (registerState.email.isNotBlank() && !registerState.isEmailValid) {
-                            Text("Enter a valid email format.", color = ErrorRed, fontSize = 12.sp)
+                if (registerState.isEmployeeSignup) {
+                    // ── Employee Registration Fields ─────────────────────────────
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = SurfaceDarkVariant.copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, SurfaceBorder)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = EmeraldBright,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "Ask your Store Owner for their Shop Code (found in Shop Settings). Once registered, your account will be reviewed and approved by the owner.",
+                                style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 12.sp)
+                            )
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    textStyle = LocalTextStyle.current.copy(color = TextPrimary),
-                    colors = posTextFieldColors(),
-                    singleLine = true
-                )
+                    }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                // Phone Number
-                OutlinedTextField(
-                    value = registerState.phone,
-                    onValueChange = {
-                        authViewModel.updateStep1Data(
-                            registerState.shopName, registerState.ownerName, it,
-                            registerState.email, registerState.category, registerState.address
-                        )
-                    },
-                    label = { Text("Phone Number") },
-                    placeholder = { Text("e.g. +254 712 345 678") },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.Phone, contentDescription = null, tint = EmeraldBright)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    textStyle = LocalTextStyle.current.copy(color = TextPrimary),
-                    colors = posTextFieldColors(),
-                    singleLine = true
-                )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Category
-                Box(modifier = Modifier.fillMaxWidth()) {
+                    // Shop Code / ID
                     OutlinedTextField(
-                        value = registerState.category,
+                        value = registerState.targetShopId,
                         onValueChange = {
-                            authViewModel.updateStep1Data(
-                                registerState.shopName, registerState.ownerName, registerState.phone,
-                                registerState.email, it, registerState.address
+                            authViewModel.updateEmployeeStep1Data(
+                                targetShopId = it,
+                                name = registerState.ownerName,
+                                phone = registerState.phone,
+                                email = registerState.email
                             )
                         },
-                        label = { Text("Shop Category") },
-                        placeholder = { Text("Select or enter category") },
+                        label = { Text("Shop Code / ID") },
+                        placeholder = { Text("e.g. shop_main or UUID from owner") },
                         leadingIcon = {
-                            Icon(Icons.Outlined.Badge, contentDescription = null, tint = EmeraldBright)
+                            Icon(Icons.Outlined.Storefront, contentDescription = null, tint = EmeraldBright)
                         },
-                        trailingIcon = {
-                            IconButton(onClick = { categoryExpanded = !categoryExpanded }) {
-                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Select category", tint = EmeraldBright)
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                        colors = posTextFieldColors(),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Employee Full Name
+                    OutlinedTextField(
+                        value = registerState.ownerName,
+                        onValueChange = {
+                            authViewModel.updateEmployeeStep1Data(
+                                targetShopId = registerState.targetShopId,
+                                name = it,
+                                phone = registerState.phone,
+                                email = registerState.email
+                            )
+                        },
+                        label = { Text("Full Name") },
+                        placeholder = { Text("e.g. John Doe") },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.Person, contentDescription = null, tint = EmeraldBright)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                        colors = posTextFieldColors(),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Employee Email Address
+                    OutlinedTextField(
+                        value = registerState.email,
+                        onValueChange = {
+                            authViewModel.updateEmployeeStep1Data(
+                                targetShopId = registerState.targetShopId,
+                                name = registerState.ownerName,
+                                phone = registerState.phone,
+                                email = it
+                            )
+                        },
+                        label = { Text("Email Address") },
+                        placeholder = { Text("e.g. staff@example.com") },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.Email, contentDescription = null, tint = EmeraldBright)
+                        },
+                        isError = registerState.email.isNotBlank() && !registerState.isEmailValid,
+                        supportingText = {
+                            if (registerState.email.isNotBlank() && !registerState.isEmailValid) {
+                                Text("Enter a valid email format.", color = ErrorRed, fontSize = 12.sp)
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -297,56 +303,231 @@ fun RegisterShopStep1Screen(
                         singleLine = true
                     )
 
-                    DropdownMenu(
-                        expanded = categoryExpanded,
-                        onDismissRequest = { categoryExpanded = false },
-                        modifier = Modifier
-                            .fillMaxWidth(0.88f)
-                            .background(SurfaceDark)
-                            .border(1.dp, SurfaceBorder, RoundedCornerShape(8.dp))
-                    ) {
-                        shopCategories.forEach { categoryOption ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = categoryOption,
-                                        color = if (registerState.category == categoryOption) EmeraldBright else TextPrimary
-                                    )
-                                },
-                                onClick = {
-                                    authViewModel.updateStep1Data(
-                                        registerState.shopName, registerState.ownerName, registerState.phone,
-                                        registerState.email, categoryOption, registerState.address
-                                    )
-                                    categoryExpanded = false
-                                }
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Employee Phone Number
+                    OutlinedTextField(
+                        value = registerState.phone,
+                        onValueChange = {
+                            authViewModel.updateEmployeeStep1Data(
+                                targetShopId = registerState.targetShopId,
+                                name = registerState.ownerName,
+                                phone = it,
+                                email = registerState.email
                             )
+                        },
+                        label = { Text("Phone Number") },
+                        placeholder = { Text("e.g. +254 712 345 678") },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.Phone, contentDescription = null, tint = EmeraldBright)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                        colors = posTextFieldColors(),
+                        singleLine = true
+                    )
+                } else {
+                    // ── Store Owner Registration Fields ──────────────────────────
+                    val shopCategories = remember {
+                        listOf(
+                            "Retail & Grocery",
+                            "Supermarket / Minimart",
+                            "Electronics & Tech",
+                            "Fashion, Clothes & Apparel",
+                            "Pharmacy & Chemist",
+                            "Hardware & Building Materials",
+                            "Beauty, Cosmetics & Salon",
+                            "Restaurant, Cafe & Eatery",
+                            "Wholesale & Distribution",
+                            "General Store & Kiosk",
+                            "Bakery & Pastries",
+                            "Butchery & Fresh Meat",
+                            "Wines, Spirits & Beverages",
+                            "Bookshop & Stationery",
+                            "Automotive & Spare Parts",
+                            "Agrovet & Farming Inputs",
+                            "Other / Services"
+                        )
+                    }
+                    var categoryExpanded by remember { mutableStateOf(false) }
+
+                    // Shop Name
+                    OutlinedTextField(
+                        value = registerState.shopName,
+                        onValueChange = {
+                            authViewModel.updateStep1Data(
+                                it, registerState.ownerName, registerState.phone,
+                                registerState.email, registerState.category, registerState.address
+                            )
+                        },
+                        label = { Text("Shop Name") },
+                        placeholder = { Text("e.g. Acme Supermarket") },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.Storefront, contentDescription = null, tint = EmeraldBright)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                        colors = posTextFieldColors(),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Owner Name
+                    OutlinedTextField(
+                        value = registerState.ownerName,
+                        onValueChange = {
+                            authViewModel.updateStep1Data(
+                                registerState.shopName, it, registerState.phone,
+                                registerState.email, registerState.category, registerState.address
+                            )
+                        },
+                        label = { Text("Full Name / Owner") },
+                        placeholder = { Text("e.g. John Doe") },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.Person, contentDescription = null, tint = EmeraldBright)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                        colors = posTextFieldColors(),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Email Address
+                    OutlinedTextField(
+                        value = registerState.email,
+                        onValueChange = {
+                            authViewModel.updateStep1Data(
+                                registerState.shopName, registerState.ownerName, registerState.phone,
+                                it, registerState.category, registerState.address
+                            )
+                        },
+                        label = { Text("Email Address") },
+                        placeholder = { Text("e.g. contact@myshop.com") },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.Email, contentDescription = null, tint = EmeraldBright)
+                        },
+                        isError = registerState.email.isNotBlank() && !registerState.isEmailValid,
+                        supportingText = {
+                            if (registerState.email.isNotBlank() && !registerState.isEmailValid) {
+                                Text("Enter a valid email format.", color = ErrorRed, fontSize = 12.sp)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                        colors = posTextFieldColors(),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Phone Number
+                    OutlinedTextField(
+                        value = registerState.phone,
+                        onValueChange = {
+                            authViewModel.updateStep1Data(
+                                registerState.shopName, registerState.ownerName, it,
+                                registerState.email, registerState.category, registerState.address
+                            )
+                        },
+                        label = { Text("Phone Number") },
+                        placeholder = { Text("e.g. +254 712 345 678") },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.Phone, contentDescription = null, tint = EmeraldBright)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                        colors = posTextFieldColors(),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Category
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = registerState.category,
+                            onValueChange = {
+                                authViewModel.updateStep1Data(
+                                    registerState.shopName, registerState.ownerName, registerState.phone,
+                                    registerState.email, it, registerState.address
+                                )
+                            },
+                            label = { Text("Shop Category") },
+                            placeholder = { Text("Select or enter category") },
+                            leadingIcon = {
+                                Icon(Icons.Outlined.Badge, contentDescription = null, tint = EmeraldBright)
+                            },
+                            trailingIcon = {
+                                IconButton(onClick = { categoryExpanded = !categoryExpanded }) {
+                                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Select category", tint = EmeraldBright)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                            colors = posTextFieldColors(),
+                            singleLine = true
+                        )
+
+                        DropdownMenu(
+                            expanded = categoryExpanded,
+                            onDismissRequest = { categoryExpanded = false },
+                            modifier = Modifier
+                                .fillMaxWidth(0.88f)
+                                .background(SurfaceDark)
+                                .border(1.dp, SurfaceBorder, RoundedCornerShape(8.dp))
+                        ) {
+                            shopCategories.forEach { categoryOption ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = categoryOption,
+                                            color = if (registerState.category == categoryOption) EmeraldBright else TextPrimary
+                                        )
+                                    },
+                                    onClick = {
+                                        authViewModel.updateStep1Data(
+                                            registerState.shopName, registerState.ownerName, registerState.phone,
+                                            registerState.email, categoryOption, registerState.address
+                                        )
+                                        categoryExpanded = false
+                                    }
+                                )
+                            }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Address
+                    OutlinedTextField(
+                        value = registerState.address,
+                        onValueChange = {
+                            authViewModel.updateStep1Data(
+                                registerState.shopName, registerState.ownerName, registerState.phone,
+                                registerState.email, registerState.category, it
+                            )
+                        },
+                        label = { Text("Shop Physical Address") },
+                        placeholder = { Text("e.g. Plot 42, Biashara Street, Nairobi") },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.Place, contentDescription = null, tint = EmeraldBright)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                        colors = posTextFieldColors(),
+                        singleLine = true
+                    )
                 }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Address
-                OutlinedTextField(
-                    value = registerState.address,
-                    onValueChange = {
-                        authViewModel.updateStep1Data(
-                            registerState.shopName, registerState.ownerName, registerState.phone,
-                            registerState.email, registerState.category, it
-                        )
-                    },
-                    label = { Text("Shop Physical Address") },
-                    placeholder = { Text("e.g. Plot 42, Biashara Street, Nairobi") },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.Place, contentDescription = null, tint = EmeraldBright)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    textStyle = LocalTextStyle.current.copy(color = TextPrimary),
-                    colors = posTextFieldColors(),
-                    singleLine = true
-                )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -522,7 +703,7 @@ fun RegisterShopStep2Screen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Security Setup",
+                    text = if (registerState.isEmployeeSignup) "Staff Security" else "Security Setup",
                     style = MaterialTheme.typography.headlineLarge.copy(
                         fontWeight = FontWeight.Bold,
                         fontStyle = FontStyle.Italic,
@@ -534,7 +715,7 @@ fun RegisterShopStep2Screen(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "Step 2 of 2: Create a secure password",
+                    text = if (registerState.isEmployeeSignup) "Step 2 of 2: Create your staff terminal password" else "Step 2 of 2: Create a secure password",
                     style = MaterialTheme.typography.bodyMedium.copy(
                         color = TextSecondary,
                         fontSize = 13.sp
@@ -599,23 +780,26 @@ fun RegisterShopStep2Screen(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Business Reg No (Optional)
-                OutlinedTextField(
-                    value = registerState.businessRegNo,
-                    onValueChange = { authViewModel.updateBusinessRegNo(it) },
-                    label = { Text("Business Registration No. (Optional)") },
-                    placeholder = { Text("e.g. BN/2026/0123") },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.Badge, contentDescription = null, tint = EmeraldBright)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    textStyle = LocalTextStyle.current.copy(color = TextPrimary),
-                    colors = posTextFieldColors(),
-                    singleLine = true
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
+                if (!registerState.isEmployeeSignup) {
+                    // Business Reg No (Optional)
+                    OutlinedTextField(
+                        value = registerState.businessRegNo,
+                        onValueChange = { authViewModel.updateBusinessRegNo(it) },
+                        label = { Text("Business Registration No. (Optional)") },
+                        placeholder = { Text("e.g. BN/2026/0123") },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.Badge, contentDescription = null, tint = EmeraldBright)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        textStyle = LocalTextStyle.current.copy(color = TextPrimary),
+                        colors = posTextFieldColors(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                } else {
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
 
                 // Password requirement checklist card
                 Surface(
@@ -664,12 +848,13 @@ fun RegisterShopStep2Screen(
 
                 // Complete registration button
                 PrimaryGreenButton(
-                    text = if (registerState.isLoading) "Creating Account..." else "Complete Registration",
+                    text = if (registerState.isLoading) "Creating Account..." else if (registerState.isEmployeeSignup) "Submit for Owner Approval" else "Complete Registration",
                     enabled = registerState.canSubmit && !registerState.isLoading,
                     onClick = {
-                        authViewModel.submitRegistration {
-                            onRegisterSuccess()
-                        }
+                        authViewModel.submitRegistration(
+                            onSuccess = { onRegisterSuccess() },
+                            onEmployeeSuccess = { onRegisterSuccess() }
+                        )
                     }
                 )
 

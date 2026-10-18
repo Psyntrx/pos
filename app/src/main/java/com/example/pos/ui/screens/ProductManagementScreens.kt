@@ -616,6 +616,7 @@ fun AddProductScreen(
     viewModel: PosViewModel,
     onClose: () -> Unit
 ) {
+    val isOwner by viewModel.isOwner.collectAsState()
     val products by viewModel.products.collectAsState()
     var name by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
@@ -887,7 +888,7 @@ fun AddProductScreen(
         Surface(color = BgDark, shadowElevation = 10.dp) {
             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp)) {
                 PrimaryGreenButton(
-                    text = "Save product",
+                    text = if (isOwner) "Save product" else "Submit Product for Owner Approval",
                     onClick = {
                         attemptedSave = true
                         saveError = null
