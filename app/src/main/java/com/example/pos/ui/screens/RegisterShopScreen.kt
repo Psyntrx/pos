@@ -649,6 +649,7 @@ fun RegisterShopStep1Screen(
 fun RegisterShopStep2Screen(
     authViewModel: AuthViewModel,
     onRegisterSuccess: () -> Unit,
+    onEmployeeRegistered: (Employee) -> Unit = {},
     onNavigateToStep1: () -> Unit
 ) {
     val registerState by authViewModel.registerState.collectAsState()
@@ -853,7 +854,7 @@ fun RegisterShopStep2Screen(
                     onClick = {
                         authViewModel.submitRegistration(
                             onSuccess = { onRegisterSuccess() },
-                            onEmployeeSuccess = { onRegisterSuccess() }
+                            onEmployeeSuccess = { emp -> onEmployeeRegistered(emp) }
                         )
                     }
                 )

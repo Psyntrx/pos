@@ -39,7 +39,10 @@ fun ApprovalsCenterScreen(
     viewModel: PosViewModel,
     onClose: () -> Unit
 ) {
-    val pendingEmployees by viewModel.pendingEmployees.collectAsState()
+    val pendingEmployeesRaw by viewModel.pendingEmployees.collectAsState()
+    val pendingEmployees = remember(pendingEmployeesRaw) {
+        pendingEmployeesRaw.distinctBy { it.email.lowercase() }
+    }
     val pendingStockIns by viewModel.pendingStockIns.collectAsState()
     val pendingNewProducts by viewModel.pendingNewProducts.collectAsState()
     val pendingExpenses by viewModel.pendingExpenses.collectAsState()

@@ -141,25 +141,17 @@ class MainActivity : ComponentActivity() {
                             authViewModel = authViewModel,
                             onRegisterSuccess = {
                                 val regState = authViewModel.registerState.value
-                                if (regState.isEmployeeSignup) {
-                                    val resolvedUserId = SupabaseClient.service.getUserId()
-                                    posViewModel.registerEmployee(
-                                        shopId = regState.targetShopId,
-                                        name = regState.ownerName,
-                                        phone = regState.phone,
-                                        email = regState.email,
-                                        authUserId = resolvedUserId
-                                    )
-                                } else {
-                                    posViewModel.registerShop(
-                                        shopName = regState.shopName,
-                                        ownerName = regState.ownerName,
-                                        email = regState.email,
-                                        phone = regState.phone,
-                                        address = regState.address,
-                                        category = regState.category
-                                    )
-                                }
+                                posViewModel.registerShop(
+                                    shopName = regState.shopName,
+                                    ownerName = regState.ownerName,
+                                    email = regState.email,
+                                    phone = regState.phone,
+                                    address = regState.address,
+                                    category = regState.category
+                                )
+                            },
+                            onEmployeeRegistered = { emp ->
+                                posViewModel.onEmployeeRegistered(emp)
                             },
                             onNavigateToStep1 = {
                                 posViewModel.navigateTo("register_step1")

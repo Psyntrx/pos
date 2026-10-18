@@ -624,9 +624,32 @@ class PosViewModel(
         }
     }
 
+    fun onEmployeeRegistered(emp: Employee) {
+        _isOwner.value = false
+        _currentEmployee.value = emp
+        _employees.update { list ->
+            list.filterNot { it.id == emp.id || it.email.equals(emp.email, ignoreCase = true) } + emp
+        }
+        storageManager.saveEmployees(_employees.value)
+        storageManager.saveCurrentUserRole("EMPLOYEE")
+        storageManager.saveActiveEmployeeId(emp.id)
+        _isLoggedIn.value = true
+        _currentScreen.value = "employee_waiting_approval"
+        updatePendingLists()
+    }
+
     fun registerEmployee(shopId: String, name: String, phone: String, email: String, authUserId: String? = null) {
-        val emp = Employee(
-            id = "emp_${System.currentTimeMillis()}",
+        val cleanEmail = email.trim().lowercase()
+        val deterministicId = authUserId?.takeIf { it.isNotBlank() }?.let { "emp_$it" }
+            ?: "emp_${cleanEmail.replace(Regex("[^a-zA-Z0-9]"), "_")}"
+
+        val existing = _employees.value.find { it.email.equals(cleanEmail, ignoreCase = true) }
+        val emp = existing?.copy(
+            name = name.trim().ifBlank { existing.name },
+            phone = phone.trim().ifBlank { existing.phone },
+            authUserId = authUserId ?: existing.authUserId
+        ) ?: Employee(
+            id = deterministicId,
             name = name.trim(),
             role = "Cashier",
             phone = phone.trim(),
@@ -640,14 +663,7 @@ class PosViewModel(
             ),
             authUserId = authUserId
         )
-        _isOwner.value = false
-        _currentEmployee.value = emp
-        _employees.update { it + emp }
-        storageManager.saveEmployees(_employees.value)
-        storageManager.saveCurrentUserRole("EMPLOYEE")
-        storageManager.saveActiveEmployeeId(emp.id)
-        _isLoggedIn.value = true
-        _currentScreen.value = "employee_waiting_approval"
+        onEmployeeRegistered(emp)
 
         viewModelScope.launch {
             supabase?.upsertEmployee(emp, shopId.trim())
@@ -658,19 +674,28 @@ class PosViewModel(
     fun refreshEmployeeStatus(onComplete: () -> Unit = {}) {
         val service = supabase ?: run { onComplete(); return }
         val empId = _currentEmployee.value?.id ?: storageManager.loadActiveEmployeeId()
+        val currentEmail = _currentEmployee.value?.email ?: storageManager.loadRememberedEmail()
         val shopId = _currentEmployee.value?.shopId ?: _shop.value.id
         viewModelScope.launch {
             try {
                 val res = service.getEmployees(shopId)
                 res.onSuccess { list ->
-                    _employees.value = list
-                    storageManager.saveEmployees(list)
-                    val updated = list.find { it.id == empId || (empId == null && it.email.equals(_shop.value.email, ignoreCase = true)) }
+                    val deduplicated = list.distinctBy { it.id }.distinctBy { it.email.lowercase() }
+                    _employees.value = deduplicated
+                    storageManager.saveEmployees(deduplicated)
+                    val updated = deduplicated.find {
+                        it.id == empId || (!currentEmail.isNullOrBlank() && it.email.equals(currentEmail, ignoreCase = true))
+                    }
                     if (updated != null) {
                         _currentEmployee.value = updated
+                        storageManager.saveActiveEmployeeId(updated.id)
                         if (updated.status == "ACTIVE") {
                             _currentScreen.value = "main"
                         }
+                    } else if (empId != null && !currentEmail.isNullOrBlank()) {
+                        _currentEmployee.value = null
+                        storageManager.saveActiveEmployeeId(null)
+                        _currentScreen.value = "login"
                     }
                     updatePendingLists()
                 }
@@ -681,20 +706,35 @@ class PosViewModel(
     }
 
     // Permission Checkers
-    fun canRecordSales(): Boolean =
-        isOwner.value || (_currentEmployee.value?.permissions?.contains(EmployeePermissions.PERM_RECORD_SALES) != false)
+    fun canRecordSales(): Boolean {
+        if (isOwner.value) return true
+        val emp = _currentEmployee.value ?: return false
+        return emp.status == "ACTIVE" && emp.permissions.contains(EmployeePermissions.PERM_RECORD_SALES)
+    }
 
-    fun canStockIn(): Boolean =
-        isOwner.value || (_currentEmployee.value?.permissions?.contains(EmployeePermissions.PERM_STOCK_IN) != false)
+    fun canStockIn(): Boolean {
+        if (isOwner.value) return true
+        val emp = _currentEmployee.value ?: return false
+        return emp.status == "ACTIVE" && emp.permissions.contains(EmployeePermissions.PERM_STOCK_IN)
+    }
 
-    fun canAddProduct(): Boolean =
-        isOwner.value || (_currentEmployee.value?.permissions?.contains(EmployeePermissions.PERM_NEW_PRODUCT) == true)
+    fun canAddProduct(): Boolean {
+        if (isOwner.value) return true
+        val emp = _currentEmployee.value ?: return false
+        return emp.status == "ACTIVE" && emp.permissions.contains(EmployeePermissions.PERM_NEW_PRODUCT)
+    }
 
-    fun canIssueCredit(): Boolean =
-        isOwner.value || (_currentEmployee.value?.permissions?.contains(EmployeePermissions.PERM_CREDIT_SALES) == true)
+    fun canIssueCredit(): Boolean {
+        if (isOwner.value) return true
+        val emp = _currentEmployee.value ?: return false
+        return emp.status == "ACTIVE" && emp.permissions.contains(EmployeePermissions.PERM_CREDIT_SALES)
+    }
 
-    fun canRecordExpense(): Boolean =
-        isOwner.value || (_currentEmployee.value?.permissions?.contains(EmployeePermissions.PERM_RECORD_EXPENSES) == true)
+    fun canRecordExpense(): Boolean {
+        if (isOwner.value) return true
+        val emp = _currentEmployee.value ?: return false
+        return emp.status == "ACTIVE" && emp.permissions.contains(EmployeePermissions.PERM_RECORD_EXPENSES)
+    }
 
     // Owner Approval Actions
     fun approveEmployee(employeeId: String, permissions: List<String>) {
@@ -704,6 +744,74 @@ class PosViewModel(
             status = "ACTIVE",
             permissions = permissions
         )
+        val duplicateIds = _employees.value
+            .filter { it.id != employeeId && it.email.equals(emp.email, ignoreCase = true) }
+            .map { it.id }
+
+        _employees.update { list ->
+            list.filterNot { duplicateIds.contains(it.id) }.map { if (it.id == employeeId) updated else it }
+        }
+        storageManager.saveEmployees(_employees.value)
+        viewModelScope.launch {
+            supabase?.upsertEmployee(updated, activeShopId)
+            duplicateIds.forEach { dupId ->
+                supabase?.deleteEmployee(dupId)
+            }
+        }
+        updatePendingLists()
+    }
+
+    fun rejectEmployee(employeeId: String) {
+        val emp = _employees.value.find { it.id == employeeId }
+        val empEmail = emp?.email
+        val targetIds = _employees.value
+            .filter { it.id == employeeId || (!empEmail.isNullOrBlank() && it.email.equals(empEmail, ignoreCase = true)) }
+            .map { it.id }
+
+        _employees.update { list -> list.filterNot { targetIds.contains(it.id) } }
+        storageManager.saveEmployees(_employees.value)
+        viewModelScope.launch {
+            targetIds.forEach { id ->
+                supabase?.deleteEmployee(id)
+            }
+        }
+        updatePendingLists()
+    }
+
+    fun removeEmployee(employeeId: String) {
+        val emp = _employees.value.find { it.id == employeeId } ?: return
+        val empEmail = emp.email
+        val targetIds = _employees.value
+            .filter { it.id == employeeId || (empEmail.isNotBlank() && it.email.equals(empEmail, ignoreCase = true)) }
+            .map { it.id }
+
+        _employees.update { list -> list.filterNot { targetIds.contains(it.id) } }
+        storageManager.saveEmployees(_employees.value)
+        updatePendingLists()
+
+        viewModelScope.launch {
+            val service = supabase ?: return@launch
+            targetIds.forEach { id ->
+                service.deleteEmployee(id)
+            }
+        }
+    }
+
+    fun updateEmployeePermissions(employeeId: String, permissions: List<String>) {
+        val emp = _employees.value.find { it.id == employeeId } ?: return
+        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val updated = emp.copy(permissions = permissions)
+        _employees.update { list -> list.map { if (it.id == employeeId) updated else it } }
+        storageManager.saveEmployees(_employees.value)
+        viewModelScope.launch {
+            supabase?.upsertEmployee(updated, activeShopId)
+        }
+    }
+
+    fun updateEmployeeStatus(employeeId: String, status: String) {
+        val emp = _employees.value.find { it.id == employeeId } ?: return
+        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val updated = emp.copy(status = status)
         _employees.update { list -> list.map { if (it.id == employeeId) updated else it } }
         storageManager.saveEmployees(_employees.value)
         viewModelScope.launch {
@@ -712,14 +820,8 @@ class PosViewModel(
         updatePendingLists()
     }
 
-    fun rejectEmployee(employeeId: String) {
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
-        _employees.update { list -> list.filterNot { it.id == employeeId } }
-        storageManager.saveEmployees(_employees.value)
-        viewModelScope.launch {
-            supabase?.deleteEmployee(employeeId)
-        }
-        updatePendingLists()
+    fun revokeAllEmployeePermissions(employeeId: String) {
+        updateEmployeePermissions(employeeId, emptyList())
     }
 
     fun approveStockIn(record: StockInRecord) {
@@ -861,7 +963,9 @@ class PosViewModel(
     }
 
     fun updatePendingLists() {
-        _pendingEmployees.value = _employees.value.filter { it.status == "PENDING" }
+        _pendingEmployees.value = _employees.value
+            .filter { !it.isOwner && it.status == "PENDING" }
+            .distinctBy { it.email.lowercase() }
         _pendingStockIns.value = _stockInRecords.value.filter { it.supplier.startsWith("PENDING_APPROVAL||") }
         _pendingNewProducts.value = _products.value.filter { it.supplier.startsWith("PENDING_APPROVAL||") }
         _pendingExpenses.value = _expenses.value.filter { it.category.startsWith("PENDING_APPROVAL||") }
@@ -1686,17 +1790,37 @@ class PosViewModel(
     }
 
     // Add Employee
-    fun addEmployee(name: String, role: String, phone: String, email: String) {
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
-        val emp = Employee(
-            id = "emp_${System.currentTimeMillis()}",
-            name = name,
-            role = role,
-            phone = phone,
-            email = email,
-            shopId = activeShopId
+    fun addEmployee(
+        name: String,
+        role: String,
+        phone: String,
+        email: String,
+        permissions: List<String> = listOf(
+            EmployeePermissions.PERM_RECORD_SALES,
+            EmployeePermissions.PERM_STOCK_IN
         )
-        _employees.update { it + emp }
+    ) {
+        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val cleanEmail = email.trim().lowercase()
+        val deterministicId = if (cleanEmail.isNotBlank()) {
+            "emp_${cleanEmail.replace(Regex("[^a-zA-Z0-9]"), "_")}"
+        } else {
+            "emp_${System.currentTimeMillis()}"
+        }
+
+        val emp = Employee(
+            id = deterministicId,
+            name = name.trim(),
+            role = role.trim().ifBlank { "Cashier" },
+            phone = phone.trim(),
+            email = email.trim(),
+            shopId = activeShopId,
+            status = "ACTIVE",
+            permissions = permissions
+        )
+        _employees.update { list ->
+            list.filterNot { it.id == emp.id || (cleanEmail.isNotBlank() && it.email.equals(cleanEmail, ignoreCase = true)) } + emp
+        }
         storageManager.saveEmployees(_employees.value)
 
         viewModelScope.launch {

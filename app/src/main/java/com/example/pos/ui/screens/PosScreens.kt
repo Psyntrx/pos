@@ -1846,9 +1846,29 @@ fun PaymentScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            val canRecord = viewModel.canRecordSales()
+            if (!canRecord) {
+                SurfaceCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    backgroundColor = ErrorRed.copy(alpha = 0.12f),
+                    borderColor = ErrorRed.copy(alpha = 0.4f),
+                    cornerRadius = 14.dp
+                ) {
+                    Text(
+                        "Your permission to record sales has been revoked by the store owner.",
+                        color = ErrorRed,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
             // Complete Sale Button
             PrimaryGreenButton(
-                text = if (isCreditSale) "Save Credit Sale" else "Complete Sale",
+                text = if (!canRecord) "Permission Revoked" else if (isCreditSale) "Save Credit Sale" else "Complete Sale",
+                enabled = canRecord,
                 onClick = {
                     if (isCreditSale) {
                         val trimmedName = creditCustomerName.trim()

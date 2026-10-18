@@ -226,20 +226,28 @@ class AuthViewModel(
                 val resolvedUserId = supabase?.getUserId()
                     ?: result?.getOrNull()?.let { supabase.extractUserId(it) }
 
+                val cleanEmailSlug = state.email.trim().lowercase().replace(Regex("[^a-zA-Z0-9]"), "_")
+                val deterministicId = resolvedUserId?.takeIf { it.isNotBlank() }?.let { "emp_$it" }
+                    ?: "emp_$cleanEmailSlug"
+
+                val existingEmployees = supabase?.getEmployees(state.targetShopId.trim())?.getOrNull() ?: emptyList()
+                val matchedExisting = existingEmployees.find { it.email.equals(state.email.trim(), ignoreCase = true) }
+                val finalEmpId = matchedExisting?.id ?: deterministicId
+
                 val emp = Employee(
-                    id = "emp_${System.currentTimeMillis()}",
+                    id = finalEmpId,
                     name = state.ownerName.trim(),
                     role = "Cashier",
                     phone = state.phone.trim(),
                     email = state.email.trim(),
                     isOwner = false,
                     shopId = state.targetShopId.trim(),
-                    status = "PENDING",
-                    permissions = listOf(
+                    status = matchedExisting?.status ?: "PENDING",
+                    permissions = matchedExisting?.permissions ?: listOf(
                         EmployeePermissions.PERM_RECORD_SALES,
                         EmployeePermissions.PERM_STOCK_IN
                     ),
-                    authUserId = resolvedUserId
+                    authUserId = resolvedUserId ?: matchedExisting?.authUserId
                 )
 
                 if (supabase != null) {
