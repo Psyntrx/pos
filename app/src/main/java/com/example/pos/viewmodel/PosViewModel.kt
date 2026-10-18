@@ -131,6 +131,12 @@ class PosViewModel(
     private val _totalPendingCount = MutableStateFlow(0)
     val totalPendingCount: StateFlow<Int> = _totalPendingCount.asStateFlow()
 
+    fun getActiveShopId(): String? {
+        return _shop.value.id.takeIf { it.isNotBlank() && it != "shop_default" && it != "shop_1" }
+            ?: _currentEmployee.value?.shopId?.takeIf { it.isNotBlank() && it != "shop_default" && it != "shop_1" }
+            ?: storageManager.loadShop(defaultShop).id.takeIf { it.isNotBlank() && it != "shop_default" && it != "shop_1" }
+    }
+
     init {
         if (_expenses.value.isEmpty()) {
             _expenses.value = CreditLedgerUtils.buildDemoExpenses()
@@ -153,6 +159,10 @@ class PosViewModel(
             _currentEmployee.value = activeEmp
             if (activeEmp?.status == "PENDING") {
                 _currentScreen.value = "employee_waiting_approval"
+            }
+            if (activeEmp != null && !activeEmp.shopId.isNullOrBlank() && (_shop.value.id.isBlank() || _shop.value.id == "shop_default" || _shop.value.id == "shop_1")) {
+                _shop.value = _shop.value.copy(id = activeEmp.shopId)
+                storageManager.saveShop(_shop.value)
             }
         } else {
             _isOwner.value = true
@@ -667,6 +677,10 @@ class PosViewModel(
     fun onEmployeeRegistered(emp: Employee) {
         _isOwner.value = false
         _currentEmployee.value = emp
+        if (!emp.shopId.isNullOrBlank()) {
+            _shop.value = _shop.value.copy(id = emp.shopId)
+            storageManager.saveShop(_shop.value)
+        }
         _employees.update { list ->
             list.filterNot { it.id == emp.id || it.email.equals(emp.email, ignoreCase = true) } + emp
         }
@@ -779,7 +793,7 @@ class PosViewModel(
     // Owner Approval Actions
     fun approveEmployee(employeeId: String, permissions: List<String>) {
         val emp = _employees.value.find { it.id == employeeId } ?: return
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val activeShopId = getActiveShopId()
         val updated = emp.copy(
             status = "ACTIVE",
             permissions = permissions
@@ -839,7 +853,7 @@ class PosViewModel(
 
     fun updateEmployeePermissions(employeeId: String, permissions: List<String>) {
         val emp = _employees.value.find { it.id == employeeId } ?: return
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val activeShopId = getActiveShopId()
         val updated = emp.copy(permissions = permissions)
         _employees.update { list -> list.map { if (it.id == employeeId) updated else it } }
         storageManager.saveEmployees(_employees.value)
@@ -850,7 +864,7 @@ class PosViewModel(
 
     fun updateEmployeeStatus(employeeId: String, status: String) {
         val emp = _employees.value.find { it.id == employeeId } ?: return
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val activeShopId = getActiveShopId()
         val updated = emp.copy(status = status)
         _employees.update { list -> list.map { if (it.id == employeeId) updated else it } }
         storageManager.saveEmployees(_employees.value)
@@ -865,7 +879,7 @@ class PosViewModel(
     }
 
     fun approveStockIn(record: StockInRecord) {
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val activeShopId = getActiveShopId()
         _products.update { currentList ->
             currentList.map { p ->
                 if (p.id == record.productId) {
@@ -882,9 +896,14 @@ class PosViewModel(
             viewModelScope.launch { supabase?.upsertProduct(updatedProduct, activeShopId) }
         }
 
+        val cleanSupplier = if (record.supplier.contains("orig:")) {
+            record.supplier.substringAfter("orig:").ifBlank { "" }
+        } else {
+            record.supplier.removePrefix("PENDING_APPROVAL||").ifBlank { "" }
+        }
         val approvedRecord = record.copy(
             id = if (record.id.startsWith("stk_pending_")) "stk_${record.id.removePrefix("stk_pending_")}" else record.id,
-            supplier = record.supplier.substringAfter("orig:").ifBlank { "" }
+            supplier = cleanSupplier
         )
         _stockInRecords.update { list ->
             list.map { if (it.id == record.id) approvedRecord else it }
@@ -905,10 +924,13 @@ class PosViewModel(
     }
 
     fun approveNewProduct(product: Product) {
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
-        val approvedProduct = product.copy(
-            supplier = product.supplier.substringAfter("orig:").ifBlank { "" }
-        )
+        val activeShopId = getActiveShopId()
+        val cleanSupplier = if (product.supplier.contains("orig:")) {
+            product.supplier.substringAfter("orig:").ifBlank { "" }
+        } else {
+            product.supplier.removePrefix("PENDING_APPROVAL||").ifBlank { "" }
+        }
+        val approvedProduct = product.copy(supplier = cleanSupplier)
         _products.update { list -> list.map { if (it.id == product.id) approvedProduct else it } }
         storageManager.saveProducts(_products.value)
         viewModelScope.launch {
@@ -923,7 +945,7 @@ class PosViewModel(
     }
 
     fun approveCreditSale(sale: Sale) {
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val activeShopId = getActiveShopId()
         // 1. Deduct stock for items in the approved credit sale
         _products.update { currentList ->
             currentList.map { prod ->
@@ -981,10 +1003,15 @@ class PosViewModel(
     }
 
     fun approveExpense(expense: Expense) {
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val activeShopId = getActiveShopId()
+        val approvedCategory = if (expense.category.contains("orig:")) {
+            expense.category.substringAfter("orig:").ifBlank { "General" }
+        } else {
+            expense.category.removePrefix("PENDING_APPROVAL||").ifBlank { "General" }
+        }
         val approvedExpense = expense.copy(
             id = if (expense.id.startsWith("exp_pending_")) "exp_${expense.id.removePrefix("exp_pending_")}" else expense.id,
-            category = expense.category.removePrefix("PENDING_APPROVAL||")
+            category = approvedCategory
         )
         _expenses.update { list -> list.map { if (it.id == expense.id) approvedExpense else it } }
         storageManager.saveExpenses(_expenses.value)
@@ -1009,7 +1036,12 @@ class PosViewModel(
         _pendingStockIns.value = _stockInRecords.value.filter { it.supplier.startsWith("PENDING_APPROVAL||") }
         _pendingNewProducts.value = _products.value.filter { it.supplier.startsWith("PENDING_APPROVAL||") }
         _pendingExpenses.value = _expenses.value.filter { it.category.startsWith("PENDING_APPROVAL||") }
-        _pendingCreditSales.value = _salesHistory.value.filter { it.paymentMethod.startsWith("PENDING_APPROVAL||") }
+        _pendingCreditSales.value = _salesHistory.value.filter {
+            it.paymentMethod.startsWith("PENDING_APPROVAL||") ||
+            it.paymentMethod == "PENDING_CREDIT" ||
+            it.paymentMethod.startsWith("PENDING_CREDIT") ||
+            it.id.startsWith("SL_PENDING_")
+        }
         _totalPendingCount.value = _pendingEmployees.value.size +
             _pendingStockIns.value.size +
             _pendingNewProducts.value.size +
@@ -1173,7 +1205,7 @@ class PosViewModel(
             null
         }
 
-        val isPendingCredit = isCredit && !isOwner.value && !canIssueCredit()
+        val isPendingCredit = isCredit && !isOwner.value
 
         // Deduct inventory locally (only for confirmed sales, not pending approval credit sales)
         if (!isPendingCredit) {
@@ -1191,7 +1223,7 @@ class PosViewModel(
             storageManager.saveProducts(_products.value)
         }
 
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val activeShopId = getActiveShopId()
         val activeOwnerName = _shop.value.ownerName.ifBlank { "Store Owner" }
         val saleEmployeeName = if (!isOwner.value) _currentEmployee.value?.name.orEmpty().ifBlank { "Employee" } else activeOwnerName
 
@@ -1200,7 +1232,7 @@ class PosViewModel(
             id = if (isPendingCredit) "SL_PENDING_${(1093..9999).random()}" else "SL-${(1093..9999).random()}",
             items = currentCartItems.map { it.copy(product = it.product.copy(shopId = activeShopId)) },
             totalAmount = creditTotal,
-            paymentMethod = if (isPendingCredit) "PENDING_CREDIT" else paymentMethod,
+            paymentMethod = if (isPendingCredit) "PENDING_APPROVAL||requester:$saleEmployeeName||orig:Credit" else paymentMethod,
             customerName = if (trimmedCustomerName.isNotBlank()) trimmedCustomerName else if (isCredit) "Credit Customer" else "Walk-in Customer",
             dateFormatted = "Today, $saleTimeFormat",
             timestamp = System.currentTimeMillis(),
@@ -1287,7 +1319,7 @@ class PosViewModel(
 
             val service = supabase
             if (service != null) {
-                val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+                val activeShopId = getActiveShopId()
                 pendingProductUpdates.addAll(productIds)
                 viewModelScope.launch {
                     try {
@@ -1346,7 +1378,7 @@ class PosViewModel(
 
             val service = supabase ?: return
             viewModelScope.launch {
-                val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+                val activeShopId = getActiveShopId()
                 pendingProductUpdates.addAll(allProductIds)
                 try {
                     service.upsertSale(updatedSale, activeShopId)
@@ -1366,7 +1398,7 @@ class PosViewModel(
         } else {
             val service = supabase ?: return
             viewModelScope.launch {
-                val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+                val activeShopId = getActiveShopId()
                 service.upsertSale(updatedSale, activeShopId)
             }
         }
@@ -1400,7 +1432,7 @@ class PosViewModel(
         val normalizedName = customerName.trim()
         if (normalizedName.isBlank()) return false
         val normalizedPhone = CreditLedgerUtils.normalizePhoneNumber(phone) ?: return false
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val activeShopId = getActiveShopId()
         val created = CreditLedgerUtils.createCredit(
             id = "c_${System.currentTimeMillis()}",
             customerName = normalizedName,
@@ -1497,7 +1529,7 @@ class PosViewModel(
 
         return try {
             val updatedCredit = CreditLedgerUtils.applyRepayment(currentCredit, amount, method, referenceCode, notes)
-            val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+            val activeShopId = getActiveShopId()
             val finalCredit = updatedCredit.copy(shopId = activeShopId ?: updatedCredit.shopId)
             _customerCredits.update { currentList ->
                 currentList.map { if (it.id == creditId) finalCredit else it }
@@ -1545,10 +1577,11 @@ class PosViewModel(
             _products.value.any { it.sku.equals(normalizedSku, ignoreCase = true) }
         ) return false
 
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
-        val isPending = !isOwner.value && !canAddProduct()
+        val activeShopId = getActiveShopId()
+        val isPending = !isOwner.value
+        val empName = _currentEmployee.value?.name?.ifBlank { "Employee" } ?: "Employee"
         val finalSupplier = if (isPending) {
-            "PENDING_APPROVAL||requester:${_currentEmployee.value?.name ?: "Employee"}||orig:${supplier.trim()}"
+            "PENDING_APPROVAL||requester:$empName||orig:${supplier.trim()}"
         } else {
             supplier.trim()
         }
@@ -1614,7 +1647,7 @@ class PosViewModel(
             _products.value.any { it.id != productId && it.sku.isNotBlank() && it.sku.equals(normalizedSku, ignoreCase = true) }
         ) return false
 
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val activeShopId = getActiveShopId()
         val updatedProduct = currentProduct.copy(
             name = normalizedName,
             category = normalizedCategory,
@@ -1709,7 +1742,7 @@ class PosViewModel(
         }
 
         val prodName = _products.value.find { it.id == productId }?.name ?: "Product"
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val activeShopId = getActiveShopId()
         val record = StockInRecord(
             id = recordId,
             productId = productId,
@@ -1772,11 +1805,12 @@ class PosViewModel(
         val safeAmount = amount.coerceAtLeast(0.0)
         if (normalizedTitle.isBlank() || normalizedCategory.isBlank() || safeAmount <= 0.0) return false
 
-        val isPending = !isOwner.value && !canRecordExpense()
-        val finalCategory = if (isPending) "PENDING_APPROVAL||$normalizedCategory" else normalizedCategory
+        val isPending = !isOwner.value
+        val empName = _currentEmployee.value?.name?.ifBlank { "Employee" } ?: "Employee"
+        val finalCategory = if (isPending) "PENDING_APPROVAL||requester:$empName||orig:$normalizedCategory" else normalizedCategory
         val expenseId = if (isPending) "exp_pending_${System.currentTimeMillis()}" else "exp_${System.currentTimeMillis()}"
 
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val activeShopId = getActiveShopId()
         val newExpense = Expense(
             id = expenseId,
             title = normalizedTitle,
@@ -1801,7 +1835,7 @@ class PosViewModel(
         if (normalizedTitle.isBlank() || normalizedCategory.isBlank()) return false
 
         val currentExpense = _expenses.value.find { it.id == expenseId } ?: return false
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val activeShopId = getActiveShopId()
         val updatedExpense = currentExpense.copy(
             title = normalizedTitle,
             category = normalizedCategory,
@@ -1840,7 +1874,7 @@ class PosViewModel(
             EmployeePermissions.PERM_STOCK_IN
         )
     ) {
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val activeShopId = getActiveShopId()
         val cleanEmail = email.trim().lowercase()
         val deterministicId = if (cleanEmail.isNotBlank()) {
             "emp_${cleanEmail.replace(Regex("[^a-zA-Z0-9]"), "_")}"

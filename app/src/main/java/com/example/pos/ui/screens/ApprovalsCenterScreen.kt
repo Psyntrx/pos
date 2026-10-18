@@ -53,6 +53,10 @@ fun ApprovalsCenterScreen(
 
     var selectedFilter by remember { mutableStateOf("ALL") }
 
+    LaunchedEffect(Unit) {
+        viewModel.syncWithSupabase(force = true)
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -96,6 +100,10 @@ fun ApprovalsCenterScreen(
                             fontSize = 12.sp
                         )
                     }
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                IconButton(onClick = { viewModel.syncWithSupabase(force = true) }) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = EmeraldBright)
                 }
             }
 
@@ -468,6 +476,10 @@ private fun PendingProductCard(
     onApprove: () -> Unit,
     onReject: () -> Unit
 ) {
+    val requesterName = if (product.supplier.contains("requester:")) {
+        product.supplier.substringAfter("requester:").substringBefore("||")
+    } else "Employee"
+
     SurfaceCard(
         modifier = Modifier.fillMaxWidth(),
         backgroundColor = SurfaceDark,
@@ -492,6 +504,7 @@ private fun PendingProductCard(
                 Column {
                     Text("New Product Request", color = WarningYellow, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                     Text(product.name, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text("Requested by $requesterName", color = TextSecondary, fontSize = 12.sp)
                 }
             }
 
@@ -549,6 +562,10 @@ private fun PendingCreditSaleCard(
     onApprove: () -> Unit,
     onReject: () -> Unit
 ) {
+    val requesterName = if (sale.paymentMethod.contains("requester:")) {
+        sale.paymentMethod.substringAfter("requester:").substringBefore("||")
+    } else sale.employeeName.ifBlank { "Employee" }
+
     SurfaceCard(
         modifier = Modifier.fillMaxWidth(),
         backgroundColor = SurfaceDark,
@@ -573,6 +590,7 @@ private fun PendingCreditSaleCard(
                 Column {
                     Text("Credit Sale Request", color = WarningYellow, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                     Text(sale.customerName, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text("Requested by $requesterName • Due: ${sale.dueDate.ifBlank { "N/A" }}", color = TextSecondary, fontSize = 12.sp)
                 }
             }
 
