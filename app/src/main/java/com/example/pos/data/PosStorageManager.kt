@@ -23,6 +23,9 @@ class PosStorageManager(context: Context? = null) {
         private const val KEY_REMEMBER_ME = "key_remember_me"
         private const val KEY_NOTIFICATIONS = "key_notifications"
         private const val KEY_SYSTEM_NOTIFICATIONS_ENABLED = "key_system_notifications_enabled"
+        private const val KEY_APPROVAL_REQUESTS = "key_approval_requests"
+        private const val KEY_CURRENT_USER_ROLE = "key_current_user_role"
+        private const val KEY_ACTIVE_EMPLOYEE_ID = "key_active_employee_id"
     }
 
     private inline fun editPrefs(action: SharedPreferences.Editor.() -> Unit) {
@@ -173,6 +176,45 @@ class PosStorageManager(context: Context? = null) {
         }
     }
 
+    fun saveApprovalRequests(requests: List<ApprovalRequest>) {
+        val jsonArray = JSONArray()
+        requests.forEach { jsonArray.put(it.toJson()) }
+        editPrefs { putString(KEY_APPROVAL_REQUESTS, jsonArray.toString()) }
+    }
+
+    fun loadApprovalRequests(defaultRequests: List<ApprovalRequest> = emptyList()): List<ApprovalRequest> {
+        val jsonString = prefs?.getString(KEY_APPROVAL_REQUESTS, null) ?: return defaultRequests
+        return try {
+            val jsonArray = JSONArray(jsonString)
+            val list = mutableListOf<ApprovalRequest>()
+            for (i in 0 until jsonArray.length()) {
+                list.add(jsonArray.getJSONObject(i).toApprovalRequest())
+            }
+            list
+        } catch (e: Exception) {
+            defaultRequests
+        }
+    }
+
+    fun saveCurrentUserRole(role: String) {
+        editPrefs { putString(KEY_CURRENT_USER_ROLE, role) }
+    }
+
+    fun loadCurrentUserRole(): String {
+        return prefs?.getString(KEY_CURRENT_USER_ROLE, "OWNER") ?: "OWNER"
+    }
+
+    fun saveActiveEmployeeId(id: String?) {
+        editPrefs {
+            if (id == null) remove(KEY_ACTIVE_EMPLOYEE_ID)
+            else putString(KEY_ACTIVE_EMPLOYEE_ID, id)
+        }
+    }
+
+    fun loadActiveEmployeeId(): String? {
+        return prefs?.getString(KEY_ACTIVE_EMPLOYEE_ID, null)
+    }
+
     fun saveStockInRecords(records: List<StockInRecord>) {
         val jsonArray = JSONArray()
         records.forEach { jsonArray.put(it.toJson()) }
@@ -268,7 +310,11 @@ class PosStorageManager(context: Context? = null) {
     }
 
     fun clearAuthSession() {
-        editPrefs { remove(KEY_AUTH_SESSION) }
+        editPrefs {
+            remove(KEY_AUTH_SESSION)
+            remove(KEY_CURRENT_USER_ROLE)
+            remove(KEY_ACTIVE_EMPLOYEE_ID)
+        }
     }
 
     fun isSessionValid(): Boolean {
@@ -306,6 +352,9 @@ class PosStorageManager(context: Context? = null) {
             remove(KEY_PRODUCTS)
             remove(KEY_SHOP)
             remove(KEY_NOTIFICATIONS)
+            remove(KEY_APPROVAL_REQUESTS)
+            remove(KEY_CURRENT_USER_ROLE)
+            remove(KEY_ACTIVE_EMPLOYEE_ID)
         }
     }
 }
@@ -550,6 +599,8 @@ fun JSONObject.toCustomerCredit(): CustomerCredit {
 }
 
 fun Employee.toJson(): JSONObject {
+    val permsArray = JSONArray()
+    permissions.forEach { permsArray.put(it) }
     return JSONObject().apply {
         put("id", id)
         put("name", name)
@@ -558,17 +609,75 @@ fun Employee.toJson(): JSONObject {
         put("email", email)
         put("isOwner", isOwner)
         put("shopId", shopId)
+        put("status", status)
+        put("permissions", permsArray)
+        put("authUserId", authUserId)
+        put("createdAt", createdAt)
     }
 }
 
 fun JSONObject.toEmployee(): Employee {
+    val isOwner = optBoolean("isOwner", false)
+    val permsList = mutableListOf<String>()
+    val permsArray = optJSONArray("permissions")
+    if (permsArray != null) {
+        for (i in 0 until permsArray.length()) {
+            permsList.add(permsArray.getString(i))
+        }
+    } else {
+        if (isOwner) {
+            permsList.addAll(EmployeePermissions.ALL_PERMISSIONS)
+        } else {
+            permsList.add(EmployeePermissions.PERM_RECORD_SALES)
+            permsList.add(EmployeePermissions.PERM_STOCK_IN)
+        }
+    }
+
     return Employee(
         id = getString("id"),
         name = getString("name"),
-        role = getString("role"),
+        role = optString("role", if (isOwner) "Owner" else "Cashier"),
         phone = optString("phone", ""),
         email = optString("email", ""),
-        isOwner = optBoolean("isOwner", false),
+        isOwner = isOwner,
+        shopId = optString("shopId", "").takeIf { it.isNotBlank() },
+        status = optString("status", if (isOwner) "ACTIVE" else "PENDING"),
+        permissions = permsList,
+        authUserId = optString("authUserId", "").takeIf { it.isNotBlank() },
+        createdAt = optLong("createdAt", System.currentTimeMillis())
+    )
+}
+
+fun ApprovalRequest.toJson(): JSONObject {
+    return JSONObject().apply {
+        put("id", id)
+        put("type", type)
+        put("requesterId", requesterId)
+        put("requesterName", requesterName)
+        put("title", title)
+        put("description", description)
+        put("payloadJson", payloadJson)
+        put("status", status)
+        put("createdAt", createdAt)
+        put("reviewedAt", reviewedAt)
+        put("reviewedBy", reviewedBy)
+        put("shopId", shopId)
+    }
+}
+
+fun JSONObject.toApprovalRequest(): ApprovalRequest {
+    return ApprovalRequest(
+        id = getString("id"),
+        type = getString("type"),
+        requesterId = getString("requesterId"),
+        requesterName = getString("requesterName"),
+        title = getString("title"),
+        description = getString("description"),
+        payloadJson = getString("payloadJson"),
+        status = optString("status", "PENDING"),
+        createdAt = optLong("createdAt", System.currentTimeMillis()),
+        reviewedAt = if (has("reviewedAt") && !isNull("reviewedAt")) getLong("reviewedAt") else null,
+        reviewedBy = optString("reviewedBy", "").takeIf { it.isNotBlank() },
         shopId = optString("shopId", "").takeIf { it.isNotBlank() }
     )
 }

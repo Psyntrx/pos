@@ -25,6 +25,7 @@ import com.example.pos.data.PosStorageManager
 import com.example.pos.data.SupabaseClient
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import com.example.pos.ui.screens.EmployeeWaitingApprovalScreen
 import com.example.pos.ui.screens.ForgotPasswordScreen
 import com.example.pos.ui.screens.LoginScreen
 import com.example.pos.ui.screens.MainContainerScreen
@@ -149,8 +150,20 @@ class MainActivity : ComponentActivity() {
                                     category = regState.category
                                 )
                             },
+                            onEmployeeRegistered = { emp ->
+                                posViewModel.onEmployeeRegistered(emp)
+                            },
                             onNavigateToStep1 = {
                                 posViewModel.navigateTo("register_step1")
+                            }
+                        )
+                        "employee_waiting_approval" -> EmployeeWaitingApprovalScreen(
+                            viewModel = posViewModel,
+                            onApproved = {
+                                posViewModel.navigateTo("main")
+                            },
+                            onLogout = {
+                                posViewModel.logout()
                             }
                         )
                         else -> MainContainerScreen(

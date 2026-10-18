@@ -184,6 +184,7 @@ fun NewSaleScreen(
         }
 
         val filteredProducts = products.filter { product ->
+            if (product.supplier.startsWith("PENDING_APPROVAL||")) return@filter false
             val inCartQty = cart.find { it.product.id == product.id }?.quantity ?: 0
             val matchesCategory = when (selectedCategory.lowercase()) {
                 "all" -> true
@@ -1846,9 +1847,29 @@ fun PaymentScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            val canRecord = viewModel.canRecordSales()
+            if (!canRecord) {
+                SurfaceCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    backgroundColor = ErrorRed.copy(alpha = 0.12f),
+                    borderColor = ErrorRed.copy(alpha = 0.4f),
+                    cornerRadius = 14.dp
+                ) {
+                    Text(
+                        "Your permission to record sales has been revoked by the store owner.",
+                        color = ErrorRed,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
             // Complete Sale Button
             PrimaryGreenButton(
-                text = if (isCreditSale) "Save Credit Sale" else "Complete Sale",
+                text = if (!canRecord) "Permission Revoked" else if (isCreditSale) "Save Credit Sale" else "Complete Sale",
+                enabled = canRecord,
                 onClick = {
                     if (isCreditSale) {
                         val trimmedName = creditCustomerName.trim()
@@ -1907,6 +1928,7 @@ fun SaleSuccessDialog(
             containerColor = SurfaceDark,
             title = null,
             text = {
+                val isPendingApproval = sale.id.startsWith("SL_PENDING_") || sale.paymentMethod.startsWith("PENDING_")
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1917,13 +1939,13 @@ fun SaleSuccessDialog(
                         modifier = Modifier
                             .size(64.dp)
                             .clip(CircleShape)
-                            .background(EmeraldContainer),
+                            .background(if (isPendingApproval) WarningYellow.copy(alpha = 0.15f) else EmeraldContainer),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "Success",
-                            tint = EmeraldBright,
+                            imageVector = if (isPendingApproval) Icons.Default.Info else Icons.Default.CheckCircle,
+                            contentDescription = if (isPendingApproval) "Pending" else "Success",
+                            tint = if (isPendingApproval) WarningYellow else EmeraldBright,
                             modifier = Modifier.size(40.dp)
                         )
                     }
@@ -1931,17 +1953,17 @@ fun SaleSuccessDialog(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        text = "Sale Completed!",
+                        text = if (isPendingApproval) "Credit Sale Submitted!" else "Sale Completed!",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = if (isPendingApproval) WarningYellow else TextPrimary
                         )
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = "Receipt #${sale.id}",
+                        text = if (isPendingApproval) "Submitted for Owner Approval • #${sale.id}" else "Receipt #${sale.id}",
                         style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
                     )
 

@@ -11,6 +11,8 @@ import com.example.pos.data.CustomerCredit
 import com.example.pos.data.InventoryAlertKind
 import com.example.pos.data.LowStockNotificationManager
 import com.example.pos.data.Employee
+import com.example.pos.data.EmployeePermissions
+import com.example.pos.data.ApprovalRequest
 import com.example.pos.data.Expense
 import com.example.pos.data.PosStorageManager
 import com.example.pos.data.Product
@@ -99,6 +101,42 @@ class PosViewModel(
     private val _stockInRecords = MutableStateFlow(storageManager.loadStockInRecords(defaultStockInRecords))
     val stockInRecords: StateFlow<List<StockInRecord>> = _stockInRecords.asStateFlow()
 
+    // Authorization & Current User Role
+    private val _isOwner = MutableStateFlow(storageManager.loadCurrentUserRole() == "OWNER")
+    val isOwner: StateFlow<Boolean> = _isOwner.asStateFlow()
+
+    private val _currentEmployee = MutableStateFlow<Employee?>(
+        storageManager.loadActiveEmployeeId()?.let { activeId ->
+            _employees.value.find { it.id == activeId }
+        }
+    )
+    val currentEmployee: StateFlow<Employee?> = _currentEmployee.asStateFlow()
+
+    // Pending Approval Lists
+    private val _pendingEmployees = MutableStateFlow<List<Employee>>(emptyList())
+    val pendingEmployees: StateFlow<List<Employee>> = _pendingEmployees.asStateFlow()
+
+    private val _pendingStockIns = MutableStateFlow<List<StockInRecord>>(emptyList())
+    val pendingStockIns: StateFlow<List<StockInRecord>> = _pendingStockIns.asStateFlow()
+
+    private val _pendingNewProducts = MutableStateFlow<List<Product>>(emptyList())
+    val pendingNewProducts: StateFlow<List<Product>> = _pendingNewProducts.asStateFlow()
+
+    private val _pendingExpenses = MutableStateFlow<List<Expense>>(emptyList())
+    val pendingExpenses: StateFlow<List<Expense>> = _pendingExpenses.asStateFlow()
+
+    private val _pendingCreditSales = MutableStateFlow<List<Sale>>(emptyList())
+    val pendingCreditSales: StateFlow<List<Sale>> = _pendingCreditSales.asStateFlow()
+
+    private val _totalPendingCount = MutableStateFlow(0)
+    val totalPendingCount: StateFlow<Int> = _totalPendingCount.asStateFlow()
+
+    fun getActiveShopId(): String? {
+        return _shop.value.id.takeIf { it.isNotBlank() && it != "shop_default" && it != "shop_1" }
+            ?: _currentEmployee.value?.shopId?.takeIf { it.isNotBlank() && it != "shop_default" && it != "shop_1" }
+            ?: storageManager.loadShop(defaultShop).id.takeIf { it.isNotBlank() && it != "shop_default" && it != "shop_1" }
+    }
+
     init {
         if (_expenses.value.isEmpty()) {
             _expenses.value = CreditLedgerUtils.buildDemoExpenses()
@@ -112,6 +150,25 @@ class PosViewModel(
         storageManager.saveEmployees(_employees.value)
         storageManager.saveStockInRecords(_stockInRecords.value)
         storageManager.saveShop(_shop.value)
+
+        val storedRole = storageManager.loadCurrentUserRole()
+        val activeEmpId = storageManager.loadActiveEmployeeId()
+        val activeEmp = _employees.value.find { it.id == activeEmpId }
+        if (storedRole == "EMPLOYEE") {
+            _isOwner.value = false
+            _currentEmployee.value = activeEmp
+            if (activeEmp?.status == "PENDING") {
+                _currentScreen.value = "employee_waiting_approval"
+            }
+            if (activeEmp != null && !activeEmp.shopId.isNullOrBlank() && (_shop.value.id.isBlank() || _shop.value.id == "shop_default" || _shop.value.id == "shop_1")) {
+                _shop.value = _shop.value.copy(id = activeEmp.shopId)
+                storageManager.saveShop(_shop.value)
+            }
+        } else {
+            _isOwner.value = true
+            _currentEmployee.value = null
+        }
+        updatePendingLists()
 
         // Restore authenticated Supabase session if valid
         if (supabase != null) {
@@ -316,23 +373,47 @@ class PosViewModel(
         lastSyncTime = now
 
         viewModelScope.launch {
-            // First: resolve active user email and current shop
             val activeEmail = storageManager.loadAuthSession()?.userEmail?.takeIf { it.isNotBlank() }
                 ?: _shop.value.email.takeIf { it.isNotBlank() }
 
-            var currentShop = _shop.value
-            service.getShop(
-                userEmail = activeEmail,
-                shopId = currentShop.id.takeIf { it != "shop_default" && it != "shop_1" }
-            ).onSuccess { remoteShop ->
-                if (remoteShop != null) {
-                    currentShop = remoteShop
-                    _shop.value = remoteShop
-                    storageManager.saveShop(remoteShop)
+            val isEmployee = storageManager.loadCurrentUserRole() == "EMPLOYEE" || !_isOwner.value
+            var activeShopId: String? = null
+
+            if (isEmployee) {
+                val emp = _currentEmployee.value
+                    ?: (if (!activeEmail.isNullOrBlank()) service.getEmployeeByEmail(activeEmail).getOrNull() else null)
+                if (emp != null) {
+                    _currentEmployee.value = emp
+                    _isOwner.value = false
+                    activeShopId = emp.shopId
+                    if (!activeShopId.isNullOrBlank() && (_shop.value.id == "shop_default" || _shop.value.id == "shop_1" || _shop.value.id.isBlank())) {
+                        service.getShop(shopId = activeShopId).onSuccess { remoteShop ->
+                            if (remoteShop != null) {
+                                _shop.value = remoteShop
+                                storageManager.saveShop(remoteShop)
+                            }
+                        }
+                    }
                 }
+            } else {
+                var currentShop = _shop.value
+                service.getShop(
+                    userEmail = activeEmail,
+                    shopId = currentShop.id.takeIf { it != "shop_default" && it != "shop_1" }
+                ).onSuccess { remoteShop ->
+                    if (remoteShop != null) {
+                        currentShop = remoteShop
+                        _shop.value = remoteShop
+                        storageManager.saveShop(remoteShop)
+                    }
+                }
+                activeShopId = currentShop.id.takeIf { it != "shop_default" && it != "shop_1" }
             }
 
-            val activeShopId = currentShop.id.takeIf { it != "shop_default" }
+            if (activeShopId.isNullOrBlank()) {
+                // Never query unpartitioned cross-tenant data without an active shop ID
+                return@launch
+            }
 
             // 1. Fetch live products from Supabase scoped to activeShopId
             service.getProducts(activeShopId).onSuccess { remoteProducts ->
@@ -403,14 +484,30 @@ class PosViewModel(
                 }
             }
 
-            // 6. Fetch shop info if any
-            val userEmail = storageManager.loadRememberedEmail() ?: _shop.value.email
-            service.getShop(userEmail).onSuccess { remoteShop ->
-                if (remoteShop != null && remoteShop.name.isNotBlank()) {
-                    _shop.value = remoteShop
-                    storageManager.saveShop(remoteShop)
+            // 6. Fetch shop info if owner
+            if (!isEmployee) {
+                val userEmail = storageManager.loadRememberedEmail() ?: _shop.value.email
+                service.getShop(userEmail).onSuccess { remoteShop ->
+                    if (remoteShop != null && remoteShop.name.isNotBlank()) {
+                        _shop.value = remoteShop
+                        storageManager.saveShop(remoteShop)
+                    }
                 }
             }
+
+            // 7. Fetch employees scoped to activeShopId
+            service.getEmployees(activeShopId).onSuccess { remoteEmployees ->
+                if (remoteEmployees.isNotEmpty()) {
+                    _employees.value = remoteEmployees
+                    storageManager.saveEmployees(remoteEmployees)
+                    val activeId = storageManager.loadActiveEmployeeId()
+                    if (activeId != null) {
+                        _currentEmployee.value = remoteEmployees.find { it.id == activeId }
+                    }
+                }
+            }
+
+            updatePendingLists()
         }
     }
 
@@ -444,7 +541,6 @@ class PosViewModel(
             storageManager.saveRememberedEmail(email)
         }
         _isLoggedIn.value = true
-        _currentScreen.value = "main"
 
         // Clear cached shop data from any previous session so there is zero data bleeding
         storageManager.clearShopData()
@@ -456,21 +552,66 @@ class PosViewModel(
         _cart.value = emptyList()
         _notifications.value = emptyList()
 
-        // Fetch shop for this specific user immediately upon login
+        // Fetch shop & employees for this specific user immediately upon login
         viewModelScope.launch {
             val service = supabase
             if (service != null) {
-                service.getShop(userEmail = email).onSuccess { remoteShop ->
-                    if (remoteShop != null) {
-                        _shop.value = remoteShop
-                        storageManager.saveShop(remoteShop)
+                // Check if user is a shop owner first
+                val remoteShop = service.getShop(userEmail = email).getOrNull()
+                val matchedEmp = if (remoteShop == null) {
+                    service.getEmployeeByEmail(email).getOrNull()
+                } else null
+
+                if (remoteShop != null) {
+                    // Owner Login
+                    _isOwner.value = true
+                    _currentEmployee.value = null
+                    _shop.value = remoteShop
+                    storageManager.saveShop(remoteShop)
+                    storageManager.saveCurrentUserRole("OWNER")
+                    storageManager.saveActiveEmployeeId(null)
+                    _currentScreen.value = "main"
+
+                    val remoteEmployees = service.getEmployees(remoteShop.id).getOrNull() ?: emptyList()
+                    _employees.value = remoteEmployees
+                    storageManager.saveEmployees(remoteEmployees)
+                } else if (matchedEmp != null) {
+                    // Employee Login
+                    _isOwner.value = false
+                    _currentEmployee.value = matchedEmp
+                    storageManager.saveCurrentUserRole("EMPLOYEE")
+                    storageManager.saveActiveEmployeeId(matchedEmp.id)
+
+                    val empShopId = matchedEmp.shopId
+                    if (!empShopId.isNullOrBlank()) {
+                        val empShop = service.getShop(shopId = empShopId).getOrNull()
+                        if (empShop != null) {
+                            _shop.value = empShop
+                            storageManager.saveShop(empShop)
+                        } else {
+                            _shop.value = Shop(id = empShopId, name = "Store POS")
+                            storageManager.saveShop(_shop.value)
+                        }
                     }
-                    syncWithSupabase(force = true)
-                }.onFailure {
-                    syncWithSupabase(force = true)
+
+                    if (matchedEmp.status == "PENDING") {
+                        _currentScreen.value = "employee_waiting_approval"
+                    } else {
+                        _currentScreen.value = "main"
+                    }
+                } else {
+                    val role = storageManager.loadCurrentUserRole()
+                    _isOwner.value = (role != "EMPLOYEE")
+                    _currentScreen.value = "main"
                 }
-            } else {
+
                 syncWithSupabase(force = true)
+                updatePendingLists()
+            } else {
+                _isOwner.value = true
+                _currentScreen.value = "main"
+                syncWithSupabase(force = true)
+                updatePendingLists()
             }
         }
     }
@@ -533,6 +674,381 @@ class PosViewModel(
         }
     }
 
+    fun onEmployeeRegistered(emp: Employee) {
+        _isOwner.value = false
+        _currentEmployee.value = emp
+        if (!emp.shopId.isNullOrBlank()) {
+            _shop.value = _shop.value.copy(id = emp.shopId)
+            storageManager.saveShop(_shop.value)
+        }
+        _employees.update { list ->
+            list.filterNot { it.id == emp.id || it.email.equals(emp.email, ignoreCase = true) } + emp
+        }
+        storageManager.saveEmployees(_employees.value)
+        storageManager.saveCurrentUserRole("EMPLOYEE")
+        storageManager.saveActiveEmployeeId(emp.id)
+        _isLoggedIn.value = true
+        _currentScreen.value = "employee_waiting_approval"
+        updatePendingLists()
+    }
+
+    fun registerEmployee(shopId: String, name: String, phone: String, email: String, authUserId: String? = null) {
+        val cleanEmail = email.trim().lowercase()
+        val deterministicId = authUserId?.takeIf { it.isNotBlank() }?.let { "emp_$it" }
+            ?: "emp_${cleanEmail.replace(Regex("[^a-zA-Z0-9]"), "_")}"
+
+        val existing = _employees.value.find { it.email.equals(cleanEmail, ignoreCase = true) }
+        val emp = existing?.copy(
+            name = name.trim().ifBlank { existing.name },
+            phone = phone.trim().ifBlank { existing.phone },
+            authUserId = authUserId ?: existing.authUserId
+        ) ?: Employee(
+            id = deterministicId,
+            name = name.trim(),
+            role = "Cashier",
+            phone = phone.trim(),
+            email = email.trim(),
+            isOwner = false,
+            shopId = shopId.trim(),
+            status = "PENDING",
+            permissions = listOf(
+                EmployeePermissions.PERM_RECORD_SALES,
+                EmployeePermissions.PERM_STOCK_IN
+            ),
+            authUserId = authUserId
+        )
+        onEmployeeRegistered(emp)
+
+        viewModelScope.launch {
+            supabase?.upsertEmployee(emp, shopId.trim())
+            updatePendingLists()
+        }
+    }
+
+    fun refreshEmployeeStatus(onComplete: () -> Unit = {}) {
+        val service = supabase ?: run { onComplete(); return }
+        val empId = _currentEmployee.value?.id ?: storageManager.loadActiveEmployeeId()
+        val currentEmail = _currentEmployee.value?.email ?: storageManager.loadRememberedEmail()
+        val shopId = _currentEmployee.value?.shopId ?: _shop.value.id
+        viewModelScope.launch {
+            try {
+                val res = service.getEmployees(shopId)
+                res.onSuccess { list ->
+                    val deduplicated = list.distinctBy { it.id }.distinctBy { it.email.lowercase() }
+                    _employees.value = deduplicated
+                    storageManager.saveEmployees(deduplicated)
+                    val updated = deduplicated.find {
+                        it.id == empId || (!currentEmail.isNullOrBlank() && it.email.equals(currentEmail, ignoreCase = true))
+                    }
+                    if (updated != null) {
+                        _currentEmployee.value = updated
+                        storageManager.saveActiveEmployeeId(updated.id)
+                        if (updated.status == "ACTIVE") {
+                            _currentScreen.value = "main"
+                        }
+                    } else if (empId != null && !currentEmail.isNullOrBlank()) {
+                        _currentEmployee.value = null
+                        storageManager.saveActiveEmployeeId(null)
+                        _currentScreen.value = "login"
+                    }
+                    updatePendingLists()
+                }
+            } finally {
+                onComplete()
+            }
+        }
+    }
+
+    // Permission Checkers
+    fun canRecordSales(): Boolean {
+        if (isOwner.value) return true
+        val emp = _currentEmployee.value ?: return false
+        return emp.status == "ACTIVE" && emp.permissions.contains(EmployeePermissions.PERM_RECORD_SALES)
+    }
+
+    fun canStockIn(): Boolean {
+        if (isOwner.value) return true
+        val emp = _currentEmployee.value ?: return false
+        return emp.status == "ACTIVE" && emp.permissions.contains(EmployeePermissions.PERM_STOCK_IN)
+    }
+
+    fun canAddProduct(): Boolean {
+        if (isOwner.value) return true
+        val emp = _currentEmployee.value ?: return false
+        return emp.status == "ACTIVE" && emp.permissions.contains(EmployeePermissions.PERM_NEW_PRODUCT)
+    }
+
+    fun canIssueCredit(): Boolean {
+        if (isOwner.value) return true
+        val emp = _currentEmployee.value ?: return false
+        return emp.status == "ACTIVE" && emp.permissions.contains(EmployeePermissions.PERM_CREDIT_SALES)
+    }
+
+    fun canRecordExpense(): Boolean {
+        if (isOwner.value) return true
+        val emp = _currentEmployee.value ?: return false
+        return emp.status == "ACTIVE" && emp.permissions.contains(EmployeePermissions.PERM_RECORD_EXPENSES)
+    }
+
+    // Owner Approval Actions
+    fun approveEmployee(employeeId: String, permissions: List<String>) {
+        val emp = _employees.value.find { it.id == employeeId } ?: return
+        val activeShopId = getActiveShopId()
+        val updated = emp.copy(
+            status = "ACTIVE",
+            permissions = permissions
+        )
+        val duplicateIds = _employees.value
+            .filter { it.id != employeeId && it.email.equals(emp.email, ignoreCase = true) }
+            .map { it.id }
+
+        _employees.update { list ->
+            list.filterNot { duplicateIds.contains(it.id) }.map { if (it.id == employeeId) updated else it }
+        }
+        storageManager.saveEmployees(_employees.value)
+        viewModelScope.launch {
+            supabase?.upsertEmployee(updated, activeShopId)
+            duplicateIds.forEach { dupId ->
+                supabase?.deleteEmployee(dupId)
+            }
+        }
+        updatePendingLists()
+    }
+
+    fun rejectEmployee(employeeId: String) {
+        val emp = _employees.value.find { it.id == employeeId }
+        val empEmail = emp?.email
+        val targetIds = _employees.value
+            .filter { it.id == employeeId || (!empEmail.isNullOrBlank() && it.email.equals(empEmail, ignoreCase = true)) }
+            .map { it.id }
+
+        _employees.update { list -> list.filterNot { targetIds.contains(it.id) } }
+        storageManager.saveEmployees(_employees.value)
+        viewModelScope.launch {
+            targetIds.forEach { id ->
+                supabase?.deleteEmployee(id)
+            }
+        }
+        updatePendingLists()
+    }
+
+    fun removeEmployee(employeeId: String) {
+        val emp = _employees.value.find { it.id == employeeId } ?: return
+        val empEmail = emp.email
+        val targetIds = _employees.value
+            .filter { it.id == employeeId || (empEmail.isNotBlank() && it.email.equals(empEmail, ignoreCase = true)) }
+            .map { it.id }
+
+        _employees.update { list -> list.filterNot { targetIds.contains(it.id) } }
+        storageManager.saveEmployees(_employees.value)
+        updatePendingLists()
+
+        viewModelScope.launch {
+            val service = supabase ?: return@launch
+            targetIds.forEach { id ->
+                service.deleteEmployee(id)
+            }
+        }
+    }
+
+    fun updateEmployeePermissions(employeeId: String, permissions: List<String>) {
+        val emp = _employees.value.find { it.id == employeeId } ?: return
+        val activeShopId = getActiveShopId()
+        val updated = emp.copy(permissions = permissions)
+        _employees.update { list -> list.map { if (it.id == employeeId) updated else it } }
+        storageManager.saveEmployees(_employees.value)
+        viewModelScope.launch {
+            supabase?.upsertEmployee(updated, activeShopId)
+        }
+    }
+
+    fun updateEmployeeStatus(employeeId: String, status: String) {
+        val emp = _employees.value.find { it.id == employeeId } ?: return
+        val activeShopId = getActiveShopId()
+        val updated = emp.copy(status = status)
+        _employees.update { list -> list.map { if (it.id == employeeId) updated else it } }
+        storageManager.saveEmployees(_employees.value)
+        viewModelScope.launch {
+            supabase?.upsertEmployee(updated, activeShopId)
+        }
+        updatePendingLists()
+    }
+
+    fun revokeAllEmployeePermissions(employeeId: String) {
+        updateEmployeePermissions(employeeId, emptyList())
+    }
+
+    fun approveStockIn(record: StockInRecord) {
+        val activeShopId = getActiveShopId()
+        _products.update { currentList ->
+            currentList.map { p ->
+                if (p.id == record.productId) {
+                    p.copy(
+                        stockQuantity = p.stockQuantity + record.quantityAdded,
+                        buyingPrice = if (record.buyingPrice > 0) record.buyingPrice else p.buyingPrice
+                    )
+                } else p
+            }
+        }
+        storageManager.saveProducts(_products.value)
+        val updatedProduct = _products.value.find { it.id == record.productId }
+        if (updatedProduct != null) {
+            viewModelScope.launch { supabase?.upsertProduct(updatedProduct, activeShopId) }
+        }
+
+        val cleanSupplier = if (record.supplier.contains("orig:")) {
+            record.supplier.substringAfter("orig:").ifBlank { "" }
+        } else {
+            record.supplier.removePrefix("PENDING_APPROVAL||").ifBlank { "" }
+        }
+        val approvedRecord = record.copy(
+            id = if (record.id.startsWith("stk_pending_")) "stk_${record.id.removePrefix("stk_pending_")}" else record.id,
+            supplier = cleanSupplier
+        )
+        _stockInRecords.update { list ->
+            list.map { if (it.id == record.id) approvedRecord else it }
+        }
+        storageManager.saveStockInRecords(_stockInRecords.value)
+        viewModelScope.launch {
+            supabase?.deleteStockInRecord(record.id)
+            supabase?.insertStockInRecord(approvedRecord, activeShopId)
+        }
+        updatePendingLists()
+    }
+
+    fun rejectStockIn(recordId: String) {
+        _stockInRecords.update { list -> list.filterNot { it.id == recordId } }
+        storageManager.saveStockInRecords(_stockInRecords.value)
+        viewModelScope.launch { supabase?.deleteStockInRecord(recordId) }
+        updatePendingLists()
+    }
+
+    fun approveNewProduct(product: Product) {
+        val activeShopId = getActiveShopId()
+        val cleanSupplier = if (product.supplier.contains("orig:")) {
+            product.supplier.substringAfter("orig:").ifBlank { "" }
+        } else {
+            product.supplier.removePrefix("PENDING_APPROVAL||").ifBlank { "" }
+        }
+        val approvedProduct = product.copy(supplier = cleanSupplier)
+        _products.update { list -> list.map { if (it.id == product.id) approvedProduct else it } }
+        storageManager.saveProducts(_products.value)
+        viewModelScope.launch {
+            supabase?.upsertProduct(approvedProduct, activeShopId)
+        }
+        updatePendingLists()
+    }
+
+    fun rejectNewProduct(productId: String) {
+        deleteProduct(productId)
+        updatePendingLists()
+    }
+
+    fun approveCreditSale(sale: Sale) {
+        val activeShopId = getActiveShopId()
+        // 1. Deduct stock for items in the approved credit sale
+        _products.update { currentList ->
+            currentList.map { prod ->
+                val sold = sale.items.find { it.product.id == prod.id }
+                if (sold != null) {
+                    prod.copy(stockQuantity = (prod.stockQuantity - sold.quantity).coerceAtLeast(0))
+                } else prod
+            }
+        }
+        storageManager.saveProducts(_products.value)
+        viewModelScope.launch {
+            sale.items.forEach { sold ->
+                val p = _products.value.find { it.id == sold.product.id }
+                if (p != null) supabase?.upsertProduct(p, activeShopId)
+            }
+        }
+
+        // 2. Create customer credit ledger entry
+        val creditRecord = CustomerCredit(
+            id = "c_${System.currentTimeMillis()}",
+            customerName = sale.customerName,
+            customerPhone = "",
+            totalOutstanding = sale.totalAmount,
+            productsSummary = "${sale.items.size} Items | ${sale.items.joinToString { it.product.name }}",
+            amountPaid = sale.paidAmount,
+            balance = sale.balance,
+            dueDate = sale.dueDate,
+            status = if (sale.balance <= 0) "Settled" else "Pending",
+            shopId = activeShopId
+        )
+        _customerCredits.update { listOf(creditRecord) + it }
+        storageManager.saveCustomerCredits(_customerCredits.value)
+
+        // 3. Mark sale as confirmed
+        val confirmedSale = sale.copy(
+            id = if (sale.id.startsWith("SL_PENDING_")) "SL-${(1093..9999).random()}" else sale.id,
+            paymentMethod = "Credit"
+        )
+        _salesHistory.update { list -> list.map { if (it.id == sale.id) confirmedSale else it } }
+        storageManager.saveSales(_salesHistory.value)
+
+        viewModelScope.launch {
+            supabase?.deleteSale(sale.id)
+            supabase?.insertSale(confirmedSale, activeShopId)
+            supabase?.upsertCustomerCredit(creditRecord, activeShopId)
+        }
+        updatePendingLists()
+    }
+
+    fun rejectCreditSale(saleId: String) {
+        _salesHistory.update { list -> list.filterNot { it.id == saleId } }
+        storageManager.saveSales(_salesHistory.value)
+        viewModelScope.launch { supabase?.deleteSale(saleId) }
+        updatePendingLists()
+    }
+
+    fun approveExpense(expense: Expense) {
+        val activeShopId = getActiveShopId()
+        val approvedCategory = if (expense.category.contains("orig:")) {
+            expense.category.substringAfter("orig:").ifBlank { "General" }
+        } else {
+            expense.category.removePrefix("PENDING_APPROVAL||").ifBlank { "General" }
+        }
+        val approvedExpense = expense.copy(
+            id = if (expense.id.startsWith("exp_pending_")) "exp_${expense.id.removePrefix("exp_pending_")}" else expense.id,
+            category = approvedCategory
+        )
+        _expenses.update { list -> list.map { if (it.id == expense.id) approvedExpense else it } }
+        storageManager.saveExpenses(_expenses.value)
+        viewModelScope.launch {
+            supabase?.deleteExpense(expense.id)
+            supabase?.insertExpense(approvedExpense, activeShopId)
+        }
+        updatePendingLists()
+    }
+
+    fun rejectExpense(expenseId: String) {
+        _expenses.update { list -> list.filterNot { it.id == expenseId } }
+        storageManager.saveExpenses(_expenses.value)
+        viewModelScope.launch { supabase?.deleteExpense(expenseId) }
+        updatePendingLists()
+    }
+
+    fun updatePendingLists() {
+        _pendingEmployees.value = _employees.value
+            .filter { !it.isOwner && it.status == "PENDING" }
+            .distinctBy { it.email.lowercase() }
+        _pendingStockIns.value = _stockInRecords.value.filter { it.supplier.startsWith("PENDING_APPROVAL||") }
+        _pendingNewProducts.value = _products.value.filter { it.supplier.startsWith("PENDING_APPROVAL||") }
+        _pendingExpenses.value = _expenses.value.filter { it.category.startsWith("PENDING_APPROVAL||") }
+        _pendingCreditSales.value = _salesHistory.value.filter {
+            it.paymentMethod.startsWith("PENDING_APPROVAL||") ||
+            it.paymentMethod == "PENDING_CREDIT" ||
+            it.paymentMethod.startsWith("PENDING_CREDIT") ||
+            it.id.startsWith("SL_PENDING_")
+        }
+        _totalPendingCount.value = _pendingEmployees.value.size +
+            _pendingStockIns.value.size +
+            _pendingNewProducts.value.size +
+            _pendingExpenses.value.size +
+            _pendingCreditSales.value.size
+    }
+
     fun updateShopInformation(shop: Shop) {
         _shop.value = shop
         storageManager.saveShop(shop)
@@ -551,6 +1067,8 @@ class PosViewModel(
         storageManager.clearShopData()
         supabase?.clearSession()
         _isLoggedIn.value = false
+        _isOwner.value = true
+        _currentEmployee.value = null
         _currentScreen.value = "login"
         _shop.value = defaultShop
         _products.value = defaultProducts
@@ -560,6 +1078,7 @@ class PosViewModel(
         _customerCredits.value = emptyList()
         _cart.value = emptyList()
         _notifications.value = emptyList()
+        updatePendingLists()
     }
 
     // Category & Search
@@ -686,33 +1205,38 @@ class PosViewModel(
             null
         }
 
-        // Deduct inventory locally
-        _products.update { currentList ->
-            currentList.map { product ->
-                val cartItem = currentCartItems.find { it.product.id == product.id }
-                if (cartItem != null) {
-                    val newQty = (product.stockQuantity - cartItem.quantity).coerceAtLeast(0)
-                    product.copy(stockQuantity = newQty)
-                } else {
-                    product
+        val isPendingCredit = isCredit && !isOwner.value
+
+        // Deduct inventory locally (only for confirmed sales, not pending approval credit sales)
+        if (!isPendingCredit) {
+            _products.update { currentList ->
+                currentList.map { product ->
+                    val cartItem = currentCartItems.find { it.product.id == product.id }
+                    if (cartItem != null) {
+                        val newQty = (product.stockQuantity - cartItem.quantity).coerceAtLeast(0)
+                        product.copy(stockQuantity = newQty)
+                    } else {
+                        product
+                    }
                 }
             }
+            storageManager.saveProducts(_products.value)
         }
-        storageManager.saveProducts(_products.value)
 
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val activeShopId = getActiveShopId()
         val activeOwnerName = _shop.value.ownerName.ifBlank { "Store Owner" }
+        val saleEmployeeName = if (!isOwner.value) _currentEmployee.value?.name.orEmpty().ifBlank { "Employee" } else activeOwnerName
 
         val saleTimeFormat = java.text.SimpleDateFormat("h:mm a", java.util.Locale.US).format(java.util.Date())
         val newSale = Sale(
-            id = "SL-${(1093..9999).random()}",
+            id = if (isPendingCredit) "SL_PENDING_${(1093..9999).random()}" else "SL-${(1093..9999).random()}",
             items = currentCartItems.map { it.copy(product = it.product.copy(shopId = activeShopId)) },
             totalAmount = creditTotal,
-            paymentMethod = paymentMethod,
+            paymentMethod = if (isPendingCredit) "PENDING_APPROVAL||requester:$saleEmployeeName||orig:Credit" else paymentMethod,
             customerName = if (trimmedCustomerName.isNotBlank()) trimmedCustomerName else if (isCredit) "Credit Customer" else "Walk-in Customer",
             dateFormatted = "Today, $saleTimeFormat",
             timestamp = System.currentTimeMillis(),
-            employeeName = activeOwnerName,
+            employeeName = saleEmployeeName,
             isCreditSale = isCredit,
             paidAmount = creditPaid,
             balance = creditBalance,
@@ -722,9 +1246,10 @@ class PosViewModel(
 
         _salesHistory.update { listOf(newSale) + it }
         storageManager.saveSales(_salesHistory.value)
+        updatePendingLists()
 
         val finalCreditRecord = creditRecord?.copy(shopId = activeShopId)
-        if (isCredit && finalCreditRecord != null) {
+        if (isCredit && !isPendingCredit && finalCreditRecord != null) {
             _customerCredits.update { listOf(finalCreditRecord) + it }
             storageManager.saveCustomerCredits(_customerCredits.value)
             val service = supabase
@@ -734,30 +1259,38 @@ class PosViewModel(
         }
 
         val productIds = currentCartItems.map { it.product.id }.toSet()
-        pendingProductUpdates.addAll(productIds)
+        if (!isPendingCredit) {
+            pendingProductUpdates.addAll(productIds)
+        }
 
         // Asynchronous cloud sync to Supabase
         val service = supabase
         if (service != null) {
             viewModelScope.launch {
                 try {
-                    currentCartItems.forEach { cartItem ->
-                        val updatedProd = _products.value.find { it.id == cartItem.product.id }
-                        if (updatedProd != null) {
-                            service.updateProductStock(updatedProd.id, updatedProd.stockQuantity, activeShopId)
-                            service.upsertProduct(updatedProd, activeShopId)
+                    if (!isPendingCredit) {
+                        currentCartItems.forEach { cartItem ->
+                            val updatedProd = _products.value.find { it.id == cartItem.product.id }
+                            if (updatedProd != null) {
+                                service.updateProductStock(updatedProd.id, updatedProd.stockQuantity, activeShopId)
+                                service.upsertProduct(updatedProd, activeShopId)
+                            }
                         }
                     }
                     service.insertSale(newSale, activeShopId)
-                    if (finalCreditRecord != null) {
+                    if (finalCreditRecord != null && !isPendingCredit) {
                         service.upsertCustomerCredit(finalCreditRecord, activeShopId)
                     }
                 } finally {
-                    pendingProductUpdates.removeAll(productIds)
+                    if (!isPendingCredit) {
+                        pendingProductUpdates.removeAll(productIds)
+                    }
                 }
             }
         } else {
-            pendingProductUpdates.removeAll(productIds)
+            if (!isPendingCredit) {
+                pendingProductUpdates.removeAll(productIds)
+            }
         }
 
         _completedSale.value = newSale
@@ -766,6 +1299,7 @@ class PosViewModel(
     }
 
     fun deleteSale(saleId: String) {
+        if (!isOwner.value) return
         val saleToDelete = _salesHistory.value.find { it.id == saleId }
         _salesHistory.update { list -> list.filterNot { it.id == saleId } }
         storageManager.saveSales(_salesHistory.value)
@@ -785,7 +1319,7 @@ class PosViewModel(
 
             val service = supabase
             if (service != null) {
-                val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+                val activeShopId = getActiveShopId()
                 pendingProductUpdates.addAll(productIds)
                 viewModelScope.launch {
                     try {
@@ -811,6 +1345,7 @@ class PosViewModel(
     }
 
     fun updateSale(updatedSale: Sale) {
+        if (!isOwner.value) return
         val originalSale = _salesHistory.value.find { it.id == updatedSale.id }
         _salesHistory.update { list ->
             list.map { if (it.id == updatedSale.id) updatedSale else it }
@@ -843,7 +1378,7 @@ class PosViewModel(
 
             val service = supabase ?: return
             viewModelScope.launch {
-                val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+                val activeShopId = getActiveShopId()
                 pendingProductUpdates.addAll(allProductIds)
                 try {
                     service.upsertSale(updatedSale, activeShopId)
@@ -863,7 +1398,7 @@ class PosViewModel(
         } else {
             val service = supabase ?: return
             viewModelScope.launch {
-                val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+                val activeShopId = getActiveShopId()
                 service.upsertSale(updatedSale, activeShopId)
             }
         }
@@ -897,7 +1432,7 @@ class PosViewModel(
         val normalizedName = customerName.trim()
         if (normalizedName.isBlank()) return false
         val normalizedPhone = CreditLedgerUtils.normalizePhoneNumber(phone) ?: return false
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val activeShopId = getActiveShopId()
         val created = CreditLedgerUtils.createCredit(
             id = "c_${System.currentTimeMillis()}",
             customerName = normalizedName,
@@ -994,7 +1529,7 @@ class PosViewModel(
 
         return try {
             val updatedCredit = CreditLedgerUtils.applyRepayment(currentCredit, amount, method, referenceCode, notes)
-            val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+            val activeShopId = getActiveShopId()
             val finalCredit = updatedCredit.copy(shopId = activeShopId ?: updatedCredit.shopId)
             _customerCredits.update { currentList ->
                 currentList.map { if (it.id == creditId) finalCredit else it }
@@ -1042,7 +1577,15 @@ class PosViewModel(
             _products.value.any { it.sku.equals(normalizedSku, ignoreCase = true) }
         ) return false
 
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val activeShopId = getActiveShopId()
+        val isPending = !isOwner.value
+        val empName = _currentEmployee.value?.name?.ifBlank { "Employee" } ?: "Employee"
+        val finalSupplier = if (isPending) {
+            "PENDING_APPROVAL||requester:$empName||orig:${supplier.trim()}"
+        } else {
+            supplier.trim()
+        }
+
         val newProduct = Product(
             id = "p_${System.currentTimeMillis()}",
             name = normalizedName,
@@ -1053,7 +1596,7 @@ class PosViewModel(
             sellingPrice = sellingPrice,
             stockQuantity = quantity,
             minStock = minStock,
-            supplier = supplier.trim(),
+            supplier = finalSupplier,
             iconType = normalizedCategory.lowercase().ifBlank { "box" },
             imageUri = imageUri,
             shopId = activeShopId,
@@ -1062,6 +1605,8 @@ class PosViewModel(
         )
         _products.update { listOf(newProduct) + it }
         storageManager.saveProducts(_products.value)
+        updatePendingLists()
+
         val service = supabase ?: return true
         pendingProductUpdates.add(newProduct.id)
         viewModelScope.launch {
@@ -1102,7 +1647,7 @@ class PosViewModel(
             _products.value.any { it.id != productId && it.sku.isNotBlank() && it.sku.equals(normalizedSku, ignoreCase = true) }
         ) return false
 
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val activeShopId = getActiveShopId()
         val updatedProduct = currentProduct.copy(
             name = normalizedName,
             category = normalizedCategory,
@@ -1172,65 +1717,83 @@ class PosViewModel(
     ) {
         if (quantityAdded <= 0) return
 
-        _products.update { currentList ->
-            currentList.map { p ->
-                if (p.id == productId) {
-                    p.copy(
-                        stockQuantity = p.stockQuantity + quantityAdded,
-                        buyingPrice = if (buyingPrice > 0) buyingPrice else p.buyingPrice,
-                        sellingPrice = if (sellingPrice > 0) sellingPrice else p.sellingPrice,
-                        supplier = if (supplier.isNotBlank()) supplier else p.supplier
-                    )
-                } else p
-            }
+        val isPending = !isOwner.value
+        val finalSupplier = if (isPending) {
+            "PENDING_APPROVAL||requester:${employeeName.ifBlank { _currentEmployee.value?.name ?: "Employee" }}||orig:${supplier.trim()}"
+        } else {
+            supplier.trim()
         }
-        storageManager.saveProducts(_products.value)
+        val recordId = if (isPending) "stk_pending_${System.currentTimeMillis()}" else "stk_${System.currentTimeMillis()}"
+
+        if (!isPending) {
+            _products.update { currentList ->
+                currentList.map { p ->
+                    if (p.id == productId) {
+                        p.copy(
+                            stockQuantity = p.stockQuantity + quantityAdded,
+                            buyingPrice = if (buyingPrice > 0) buyingPrice else p.buyingPrice,
+                            sellingPrice = if (sellingPrice > 0) sellingPrice else p.sellingPrice,
+                            supplier = if (supplier.isNotBlank()) supplier else p.supplier
+                        )
+                    } else p
+                }
+            }
+            storageManager.saveProducts(_products.value)
+        }
 
         val prodName = _products.value.find { it.id == productId }?.name ?: "Product"
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val activeShopId = getActiveShopId()
         val record = StockInRecord(
-            id = "stk_${System.currentTimeMillis()}",
+            id = recordId,
             productId = productId,
             productName = prodName,
             quantityAdded = quantityAdded,
             buyingPrice = buyingPrice,
-            supplier = supplier,
+            supplier = finalSupplier,
             dateFormatted = "Today, 10:00 AM",
-            employeeName = employeeName.ifBlank { _shop.value.ownerName.ifBlank { "Store Owner" } },
+            employeeName = employeeName.ifBlank { _currentEmployee.value?.name ?: _shop.value.ownerName.ifBlank { "Store Owner" } },
             shopId = activeShopId
         )
         _stockInRecords.update { listOf(record) + it }
         storageManager.saveStockInRecords(_stockInRecords.value)
+        updatePendingLists()
 
-        // Auto-resolve notifications for this product if its stock is now healthy
-        val restockedProduct = _products.value.find { it.id == productId }
-        if (restockedProduct != null && !restockedProduct.isLowStock) {
-            _notifications.update { items ->
-                items.map { notif ->
-                    if (!notif.isRead && productId in notif.productIds) {
-                        val allHealthy = notif.productIds.all { pId ->
-                            val p = _products.value.find { it.id == pId }
-                            p != null && !p.isLowStock
-                        }
-                        if (allHealthy) notif.copy(isRead = true) else notif
-                    } else notif
+        if (!isPending) {
+            // Auto-resolve notifications for this product if its stock is now healthy
+            val restockedProduct = _products.value.find { it.id == productId }
+            if (restockedProduct != null && !restockedProduct.isLowStock) {
+                _notifications.update { items ->
+                    items.map { notif ->
+                        if (!notif.isRead && productId in notif.productIds) {
+                            val allHealthy = notif.productIds.all { pId ->
+                                val p = _products.value.find { it.id == pId }
+                                p != null && !p.isLowStock
+                            }
+                            if (allHealthy) notif.copy(isRead = true) else notif
+                        } else notif
+                    }
+                }
+                storageManager.saveNotifications(_notifications.value)
+            }
+
+            // Asynchronously update product inventory and insert stock-in record in Supabase
+            val updatedProduct = _products.value.find { it.id == productId }
+            val service = supabase ?: return
+            viewModelScope.launch {
+                pendingProductUpdates.add(productId)
+                try {
+                    service.insertStockInRecord(record, activeShopId)
+                    if (updatedProduct != null) {
+                        service.upsertProduct(updatedProduct, activeShopId)
+                    }
+                } finally {
+                    pendingProductUpdates.remove(productId)
                 }
             }
-            storageManager.saveNotifications(_notifications.value)
-        }
-
-        // Asynchronously update product inventory and insert stock-in record in Supabase
-        val updatedProduct = _products.value.find { it.id == productId }
-        val service = supabase ?: return
-        viewModelScope.launch {
-            pendingProductUpdates.add(productId)
-            try {
+        } else {
+            val service = supabase ?: return
+            viewModelScope.launch {
                 service.insertStockInRecord(record, activeShopId)
-                if (updatedProduct != null) {
-                    service.upsertProduct(updatedProduct, activeShopId)
-                }
-            } finally {
-                pendingProductUpdates.remove(productId)
             }
         }
     }
@@ -1242,11 +1805,16 @@ class PosViewModel(
         val safeAmount = amount.coerceAtLeast(0.0)
         if (normalizedTitle.isBlank() || normalizedCategory.isBlank() || safeAmount <= 0.0) return false
 
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val isPending = !isOwner.value
+        val empName = _currentEmployee.value?.name?.ifBlank { "Employee" } ?: "Employee"
+        val finalCategory = if (isPending) "PENDING_APPROVAL||requester:$empName||orig:$normalizedCategory" else normalizedCategory
+        val expenseId = if (isPending) "exp_pending_${System.currentTimeMillis()}" else "exp_${System.currentTimeMillis()}"
+
+        val activeShopId = getActiveShopId()
         val newExpense = Expense(
-            id = "exp_${System.currentTimeMillis()}",
+            id = expenseId,
             title = normalizedTitle,
-            category = normalizedCategory,
+            category = finalCategory,
             amount = safeAmount,
             dateFormatted = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy")),
             iconType = normalizedCategory.lowercase(),
@@ -1254,6 +1822,8 @@ class PosViewModel(
         )
         _expenses.update { listOf(newExpense) + it }
         storageManager.saveExpenses(_expenses.value)
+        updatePendingLists()
+
         val service = supabase ?: return true
         viewModelScope.launch { service.insertExpense(newExpense, activeShopId) }
         return true
@@ -1265,7 +1835,7 @@ class PosViewModel(
         if (normalizedTitle.isBlank() || normalizedCategory.isBlank()) return false
 
         val currentExpense = _expenses.value.find { it.id == expenseId } ?: return false
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
+        val activeShopId = getActiveShopId()
         val updatedExpense = currentExpense.copy(
             title = normalizedTitle,
             category = normalizedCategory,
@@ -1294,17 +1864,37 @@ class PosViewModel(
     }
 
     // Add Employee
-    fun addEmployee(name: String, role: String, phone: String, email: String) {
-        val activeShopId = _shop.value.id.takeIf { it != "shop_default" }
-        val emp = Employee(
-            id = "emp_${System.currentTimeMillis()}",
-            name = name,
-            role = role,
-            phone = phone,
-            email = email,
-            shopId = activeShopId
+    fun addEmployee(
+        name: String,
+        role: String,
+        phone: String,
+        email: String,
+        permissions: List<String> = listOf(
+            EmployeePermissions.PERM_RECORD_SALES,
+            EmployeePermissions.PERM_STOCK_IN
         )
-        _employees.update { it + emp }
+    ) {
+        val activeShopId = getActiveShopId()
+        val cleanEmail = email.trim().lowercase()
+        val deterministicId = if (cleanEmail.isNotBlank()) {
+            "emp_${cleanEmail.replace(Regex("[^a-zA-Z0-9]"), "_")}"
+        } else {
+            "emp_${System.currentTimeMillis()}"
+        }
+
+        val emp = Employee(
+            id = deterministicId,
+            name = name.trim(),
+            role = role.trim().ifBlank { "Cashier" },
+            phone = phone.trim(),
+            email = email.trim(),
+            shopId = activeShopId,
+            status = "ACTIVE",
+            permissions = permissions
+        )
+        _employees.update { list ->
+            list.filterNot { it.id == emp.id || (cleanEmail.isNotBlank() && it.email.equals(cleanEmail, ignoreCase = true)) } + emp
+        }
         storageManager.saveEmployees(_employees.value)
 
         viewModelScope.launch {

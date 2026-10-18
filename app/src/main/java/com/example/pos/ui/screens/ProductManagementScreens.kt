@@ -330,7 +330,19 @@ fun ProductListItemCard(
                     )
                 }
                 Spacer(Modifier.height(8.dp))
-                StockBadge(isLowStock = product.isLowStock, stockQty = product.stockQuantity)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (product.supplier.startsWith("PENDING_APPROVAL||")) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(WarningYellow.copy(alpha = 0.15f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text("Pending Approval", color = WarningYellow, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    StockBadge(isLowStock = product.isLowStock, stockQty = product.stockQuantity)
+                }
             }
             Spacer(Modifier.width(6.dp))
             Column(horizontalAlignment = Alignment.End) {
@@ -616,6 +628,7 @@ fun AddProductScreen(
     viewModel: PosViewModel,
     onClose: () -> Unit
 ) {
+    val isOwner by viewModel.isOwner.collectAsState()
     val products by viewModel.products.collectAsState()
     var name by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
@@ -887,7 +900,7 @@ fun AddProductScreen(
         Surface(color = BgDark, shadowElevation = 10.dp) {
             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp)) {
                 PrimaryGreenButton(
-                    text = "Save product",
+                    text = if (isOwner) "Save product" else "Submit Product for Owner Approval",
                     onClick = {
                         attemptedSave = true
                         saveError = null

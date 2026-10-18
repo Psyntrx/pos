@@ -26,14 +26,21 @@ fun MainContainerScreen(
     profilePhotoUri: String?,
     onProfilePhotoChange: (String?) -> Unit
 ) {
+    val isOwner by viewModel.isOwner.collectAsState()
     val selectedTab by viewModel.selectedTab.collectAsState()
     val notifications by viewModel.notifications.collectAsState()
     val unreadNotificationsCount = notifications.count { !it.isRead }
     val hasUnreadNotifications = unreadNotificationsCount > 0
     var activeModal by remember {
         mutableStateOf(if (notificationNavigationRequest > 0) "notifications" else null)
-    } // "payment", "add_product", "stock_in", "credit_sales", "expenses", "employees", "notifications"
+    } // "payment", "add_product", "stock_in", "credit_sales", "expenses", "employees", "notifications", "approvals"
     var preselectedStockInProductId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(isOwner, selectedTab) {
+        if (!isOwner && selectedTab == 3) {
+            viewModel.selectTab(0)
+        }
+    }
 
     LaunchedEffect(notificationNavigationRequest) {
         if (notificationNavigationRequest > 0) activeModal = "notifications"
@@ -79,7 +86,8 @@ fun MainContainerScreen(
             if (activeModal == null) {
                 CustomBottomNavBar(
                     selectedTab = selectedTab,
-                    onTabSelected = { viewModel.selectTab(it) }
+                    onTabSelected = { viewModel.selectTab(it) },
+                    showReports = isOwner
                 )
             }
         },
@@ -138,6 +146,10 @@ fun MainContainerScreen(
                                 activeModal = "stock_in"
                             }
                         )
+                        "approvals" -> ApprovalsCenterScreen(
+                            viewModel = viewModel,
+                            onClose = { activeModal = null }
+                        )
                     }
                 }
             } else {
@@ -153,6 +165,7 @@ fun MainContainerScreen(
                         onOpenCreditSales = { activeModal = "credit_sales" },
                         onOpenExpenses = { activeModal = "expenses" },
                         onOpenNotifications = { activeModal = "notifications" },
+                        onOpenApprovals = { activeModal = "approvals" },
                         hasUnreadNotifications = hasUnreadNotifications,
                         unreadNotificationsCount = unreadNotificationsCount
                     )
@@ -180,7 +193,8 @@ fun MainContainerScreen(
                         onOpenEmployees = { activeModal = "employees" },
                         onOpenCreditReminders = { activeModal = "credit_sales" },
                         onOpenExpenses = { activeModal = "expenses" },
-                        onOpenNotifications = { activeModal = "notifications" }
+                        onOpenNotifications = { activeModal = "notifications" },
+                        onOpenApprovals = { activeModal = "approvals" }
                     )
                 }
             }

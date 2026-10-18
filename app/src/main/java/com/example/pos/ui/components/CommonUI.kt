@@ -520,15 +520,20 @@ fun RetailSyncHeader(
 @Composable
 fun CustomBottomNavBar(
     selectedTab: Int,
-    onTabSelected: (Int) -> Unit
+    onTabSelected: (Int) -> Unit,
+    showReports: Boolean = true
 ) {
-    val items = listOf(
-        NavigationItem("Home", Icons.Filled.Home, Icons.Outlined.Home),
-        NavigationItem("Sales", Icons.Filled.PointOfSale, Icons.Outlined.PointOfSale),
-        NavigationItem("Stock", Icons.Filled.Inventory, Icons.Outlined.Inventory2),
-        NavigationItem("Reports", Icons.Filled.BarChart, Icons.Outlined.BarChart),
-        NavigationItem("More", Icons.Filled.MoreHoriz, Icons.Outlined.MoreHoriz)
-    )
+    val items = remember(showReports) {
+        buildList {
+            add(NavigationItem("Home", Icons.Filled.Home, Icons.Outlined.Home, 0))
+            add(NavigationItem("Sales", Icons.Filled.PointOfSale, Icons.Outlined.PointOfSale, 1))
+            add(NavigationItem("Stock", Icons.Filled.Inventory, Icons.Outlined.Inventory2, 2))
+            if (showReports) {
+                add(NavigationItem("Reports", Icons.Filled.BarChart, Icons.Outlined.BarChart, 3))
+            }
+            add(NavigationItem("More", Icons.Filled.MoreHoriz, Icons.Outlined.MoreHoriz, 4))
+        }
+    }
 
     Surface(
         color = SurfaceDark,
@@ -546,15 +551,15 @@ fun CustomBottomNavBar(
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            items.forEachIndexed { index, item ->
-                val isSelected = selectedTab == index
+            items.forEach { item ->
+                val isSelected = selectedTab == item.tabIndex
 
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
-                        .clickable { onTabSelected(index) }
+                        .clickable { onTabSelected(item.tabIndex) }
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Box(
@@ -591,5 +596,6 @@ fun CustomBottomNavBar(
 private data class NavigationItem(
     val label: String,
     val selectedIcon: ImageVector,
-    val unselectedIcon: ImageVector
+    val unselectedIcon: ImageVector,
+    val tabIndex: Int
 )
