@@ -30,7 +30,8 @@ class CreditLedgerUtilsTest {
         val savedDate = CreditLedgerUtils.formatDueDate(date)
 
         assertEquals(date, CreditLedgerUtils.parseDueDate(savedDate))
-        assertEquals(null, CreditLedgerUtils.parseDueDate("2026-10-29"))
+        assertEquals(date, CreditLedgerUtils.parseDueDate("2026-10-29"))
+        assertEquals(null, CreditLedgerUtils.parseDueDate("invalid-date-string"))
     }
 
     @Test

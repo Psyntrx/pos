@@ -1085,6 +1085,46 @@ class SupabaseService(
         }
     }
 
+    suspend fun dispatchEdgeFunction(functionName: String, payload: Map<String, Any>): Result<String?> = withContext(Dispatchers.IO) {
+        try {
+            val json = JSONObject()
+            payload.forEach { (k, v) ->
+                when (v) {
+                    is Map<*, *> -> {
+                        val inner = JSONObject()
+                        v.forEach { (ik, iv) -> inner.put(ik.toString(), iv) }
+                        json.put(k, inner)
+                    }
+                    else -> json.put(k, v)
+                }
+            }
+            val req = buildRequest(
+                path = "/functions/v1/$functionName",
+                method = "POST",
+                bodyString = json.toString()
+            )
+            client.newCall(req).execute().use { resp ->
+                val bodyStr = resp.body?.string().orEmpty()
+                if (resp.isSuccessful) {
+                    // A successful HTTP response means the function accepted the request;
+                    // it does not prove provider delivery. Never invent a provider message ID.
+                    val msgId = runCatching {
+                        JSONObject(bodyStr).optString("message_id").takeIf { it.isNotBlank() }
+                    }.getOrNull()
+                    Result.success(msgId)
+                } else {
+                    val detail = parseErrorMessage(bodyStr, "")
+                    Result.failure(EdgeFunctionHttpException(
+                        statusCode = resp.code,
+                        message = edgeFunctionHttpErrorMessage(functionName, resp.code, detail)
+                    ))
+                }
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     private fun parseErrorMessage(responseBody: String, fallback: String): String {
         return try {
             val obj = JSONObject(responseBody)
@@ -1092,5 +1132,29 @@ class SupabaseService(
         } catch (e: Exception) {
             fallback
         }
+    }
+}
+
+internal class EdgeFunctionHttpException(
+    val statusCode: Int,
+    message: String
+) : Exception(message)
+
+internal fun edgeFunctionHttpErrorMessage(functionName: String, statusCode: Int, detail: String = ""): String {
+    val function = functionName.replace(Regex("[^a-zA-Z0-9_-]"), "")
+    val reason = when (statusCode) {
+        404 -> "function endpoint was not found in the configured Supabase project"
+        401 -> "request was not authenticated"
+        403 -> "request was not authorized by the function"
+        429 -> "function or provider rate limit was reached"
+        in 500..599 -> "Supabase function returned a server error"
+        else -> "Supabase function rejected the request"
+    }
+    val safeDetail = detail.trim().replace(Regex("(?i)bearer\\s+[^\\s,]+"), "Bearer [redacted]")
+        .replace(Regex("(?i)(access[_ -]?token|api[_ -]?key|secret)\\s*[:=]\\s*[^\\s,]+"), "\$1=[redacted]")
+        .take(300)
+    return buildString {
+        append("$function $reason (HTTP $statusCode).")
+        if (safeDetail.isNotBlank()) append(" ").append(safeDetail)
     }
 }

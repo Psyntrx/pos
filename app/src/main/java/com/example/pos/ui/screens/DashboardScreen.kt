@@ -544,7 +544,11 @@ fun DashboardScreen(
                                 categories = categoriesData,
                                 selectedIndex = selectedCategoryIndex,
                                 onSelectCategory = { index ->
-                                    selectedCategoryIndex = if (selectedCategoryIndex == index) null else index
+                                    selectedCategoryIndex = when {
+                                        index !in categoriesData.indices -> null
+                                        selectedCategoryIndex == index -> null
+                                        else -> index
+                                    }
                                 }
                             )
                         }
@@ -559,7 +563,8 @@ fun DashboardScreen(
                         exit = fadeOut()
                     ) {
                         selectedCategoryIndex?.let { idx ->
-                            val cat = categoriesData[idx]
+                            val cat = categoriesData.getOrNull(idx)
+                            if (cat != null) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -595,6 +600,7 @@ fun DashboardScreen(
                                 )
                             }
                         }
+                    }
                     }
 
                     if (selectedCategoryIndex == null) {
@@ -814,10 +820,10 @@ fun DashboardScreen(
                     )
                 }
 
-                // "Credit" Pill (Visible to Owner, or Employee with credit permission)
+                // "Credit Sales" Pill (Visible to Owner, or Employee with credit permission)
                 if (isOwner || viewModel.canIssueCredit()) {
                     SecondaryActionPill(
-                        label = "Credit",
+                        label = "Credit Sales",
                         icon = Icons.Default.CreditCard,
                         onClick = onOpenCreditSales
                     )

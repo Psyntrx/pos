@@ -2,6 +2,7 @@ package com.example.pos.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -42,17 +43,22 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 
+import com.example.pos.data.ReminderSchedulerEngine
+
 @Composable
 fun CreditSalesScreen(
     viewModel: PosViewModel,
+    initialCreditId: String? = null,
     onClose: () -> Unit
 ) {
     val context = LocalContext.current
     val customerCredits by viewModel.customerCredits.collectAsState()
     val products by viewModel.products.collectAsState()
     val shop by viewModel.shop.collectAsState()
-    val activeCredits = customerCredits.filter { it.balance > 0.0 && !it.status.equals("Settled", ignoreCase = true) }
-    val pastCredits = customerCredits.filter { it.balance <= 0.0 || it.status.equals("Settled", ignoreCase = true) }
+    val reminderConfig by viewModel.reminderConfig.collectAsState()
+    val ledgerCredits = customerCredits
+    val activeCredits = ledgerCredits.filter { it.balance > 0.0 && !it.status.equals("Settled", ignoreCase = true) }
+    val pastCredits = ledgerCredits.filter { it.balance <= 0.0 || it.status.equals("Settled", ignoreCase = true) }
     val totalOutstanding = activeCredits.sumOf { it.balance }
 
     var customerName by remember { mutableStateOf("") }
@@ -64,9 +70,14 @@ fun CreditSalesScreen(
     var showProductPickerDialog by remember { mutableStateOf(false) }
     var productPickerSearch by remember { mutableStateOf("") }
 
+    var manualAmount by remember { mutableStateOf("") }
+    var manualDescription by remember { mutableStateOf("") }
+    var showReminderSettingsDialog by remember { mutableStateOf(false) }
+
     var amountPaid by remember { mutableStateOf("") }
     var dueDate by remember { mutableStateOf(viewModel.defaultCreditDueDate()) }
     var searchQuery by remember { mutableStateOf("") }
+    var selectedStatusFilter by remember { mutableStateOf("All") }
     var paymentTarget by remember { mutableStateOf<CustomerCredit?>(null) }
     var paymentAmount by remember { mutableStateOf("") }
     var paymentMethod by remember { mutableStateOf("Cash") }
@@ -80,25 +91,49 @@ fun CreditSalesScreen(
     var showCustomDuration by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
 
+    // Handle deep-link initialCreditId
+    LaunchedEffect(initialCreditId, customerCredits) {
+        if (!initialCreditId.isNullOrBlank()) {
+            val targeted = customerCredits.find { it.id == initialCreditId }
+            if (targeted != null) {
+                historyTarget = targeted
+            }
+        }
+    }
+
     var isSaving by remember { mutableStateOf(false) }
     var snackbarMessage by remember { mutableStateOf<String?>(null) }
 
-    val filteredActiveCredits = remember(activeCredits, searchQuery) {
-        CreditLedgerUtils.filterActiveCredits(activeCredits, searchQuery)
+    val filteredActiveCredits = remember(activeCredits, searchQuery, selectedStatusFilter) {
+        val searched = CreditLedgerUtils.filterActiveCredits(activeCredits, searchQuery)
+        when (selectedStatusFilter) {
+            "Due Today" -> searched.filter { ReminderSchedulerEngine.resolveOverdueSeverity(it.dueDate, it.balance) == ReminderSchedulerEngine.OverdueSeverity.DUE_TODAY }
+            "Overdue" -> searched.filter {
+                val sev = ReminderSchedulerEngine.resolveOverdueSeverity(it.dueDate, it.balance)
+                sev == ReminderSchedulerEngine.OverdueSeverity.NEWLY_OVERDUE || sev == ReminderSchedulerEngine.OverdueSeverity.SERIOUSLY_OVERDUE
+            }
+            "Seriously Overdue" -> searched.filter { ReminderSchedulerEngine.resolveOverdueSeverity(it.dueDate, it.balance) == ReminderSchedulerEngine.OverdueSeverity.SERIOUSLY_OVERDUE }
+            else -> searched
+        }
     }
     val filteredPastCredits = remember(pastCredits, searchQuery) {
         CreditLedgerUtils.filterPastCredits(pastCredits, searchQuery)
     }
     val selectedProducts = products.filter { selectedCreditProducts.containsKey(it.id) }
-    val originalAmount = CreditLedgerUtils.calculateSaleTotal(
+    val catalogAmount = CreditLedgerUtils.calculateSaleTotal(
         selectedProducts.map { product -> CartItem(product, selectedCreditProducts[product.id] ?: 0) }
     ) ?: 0.0
-    val productsSummary = selectedProducts.joinToString { product ->
-        "${product.name} x ${selectedCreditProducts[product.id]}"
+    val effectiveOriginalAmount = if (selectedProducts.isNotEmpty()) catalogAmount else (manualAmount.toDoubleOrNull() ?: 0.0)
+    val effectiveProductsSummary = if (selectedProducts.isNotEmpty()) {
+        selectedProducts.joinToString { product ->
+            "${product.name} x ${selectedCreditProducts[product.id]}"
+        }
+    } else {
+        manualDescription.trim().ifBlank { "Credit Sale" }
     }
     val parsedAmountPaid = if (amountPaid.isBlank()) 0.0 else amountPaid.toDoubleOrNull() ?: Double.NaN
     val calculatedBalance = CreditLedgerUtils.calculateOutstandingBalance(
-        originalAmount,
+        effectiveOriginalAmount,
         parsedAmountPaid
     )
 
@@ -114,110 +149,51 @@ fun CreditSalesScreen(
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Header
+            // Header with separate Reminder Settings action
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                IconButton(onClick = onClose) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Credit Sales",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                )
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Text(
-                text = "Credit duration",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                ),
-                modifier = Modifier.align(Alignment.Start)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(7, 14).forEach { days ->
-                    FilterChip(
-                        selected = selectedCreditDuration == days,
-                        onClick = {
-                            selectedCreditDuration = days
-                            showCustomDuration = false
-                            viewModel.setCreditDurationDays(days)
-                            dueDate = viewModel.defaultCreditDueDate()
-                        },
-                        label = { Text("${days}d") }
-                    )
-                }
-                listOf(30, 60).forEach { days ->
-                    FilterChip(
-                        selected = selectedCreditDuration == days,
-                        onClick = {
-                            selectedCreditDuration = days
-                            showCustomDuration = false
-                            viewModel.setCreditDurationDays(days)
-                            dueDate = viewModel.defaultCreditDueDate()
-                        },
-                        label = { Text("${days}d") }
-                    )
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = showCustomDuration || selectedCreditDuration !in listOf(7, 14, 30, 60, -1),
-                    onClick = {
-                        showCustomDuration = true
-                        selectedCreditDuration = 0
-                    },
-                    label = { Text("Custom days") }
-                )
-                FilterChip(
-                    selected = selectedCreditDuration == -1,
-                    onClick = {
-                        selectedCreditDuration = -1
-                        showCustomDuration = false
-                        showDatePicker = true
-                    },
-                    label = { Text("Custom date") }
-                )
-            }
-            if (showCustomDuration) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = customDays,
-                        onValueChange = { customDays = it.filter(Char::isDigit) },
-                        label = { Text("Days") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                    )
-                    Button(onClick = {
-                        val days = customDays.toIntOrNull()?.takeIf { it > 0 }
-                        if (days != null) {
-                            selectedCreditDuration = days
-                            showCustomDuration = false
-                            viewModel.setCreditDurationDays(days)
-                            dueDate = viewModel.defaultCreditDueDate()
-                        }
-                    }) {
-                        Text("Apply")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onClose) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
                     }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Credit Sales",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                    )
+                }
+
+                // Secondary Action: Reminder & Credit Terms Configuration
+                OutlinedButton(
+                    onClick = { showReminderSettingsDialog = true },
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, EmeraldBright.copy(alpha = 0.5f)),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = SurfaceDarkVariant,
+                        contentColor = EmeraldBright
+                    ),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = EmeraldBright
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("Reminder Settings", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
-            Spacer(modifier = Modifier.height(20.dp))
+
+            Spacer(modifier = Modifier.height(18.dp))
 
             // Total Outstanding Banner Card
             SurfaceCard(
@@ -408,25 +384,78 @@ fun CreditSalesScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            OutlinedTextField(
-                value = "KSh ${String.format("%,.2f", originalAmount)}",
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Original sale total", color = TextSecondary) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                textStyle = TextStyle(color = TextPrimary),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = SurfaceDarkVariant,
-                    unfocusedContainerColor = SurfaceDark,
-                    focusedBorderColor = EmeraldBright,
-                    unfocusedBorderColor = SurfaceBorder,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary,
-                    cursorColor = EmeraldBright
-                ),
-                singleLine = true
-            )
+            if (selectedProducts.isNotEmpty()) {
+                OutlinedTextField(
+                    value = "KSh ${String.format(java.util.Locale.US, "%,.2f", catalogAmount)}",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Original sale total (from catalog)", color = TextSecondary) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    textStyle = TextStyle(color = TextPrimary),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = SurfaceDarkVariant,
+                        unfocusedContainerColor = SurfaceDark,
+                        focusedBorderColor = EmeraldBright,
+                        unfocusedBorderColor = SurfaceBorder,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        cursorColor = EmeraldBright
+                    ),
+                    singleLine = true
+                )
+            } else {
+                Text(
+                    text = "— OR enter credit sale details directly —",
+                    color = TextMuted,
+                    fontSize = 11.sp,
+                    modifier = Modifier.align(Alignment.Start).padding(vertical = 4.dp)
+                )
+                OutlinedTextField(
+                    value = manualDescription,
+                    onValueChange = { manualDescription = it },
+                    label = { Text("Item description or notes (e.g. 2 Sacks Maize)", color = TextSecondary) },
+                    placeholder = { Text("e.g. Direct credit sale / Service", color = TextMuted) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    textStyle = TextStyle(color = TextPrimary),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = SurfaceDarkVariant,
+                        unfocusedContainerColor = SurfaceDark,
+                        focusedBorderColor = EmeraldBright,
+                        unfocusedBorderColor = SurfaceBorder,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        focusedLabelColor = TextSecondary,
+                        unfocusedLabelColor = TextSecondary,
+                        cursorColor = EmeraldBright
+                    ),
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = manualAmount,
+                    onValueChange = { manualAmount = it.filter { c -> c.isDigit() || c == '.' } },
+                    label = { Text("Credit sale total amount (KSh) *", color = TextSecondary) },
+                    placeholder = { Text("0.00", color = TextMuted) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    textStyle = TextStyle(color = TextPrimary),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = SurfaceDarkVariant,
+                        unfocusedContainerColor = SurfaceDark,
+                        focusedBorderColor = EmeraldBright,
+                        unfocusedBorderColor = SurfaceBorder,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        focusedLabelColor = TextSecondary,
+                        unfocusedLabelColor = TextSecondary,
+                        cursorColor = EmeraldBright
+                    ),
+                    singleLine = true
+                )
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -457,7 +486,7 @@ fun CreditSalesScreen(
                 )
 
                 OutlinedTextField(
-                    value = calculatedBalance?.let { "KSh ${String.format("%,.2f", it)}" } ?: "Enter valid amounts",
+                    value = calculatedBalance?.let { "KSh ${String.format(java.util.Locale.US, "%,.2f", it)}" } ?: "Enter valid amounts",
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Outstanding balance", color = TextSecondary) },
@@ -491,6 +520,22 @@ fun CreditSalesScreen(
             }
 
             Spacer(modifier = Modifier.height(12.dp))
+            Text("Due date for this transaction", color = TextSecondary, modifier = Modifier.align(Alignment.Start))
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf(7, 14, 30, 60).forEach { days ->
+                    FilterChip(
+                        selected = dueDate == CreditLedgerUtils.calculateDueDate(days),
+                        onClick = { dueDate = CreditLedgerUtils.calculateDueDate(days) },
+                        label = { Text("${days}d") }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
 
             OutlinedTextField(
                 value = dueDate,
@@ -515,7 +560,7 @@ fun CreditSalesScreen(
                 singleLine = true,
                 trailingIcon = {
                     IconButton(onClick = { showDatePicker = true }) {
-                        Icon(Icons.Default.DateRange, contentDescription = "Choose due date", tint = EmeraldBright)
+                        Icon(Icons.Default.DateRange, contentDescription = "Choose custom due date", tint = EmeraldBright)
                     }
                 }
             )
@@ -537,24 +582,32 @@ fun CreditSalesScreen(
                         customerPhoneError = "Valid phone number is required (e.g. 0712345678 or +254...)"
                         hasError = true
                     }
-                    if (selectedProducts.isEmpty()) {
-                        snackbarMessage = "Add at least one product."
+                    val effectiveTotal = if (selectedProducts.isNotEmpty()) catalogAmount else (manualAmount.toDoubleOrNull() ?: 0.0)
+                    if (effectiveTotal <= 0.0) {
+                        snackbarMessage = "Please select products from catalog or enter a credit amount greater than 0."
                         hasError = true
                     }
                     if (hasError) return@PrimaryGreenButton
 
                     isSaving = true
-                    val saved = viewModel.addCustomerCredit(
-                        customerName = trimmedName,
-                        phone = normalizedPhone!!,
-                        productsSummary = productsSummary,
-                        originalAmount = originalAmount,
-                        amountPaid = parsedAmountPaid,
-                        dueDate = dueDate,
-                        paymentMethod = initialPaymentMethod,
-                        itemsMap = selectedCreditProducts
-                    )
-                    isSaving = false
+                    val saved = try {
+                        viewModel.addCustomerCredit(
+                            customerName = trimmedName,
+                            phone = normalizedPhone!!,
+                            productsSummary = effectiveProductsSummary,
+                            originalAmount = effectiveTotal,
+                            amountPaid = parsedAmountPaid,
+                            dueDate = dueDate,
+                            paymentMethod = initialPaymentMethod,
+                            itemsMap = selectedCreditProducts
+                        )
+                    } catch (error: Exception) {
+                        snackbarMessage = error.message?.takeIf { it.isNotBlank() }
+                            ?: "Could not save the credit record. Please retry."
+                        false
+                    } finally {
+                        isSaving = false
+                    }
                     if (saved) {
                         snackbarMessage = "Credit record saved successfully."
                         customerName = ""
@@ -562,9 +615,9 @@ fun CreditSalesScreen(
                         customerNameError = null
                         customerPhoneError = null
                         selectedCreditProducts = emptyMap()
+                        manualAmount = ""
+                        manualDescription = ""
                         amountPaid = ""
-                        selectedCreditDuration = viewModel.getCreditDurationDays()
-                        showCustomDuration = false
                         dueDate = viewModel.defaultCreditDueDate()
                     } else {
                         snackbarMessage = "Invalid credit entry. Please verify amounts and dates."
@@ -595,6 +648,32 @@ fun CreditSalesScreen(
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = EmeraldBright) }
             )
 
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Overdue Status Filter Chips
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf("All", "Due Today", "Overdue", "Seriously Overdue").forEach { filterOption ->
+                    val isSelected = selectedStatusFilter == filterOption
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(if (isSelected) EmeraldBright else SurfaceDarkVariant)
+                            .clickable { selectedStatusFilter = filterOption }
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = filterOption,
+                            color = if (isSelected) TextOnPrimary else TextSecondary,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(18.dp))
 
             Text(
@@ -621,14 +700,20 @@ fun CreditSalesScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "No active credit records match that search.",
+                            text = "No active credit records match that search or filter.",
                             color = TextSecondary
                         )
                     }
                 }
             } else {
                 filteredActiveCredits.forEach { c ->
-                    val resolvedStatus = CreditLedgerUtils.resolveCreditStatus(c)
+                    val severity = ReminderSchedulerEngine.resolveOverdueSeverity(c.dueDate, c.balance)
+                    val (severityBadgeText, severityColor, severityBg) = when (severity) {
+                        ReminderSchedulerEngine.OverdueSeverity.UPCOMING -> Triple("Upcoming", Color(0xFF64748B), Color(0xFF1E293B))
+                        ReminderSchedulerEngine.OverdueSeverity.DUE_TODAY -> Triple("Due Today", WarningYellow, WarningYellow.copy(alpha = 0.15f))
+                        ReminderSchedulerEngine.OverdueSeverity.NEWLY_OVERDUE -> Triple("Overdue", Color(0xFFF97316), Color(0xFFF97316).copy(alpha = 0.15f))
+                        ReminderSchedulerEngine.OverdueSeverity.SERIOUSLY_OVERDUE -> Triple("Seriously Overdue", ErrorRed, ErrorRed.copy(alpha = 0.18f))
+                    }
                     val dueLabel = if (c.dueDate.isNotBlank()) "Due: ${c.dueDate}" else "Due: Not set"
                     SurfaceCard(
                         modifier = Modifier
@@ -636,7 +721,7 @@ fun CreditSalesScreen(
                             .padding(bottom = 10.dp)
                             .clickable { historyTarget = c },
                         backgroundColor = SurfaceDark,
-                        borderColor = SurfaceBorder,
+                        borderColor = if (severity == ReminderSchedulerEngine.OverdueSeverity.SERIOUSLY_OVERDUE) ErrorRed.copy(alpha = 0.5f) else SurfaceBorder,
                         cornerRadius = 18.dp
                     ) {
                         Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
@@ -646,13 +731,29 @@ fun CreditSalesScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = c.customerName,
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = TextPrimary
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = c.customerName,
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = TextPrimary
+                                            )
                                         )
-                                    )
+                                        Spacer(Modifier.width(8.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(severityBg)
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = severityBadgeText,
+                                                color = severityColor,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
                                     if (c.customerPhone.isNotBlank()) {
                                         Text(
                                             text = c.customerPhone,
@@ -660,17 +761,11 @@ fun CreditSalesScreen(
                                         )
                                     }
                                     Text(
-                                        text = resolvedStatus,
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            color = if (resolvedStatus == "Overdue") ErrorRed else EmeraldBright
-                                        )
-                                    )
-                                    Text(
-                                        text = "Original: KSh ${String.format("%,.2f", c.totalOutstanding)}",
+                                        text = "Original: KSh ${String.format(java.util.Locale.US, "%,.2f", c.totalOutstanding)}",
                                         style = MaterialTheme.typography.labelSmall.copy(color = TextSecondary)
                                     )
                                     Text(
-                                        text = "Repaid: KSh ${String.format("%,.2f", c.amountPaid)}",
+                                        text = "Repaid: KSh ${String.format(java.util.Locale.US, "%,.2f", c.amountPaid)}",
                                         style = MaterialTheme.typography.labelSmall.copy(color = TextSecondary)
                                     )
                                 }
@@ -1070,7 +1165,7 @@ fun CreditSalesScreen(
                             }
                         }
 
-                        if (!isSettled && target.balance > 0.0) {
+                        if (!isSettled && target.balance > 0.0 && !target.id.startsWith("TEST_ONLY_")) {
                             Spacer(modifier = Modifier.height(12.dp))
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1240,10 +1335,7 @@ fun CreditSalesScreen(
                     )
                 )
             }
-            val normalizedPhone = remember(target.customerPhone) {
-                CreditLedgerUtils.normalizePhoneNumber(target.customerPhone) ?: target.customerPhone.trim()
-            }
-            val cleanDigits = normalizedPhone.replace("+", "").trim()
+            var recipientPhone by remember(target.id) { mutableStateOf(target.customerPhone) }
             val status = remember(target) { CreditLedgerUtils.resolveCreditStatus(target) }
 
             fun launchShareChooser() {
@@ -1251,12 +1343,13 @@ fun CreditSalesScreen(
                     type = "text/plain"
                     putExtra(Intent.EXTRA_TEXT, reminderMessageText)
                     putExtra(Intent.EXTRA_SUBJECT, "Payment Reminder - ${shop.name.ifBlank { "POS" }}")
-                    if (normalizedPhone.isNotBlank()) {
-                        putExtra("address", normalizedPhone)
-                        putExtra("android.intent.extra.PHONE_NUMBER", normalizedPhone)
+                    val norm = CreditLedgerUtils.normalizePhoneNumber(recipientPhone) ?: recipientPhone.trim()
+                    if (norm.isNotBlank()) {
+                        putExtra("address", norm)
+                        putExtra("android.intent.extra.PHONE_NUMBER", norm)
                     }
                 }
-                val chooser = Intent.createChooser(sendIntent, "Send reminder")
+                val chooser = Intent.createChooser(sendIntent, "Send payment reminder")
                 try {
                     context.startActivity(chooser)
                     reminderTarget = null
@@ -1268,7 +1361,10 @@ fun CreditSalesScreen(
             }
 
             fun launchWhatsApp() {
+                val norm = CreditLedgerUtils.normalizePhoneNumber(recipientPhone) ?: recipientPhone.trim()
+                val cleanDigits = norm.replace("+", "").filter(Char::isDigit)
                 if (cleanDigits.isBlank()) {
+                    snackbarMessage = "Invalid phone number. Opening share menu."
                     launchShareChooser()
                     return
                 }
@@ -1278,16 +1374,19 @@ fun CreditSalesScreen(
                     context.startActivity(waIntent)
                     reminderTarget = null
                 } catch (e: Exception) {
+                    snackbarMessage = "WhatsApp is not installed. Opening share options."
                     launchShareChooser()
                 }
             }
 
             fun launchSms() {
-                if (normalizedPhone.isBlank()) {
+                val norm = CreditLedgerUtils.normalizePhoneNumber(recipientPhone) ?: recipientPhone.trim()
+                if (norm.isBlank()) {
+                    snackbarMessage = "No phone number available. Opening share menu."
                     launchShareChooser()
                     return
                 }
-                val smsUri = Uri.parse("smsto:${Uri.encode(normalizedPhone)}")
+                val smsUri = Uri.parse("smsto:${Uri.encode(norm)}")
                 val smsIntent = Intent(Intent.ACTION_SENDTO, smsUri).apply {
                     putExtra("sms_body", reminderMessageText)
                 }
@@ -1295,9 +1394,12 @@ fun CreditSalesScreen(
                     context.startActivity(smsIntent)
                     reminderTarget = null
                 } catch (e: Exception) {
+                    snackbarMessage = "SMS app could not be opened. Opening share options."
                     launchShareChooser()
                 }
             }
+
+            var reminderTab by remember(target.id) { mutableStateOf(0) }
 
             AlertDialog(
                 onDismissRequest = { reminderTarget = null },
@@ -1308,7 +1410,10 @@ fun CreditSalesScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Send Reminder", color = TextPrimary, fontWeight = FontWeight.Bold)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Send Reminder", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            Text(target.customerName, color = TextSecondary, fontSize = 12.sp)
+                        }
                         Surface(
                             color = if (status == "Overdue") ErrorRed.copy(alpha = 0.2f) else EmeraldContainer,
                             shape = RoundedCornerShape(8.dp)
@@ -1328,99 +1433,252 @@ fun CreditSalesScreen(
                             .fillMaxWidth()
                             .verticalScroll(rememberScrollState())
                     ) {
-                        Text(
-                            text = target.customerName,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
-                        )
-                        if (target.customerPhone.isNotBlank()) {
-                            Text(
-                                text = target.customerPhone,
-                                style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(6.dp))
+                        // Tab Selector: Manual vs Automated
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(SurfaceDarkVariant)
+                                .padding(4.dp)
                         ) {
-                            Text(
-                                "Balance: KSh ${String.format("%,.2f", target.balance)}",
-                                color = WarningYellow,
-                                fontWeight = FontWeight.SemiBold,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                            if (target.dueDate.isNotBlank()) {
-                                Text("Due: ${target.dueDate}", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(9.dp))
+                                    .background(if (reminderTab == 0) EmeraldBright else Color.Transparent)
+                                    .clickable { reminderTab = 0 }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Send Manually",
+                                    color = if (reminderTab == 0) TextOnPrimary else TextSecondary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(9.dp))
+                                    .background(if (reminderTab == 1) EmeraldBright else Color.Transparent)
+                                    .clickable { reminderTab = 1 }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Automated Schedule",
+                                    color = if (reminderTab == 1) TextOnPrimary else TextSecondary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
 
                         Spacer(modifier = Modifier.height(14.dp))
-                        Text("Editable message:", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                        Spacer(modifier = Modifier.height(6.dp))
-                        OutlinedTextField(
-                            value = reminderMessageText,
-                            onValueChange = { reminderMessageText = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            minLines = 4,
-                            maxLines = 8,
-                            shape = RoundedCornerShape(12.dp),
-                            textStyle = TextStyle(color = TextPrimary),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = SurfaceDarkVariant,
-                                unfocusedContainerColor = SurfaceDarkVariant,
-                                focusedBorderColor = EmeraldBright,
-                                unfocusedBorderColor = SurfaceBorder,
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary
-                            )
-                        )
 
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Choose send option:", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                        Spacer(modifier = Modifier.height(8.dp))
+                        if (reminderTab == 0) {
+                            SurfaceCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                backgroundColor = SurfaceDarkVariant,
+                                borderColor = SurfaceBorder,
+                                cornerRadius = 10.dp
+                            ) {
+                                Text(
+                                    text = "Opens WhatsApp or SMS directly on this phone. You can inspect and edit the message before sending.",
+                                    color = TextSecondary,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(10.dp)
+                                )
+                            }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            SecondaryDarkButton(
-                                text = "WhatsApp",
-                                onClick = { launchWhatsApp() },
-                                modifier = Modifier.weight(1f).height(40.dp),
-                                containerColor = SurfaceDarkVariant,
-                                contentColor = EmeraldBright,
-                                borderColor = EmeraldBright.copy(alpha = 0.5f)
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    "Balance: KSh ${String.format(java.util.Locale.US, "%,.2f", target.balance)}",
+                                    color = WarningYellow,
+                                    fontWeight = FontWeight.SemiBold,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                if (target.dueDate.isNotBlank()) {
+                                    Text("Due: ${target.dueDate}", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // Destination Phone Input (User can edit or test with their own number)
+                            OutlinedTextField(
+                                value = recipientPhone,
+                                onValueChange = { recipientPhone = it },
+                                label = { Text("Destination Phone Number", color = TextSecondary) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                textStyle = TextStyle(color = TextPrimary),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedContainerColor = SurfaceDarkVariant,
+                                    unfocusedContainerColor = SurfaceDarkVariant,
+                                    focusedBorderColor = EmeraldBright,
+                                    unfocusedBorderColor = SurfaceBorder,
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary
+                                ),
+                                trailingIcon = {
+                                    if (shop.phone.isNotBlank() && recipientPhone != shop.phone) {
+                                        TextButton(onClick = { recipientPhone = shop.phone }) {
+                                            Text("My phone", fontSize = 10.sp, color = EmeraldBright)
+                                        }
+                                    }
+                                }
                             )
-                            SecondaryDarkButton(
-                                text = "SMS",
-                                onClick = { launchSms() },
-                                modifier = Modifier.weight(1f).height(40.dp),
-                                containerColor = SurfaceDarkVariant,
-                                contentColor = TextPrimary,
-                                borderColor = SurfaceBorder
+
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text("Editable reminder text:", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedTextField(
+                                value = reminderMessageText,
+                                onValueChange = { reminderMessageText = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                minLines = 4,
+                                maxLines = 8,
+                                shape = RoundedCornerShape(12.dp),
+                                textStyle = TextStyle(color = TextPrimary),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedContainerColor = SurfaceDarkVariant,
+                                    unfocusedContainerColor = SurfaceDarkVariant,
+                                    focusedBorderColor = EmeraldBright,
+                                    unfocusedBorderColor = SurfaceBorder,
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary
+                                )
                             )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
+
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text("Send via device application:", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                SecondaryDarkButton(
+                                    text = "WhatsApp",
+                                    onClick = { launchWhatsApp() },
+                                    modifier = Modifier.weight(1f).height(40.dp),
+                                    containerColor = SurfaceDarkVariant,
+                                    contentColor = EmeraldBright,
+                                    borderColor = EmeraldBright.copy(alpha = 0.5f)
+                                )
+                                SecondaryDarkButton(
+                                    text = "SMS App",
+                                    onClick = { launchSms() },
+                                    modifier = Modifier.weight(1f).height(40.dp),
+                                    containerColor = SurfaceDarkVariant,
+                                    contentColor = TextPrimary,
+                                    borderColor = SurfaceBorder
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                SecondaryDarkButton(
+                                    text = "Share Menu",
+                                    onClick = { launchShareChooser() },
+                                    modifier = Modifier.weight(1f).height(40.dp),
+                                    containerColor = SurfaceDarkVariant,
+                                    contentColor = TextPrimary,
+                                    borderColor = SurfaceBorder
+                                )
+                                SecondaryDarkButton(
+                                    text = "Copy Text",
+                                    onClick = {
+                                        clipboardManager.setText(AnnotatedString(reminderMessageText))
+                                        snackbarMessage = "Reminder copied to clipboard."
+                                        reminderTarget = null
+                                    },
+                                    modifier = Modifier.weight(1f).height(40.dp),
+                                    containerColor = SurfaceDarkVariant,
+                                    contentColor = TextPrimary,
+                                    borderColor = SurfaceBorder
+                                )
+                            }
+                        } else {
+                            // Automated Schedule View
+                            SurfaceCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                backgroundColor = SurfaceDarkVariant,
+                                borderColor = SurfaceBorder,
+                                cornerRadius = 14.dp
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("Automated Reminders", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(if (reminderConfig.autoSendEnabled) EmeraldContainer else SurfaceDark)
+                                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(
+                                                text = if (reminderConfig.autoSendEnabled) "ENABLED" else "PAUSED",
+                                                color = if (reminderConfig.autoSendEnabled) EmeraldBright else TextMuted,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Text(
+                                        text = "Channel: ${reminderConfig.defaultChannel.name} • Window: ${if (reminderConfig.allowOffHoursSending) "24 hours" else "${reminderConfig.workingHoursStart.toString().padStart(2, '0')}:00–${reminderConfig.workingHoursEnd.toString().padStart(2, '0')}:00 Nairobi time"}",
+                                        color = TextSecondary,
+                                        fontSize = 11.5.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    HorizontalDivider(color = SurfaceBorder, thickness = 0.5.dp)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("Automated Schedule for ${target.customerName}:", color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("• ${reminderConfig.additionalAdvanceDaysBeforeDue} days before due: First advance notice", color = TextSecondary, fontSize = 11.5.sp)
+                                    Text("• ${reminderConfig.advanceDaysBeforeDue} days before due: Second advance notice", color = TextSecondary, fontSize = 11.5.sp)
+                                    Text("• On due date (${target.dueDate}): Payment due today reminder", color = TextSecondary, fontSize = 11.5.sp)
+                                    Text("• ${reminderConfig.firstOverdueDaysAfterDue} days after due: Overdue notice", color = TextSecondary, fontSize = 11.5.sp)
+                                    if (reminderConfig.repeatInterval != com.example.pos.data.OverdueRepeatInterval.NONE) {
+                                        val repeatDays = if (reminderConfig.repeatInterval == com.example.pos.data.OverdueRepeatInterval.CUSTOM) {
+                                            reminderConfig.repeatIntervalDays
+                                        } else reminderConfig.repeatInterval.days
+                                        Text("• Repeat every $repeatDays days, up to ${reminderConfig.repeatCount} times", color = TextSecondary, fontSize = 11.5.sp)
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        "Schedules are saved on this device and checked while the app process is active or after sync. Delivery is not guaranteed while the app process is stopped.",
+                                        color = TextMuted,
+                                        fontSize = 10.5.sp
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
                             SecondaryDarkButton(
-                                text = "Share Chooser",
-                                onClick = { launchShareChooser() },
-                                modifier = Modifier.weight(1f).height(40.dp),
-                                containerColor = SurfaceDarkVariant,
-                                contentColor = TextPrimary,
-                                borderColor = SurfaceBorder
-                            )
-                            SecondaryDarkButton(
-                                text = "Copy Text",
+                                text = "Configure Reminder & Credit Settings",
                                 onClick = {
-                                    clipboardManager.setText(AnnotatedString(reminderMessageText))
-                                    snackbarMessage = "Reminder copied to clipboard."
                                     reminderTarget = null
+                                    showReminderSettingsDialog = true
                                 },
-                                modifier = Modifier.weight(1f).height(40.dp),
+                                icon = Icons.Default.Settings,
+                                modifier = Modifier.fillMaxWidth().height(42.dp),
                                 containerColor = SurfaceDarkVariant,
                                 contentColor = TextPrimary,
                                 borderColor = SurfaceBorder
@@ -1431,7 +1689,7 @@ fun CreditSalesScreen(
                 confirmButton = {},
                 dismissButton = {
                     TextButton(onClick = { reminderTarget = null }) {
-                        Text("Cancel", color = TextSecondary)
+                        Text("Close", color = TextSecondary)
                     }
                 }
             )
@@ -1654,6 +1912,14 @@ fun CreditSalesScreen(
             ) {
                 DatePicker(state = datePickerState)
             }
+        }
+
+        if (showReminderSettingsDialog) {
+            CreditReminderSettingsDialog(
+                viewModel = viewModel,
+                onDismiss = { showReminderSettingsDialog = false },
+                onSaved = { snackbarMessage = "Reminder settings saved successfully." }
+            )
         }
 
         // Snackbar feedback

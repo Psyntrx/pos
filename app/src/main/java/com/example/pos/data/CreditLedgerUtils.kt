@@ -34,10 +34,47 @@ object CreditLedgerUtils {
 
     fun formatDueDate(date: LocalDate): String = date.format(dueDateFormatter)
 
-    fun parseDueDate(value: String): LocalDate? = try {
-        LocalDate.parse(value.trim(), dueDateFormatter)
-    } catch (_: Exception) {
-        null
+    private val isoDateFormatter = DateTimeFormatter.ISO_LOCAL_DATE
+
+    fun parseDueDate(value: String): LocalDate? {
+        val trimmed = value.trim()
+        if (trimmed.isBlank()) return null
+
+        // 1. Standard pattern: MMM d, yyyy (e.g. Oct 25, 2026)
+        try {
+            return LocalDate.parse(trimmed, dueDateFormatter)
+        } catch (_: Exception) {}
+
+        // 2. ISO standard pattern: yyyy-MM-dd (e.g. 2026-10-25)
+        try {
+            return LocalDate.parse(trimmed, isoDateFormatter)
+        } catch (_: Exception) {}
+
+        // 3. ISO timestamp format: yyyy-MM-dd'T'...
+        if (trimmed.length >= 10 && trimmed[4] == '-' && trimmed[7] == '-') {
+            try {
+                return LocalDate.parse(trimmed.substring(0, 10), isoDateFormatter)
+            } catch (_: Exception) {}
+        }
+
+        // 4. Flexible slash or hyphen pattern: dd/MM/yyyy or yyyy/MM/dd
+        try {
+            val parts = trimmed.split('/', '-')
+            if (parts.size == 3) {
+                val p0 = parts[0].toIntOrNull()
+                val p1 = parts[1].toIntOrNull()
+                val p2 = parts[2].toIntOrNull()
+                if (p0 != null && p1 != null && p2 != null) {
+                    if (p0 > 1000 && p1 in 1..12 && p2 in 1..31) {
+                        return LocalDate.of(p0, p1, p2)
+                    } else if (p2 > 1000 && p1 in 1..12 && p0 in 1..31) {
+                        return LocalDate.of(p2, p1, p0)
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        return null
     }
 
     fun normalizeMoney(amount: Double): Double? {

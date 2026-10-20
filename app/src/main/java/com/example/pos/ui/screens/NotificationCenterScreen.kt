@@ -101,7 +101,8 @@ fun NotificationCenterScreen(
     viewModel: PosViewModel,
     onClose: () -> Unit,
     onViewInventory: () -> Unit,
-    onOpenStockIn: (String?) -> Unit = {}
+    onOpenStockIn: (String?) -> Unit = {},
+    onOpenCreditSale: (String?) -> Unit = {}
 ) {
     val notifications by viewModel.notifications.collectAsState()
     val products by viewModel.products.collectAsState()
@@ -109,6 +110,7 @@ fun NotificationCenterScreen(
     val context = LocalContext.current
     var permissionDenied by remember { mutableStateOf(false) }
     var selectedNotification by remember { mutableStateOf<AppNotification?>(null) }
+    var selectedCategoryFilter by remember { mutableStateOf<String>("ALL") }
 
     val permissionRequest = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         permissionDenied = !granted
@@ -353,10 +355,49 @@ fun NotificationCenterScreen(
             }
         }
 
-        Spacer(Modifier.height(8.dp))
+        // Notification Category Filter Chips
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            val categories = listOf(
+                "ALL" to "All",
+                "STOCK" to "Stock",
+                "CREDIT_REMINDER" to "Credit Reminders",
+                "OVERDUE_CREDIT" to "Overdue"
+            )
+            categories.forEach { (catKey, catLabel) ->
+                val isSelected = selectedCategoryFilter == catKey
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(if (isSelected) EmeraldBright else SurfaceDarkVariant)
+                        .clickable { selectedCategoryFilter = catKey }
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        text = catLabel,
+                        color = if (isSelected) TextOnPrimary else TextSecondary,
+                        fontSize = 11.5.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                    )
+                }
+            }
+        }
+
+        val filteredNotifications = remember(notifications, selectedCategoryFilter) {
+            when (selectedCategoryFilter) {
+                "STOCK" -> notifications.filter { it.category == com.example.pos.data.NotificationCategory.STOCK }
+                "CREDIT_REMINDER" -> notifications.filter { it.category == com.example.pos.data.NotificationCategory.CREDIT_REMINDER }
+                "OVERDUE_CREDIT" -> notifications.filter { it.category == com.example.pos.data.NotificationCategory.OVERDUE_CREDIT }
+                else -> notifications
+            }
+        }
 
         // Alerts List or Empty State
-        if (notifications.isEmpty()) {
+        if (filteredNotifications.isEmpty()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -387,7 +428,7 @@ fun NotificationCenterScreen(
                     fontSize = 16.sp
                 )
                 Text(
-                    text = "Low-stock and out-of-stock alerts will appear here.",
+                    text = "No alerts found for this category.",
                     color = TextMuted,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 4.dp)
@@ -399,14 +440,22 @@ fun NotificationCenterScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                items(notifications, key = AppNotification::id) { notification ->
+                items(filteredNotifications, key = AppNotification::id) { notification ->
                     InventoryNotificationCard(
                         notification = notification,
                         onClick = {
                             if (!notification.isRead) {
                                 viewModel.markNotificationAsRead(notification.id)
                             }
-                            selectedNotification = notification.copy(isRead = true)
+                            val isCreditAlert = notification.category == com.example.pos.data.NotificationCategory.CREDIT_REMINDER ||
+                                notification.category == com.example.pos.data.NotificationCategory.OVERDUE_CREDIT
+                            if (isCreditAlert) {
+                                onOpenCreditSale(notification.creditSaleId)
+                            } else if (notification.creditSaleId != null) {
+                                onOpenCreditSale(notification.creditSaleId)
+                            } else {
+                                selectedNotification = notification.copy(isRead = true)
+                            }
                         },
                         onDelete = { viewModel.deleteNotification(notification.id) }
                     )
@@ -452,7 +501,14 @@ private fun InventoryNotificationCard(
 ) {
     val isUnread = !notification.isRead
     val outOfStock = notification.kind == InventoryAlertKind.OUT_OF_STOCK
-    val accent = if (outOfStock) ErrorRed else WarningYellow
+    val isCreditReminder = notification.category == com.example.pos.data.NotificationCategory.CREDIT_REMINDER
+    val isOverdueCredit = notification.category == com.example.pos.data.NotificationCategory.OVERDUE_CREDIT
+    val accent = when {
+        isOverdueCredit -> ErrorRed
+        isCreditReminder -> EmeraldBright
+        outOfStock -> ErrorRed
+        else -> WarningYellow
+    }
 
     // Dynamic colors: Unread is bold and high-contrast, read is visibly greyed out!
     val titleColor = if (isUnread) TextPrimary else TextMuted
@@ -486,7 +542,12 @@ private fun InventoryNotificationCard(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = if (outOfStock) Icons.Default.Inventory2 else Icons.Default.WarningAmber,
+                    imageVector = when {
+                        isCreditReminder -> Icons.Default.NotificationsActive
+                        isOverdueCredit -> Icons.Default.WarningAmber
+                        outOfStock -> Icons.Default.Inventory2
+                        else -> Icons.Default.WarningAmber
+                    },
                     contentDescription = null,
                     tint = if (isUnread) accent else TextMuted.copy(alpha = 0.7f),
                     modifier = Modifier.size(22.dp)
@@ -573,6 +634,14 @@ private fun InventoryNotificationCard(
                         color = timeColor,
                         fontSize = 10.sp
                     )
+                    Spacer(modifier = Modifier.weight(1f))
+                    TextButton(onClick = onClick) {
+                        Text(
+                            text = if (isCreditReminder || isOverdueCredit) "View alert" else "View details",
+                            color = if (isCreditReminder || isOverdueCredit) EmeraldBright else TextSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
                 }
             }
         }

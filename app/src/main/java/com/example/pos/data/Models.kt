@@ -44,9 +44,24 @@ data class Product(
         if (isWholesaleFor(quantity)) (wholesalePrice ?: sellingPrice) else sellingPrice
 }
 
+enum class NotificationCategory(val storageValue: String, val label: String) {
+    STOCK("stock", "Stock"),
+    CREDIT_REMINDER("credit_reminder", "Credit Reminders"),
+    OVERDUE_CREDIT("overdue_credit", "Overdue Credit"),
+    SALES("sales", "Sales"),
+    EXPENSES("expenses", "Expenses"),
+    SYNC_FAILURE("sync_failure", "Sync & Delivery Failures");
+
+    companion object {
+        fun fromStorage(value: String?): NotificationCategory =
+            entries.firstOrNull { it.storageValue == value } ?: STOCK
+    }
+}
+
 enum class InventoryAlertKind(val storageValue: String, val label: String) {
     LOW_STOCK("low_stock", "Low stock"),
-    OUT_OF_STOCK("out_of_stock", "Out of stock");
+    OUT_OF_STOCK("out_of_stock", "Out of stock"),
+    CREDIT_ALERT("credit_alert", "Credit alert");
 
     companion object {
         fun fromStorage(value: String?): InventoryAlertKind =
@@ -56,10 +71,14 @@ enum class InventoryAlertKind(val storageValue: String, val label: String) {
 
 data class AppNotification(
     val id: String,
-    val kind: InventoryAlertKind,
+    val kind: InventoryAlertKind = InventoryAlertKind.LOW_STOCK,
+    val category: NotificationCategory = NotificationCategory.STOCK,
     val title: String,
     val message: String,
-    val productIds: List<String>,
+    val productIds: List<String> = emptyList(),
+    val creditSaleId: String? = null,
+    val customerName: String? = null,
+    val deliveryDetails: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val isRead: Boolean = false
 )

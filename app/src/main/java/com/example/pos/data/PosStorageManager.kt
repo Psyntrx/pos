@@ -26,6 +26,10 @@ class PosStorageManager(context: Context? = null) {
         private const val KEY_APPROVAL_REQUESTS = "key_approval_requests"
         private const val KEY_CURRENT_USER_ROLE = "key_current_user_role"
         private const val KEY_ACTIVE_EMPLOYEE_ID = "key_active_employee_id"
+        private const val KEY_REMINDER_CONFIG = "key_reminder_config"
+        private const val KEY_SCHEDULED_REMINDERS = "key_scheduled_reminders"
+        private const val KEY_REMINDER_EXECUTION_HISTORY = "key_reminder_execution_history"
+        private const val KEY_PENDING_SYNC_OPERATIONS = "key_pending_sync_operations"
     }
 
     private inline fun editPrefs(action: SharedPreferences.Editor.() -> Unit) {
@@ -61,9 +65,13 @@ class PosStorageManager(context: Context? = null) {
             json.put(JSONObject().apply {
                 put("id", notification.id)
                 put("kind", notification.kind.storageValue)
+                put("category", notification.category.storageValue)
                 put("title", notification.title)
                 put("message", notification.message)
                 put("productIds", JSONArray(notification.productIds))
+                if (notification.creditSaleId != null) put("creditSaleId", notification.creditSaleId)
+                if (notification.customerName != null) put("customerName", notification.customerName)
+                if (notification.deliveryDetails != null) put("deliveryDetails", notification.deliveryDetails)
                 put("createdAt", notification.createdAt)
                 put("isRead", notification.isRead)
             })
@@ -80,14 +88,227 @@ class PosStorageManager(context: Context? = null) {
             AppNotification(
                 id = item.getString("id"),
                 kind = InventoryAlertKind.fromStorage(item.optString("kind")),
+                category = NotificationCategory.fromStorage(item.optString("category")),
                 title = item.optString("title"),
                 message = item.optString("message"),
                 productIds = (0 until ids.length()).map { ids.getString(it) },
+                creditSaleId = item.optString("creditSaleId").takeIf { it.isNotBlank() },
+                customerName = item.optString("customerName").takeIf { it.isNotBlank() },
+                deliveryDetails = item.optString("deliveryDetails").takeIf { it.isNotBlank() },
                 createdAt = item.optLong("createdAt", System.currentTimeMillis()),
                 isRead = item.optBoolean("isRead", false)
             )
         }
     }.getOrDefault(emptyList())
+
+    // ==========================================
+    // REMINDER CONFIGURATION & SCHEDULES
+    // ==========================================
+    fun saveReminderConfig(config: ReminderConfig) {
+        val json = JSONObject().apply {
+            put("advanceDaysBeforeDue", config.advanceDaysBeforeDue)
+            put("additionalAdvanceDaysBeforeDue", config.additionalAdvanceDaysBeforeDue)
+            put("firstOverdueDaysAfterDue", config.firstOverdueDaysAfterDue)
+            put("repeatInterval", config.repeatInterval.storageValue)
+            put("repeatIntervalDays", config.repeatIntervalDays)
+            put("repeatCount", config.repeatCount)
+            put("stopCondition", config.stopCondition.storageValue)
+            put("defaultChannel", config.defaultChannel.storageValue)
+            put("workingHoursStart", config.workingHoursStart)
+            put("workingHoursEnd", config.workingHoursEnd)
+            put("timeZoneId", config.timeZoneId)
+            put("deliveryTimeMode", config.deliveryTimeMode.storageValue)
+            put("specificDeliveryHour", config.specificDeliveryHour)
+            put("specificDeliveryMinute", config.specificDeliveryMinute)
+            put("allowOffHoursSending", config.allowOffHoursSending)
+            put("autoSendEnabled", config.autoSendEnabled)
+            put("templates", JSONObject().apply {
+                put("advanceTemplate", config.templates.advanceTemplate)
+                put("dueDateTemplate", config.templates.dueDateTemplate)
+                put("firstOverdueTemplate", config.templates.firstOverdueTemplate)
+                put("repeatedOverdueTemplate", config.templates.repeatedOverdueTemplate)
+            })
+        }
+        editPrefs { putString(KEY_REMINDER_CONFIG, json.toString()) }
+    }
+
+    fun loadReminderConfig(): ReminderConfig = runCatching {
+        val jsonString = prefs?.getString(KEY_REMINDER_CONFIG, null) ?: return ReminderConfig()
+        val obj = JSONObject(jsonString)
+        val tmplObj = obj.optJSONObject("templates")
+        val templates = if (tmplObj != null) {
+            ReminderTemplates(
+                advanceTemplate = tmplObj.optString("advanceTemplate", ReminderTemplates().advanceTemplate),
+                dueDateTemplate = tmplObj.optString("dueDateTemplate", ReminderTemplates().dueDateTemplate),
+                firstOverdueTemplate = tmplObj.optString("firstOverdueTemplate", ReminderTemplates().firstOverdueTemplate),
+                repeatedOverdueTemplate = tmplObj.optString("repeatedOverdueTemplate", ReminderTemplates().repeatedOverdueTemplate)
+            )
+        } else {
+            ReminderTemplates()
+        }
+        ReminderConfig(
+            advanceDaysBeforeDue = obj.optInt("advanceDaysBeforeDue", 3),
+            additionalAdvanceDaysBeforeDue = obj.optInt("additionalAdvanceDaysBeforeDue", 7),
+            firstOverdueDaysAfterDue = obj.optInt("firstOverdueDaysAfterDue", 3),
+            repeatInterval = OverdueRepeatInterval.fromStorage(obj.optString("repeatInterval")),
+            repeatIntervalDays = obj.optInt("repeatIntervalDays", 7),
+            repeatCount = obj.optInt("repeatCount", 3),
+            stopCondition = OverdueStopCondition.fromStorage(obj.optString("stopCondition")),
+            defaultChannel = ReminderDeliveryChannel.fromStorage(obj.optString("defaultChannel")),
+            workingHoursStart = obj.optInt("workingHoursStart", 8),
+            workingHoursEnd = obj.optInt("workingHoursEnd", 17),
+            timeZoneId = obj.optString("timeZoneId", "Africa/Nairobi"),
+            deliveryTimeMode = ReminderDeliveryTimeMode.fromStorage(obj.optString("deliveryTimeMode")),
+            specificDeliveryHour = obj.optInt("specificDeliveryHour", 10),
+            specificDeliveryMinute = obj.optInt("specificDeliveryMinute", 0),
+            allowOffHoursSending = obj.optBoolean("allowOffHoursSending", false),
+            autoSendEnabled = obj.optBoolean("autoSendEnabled", true),
+            templates = templates
+        )
+    }.getOrDefault(ReminderConfig())
+
+    fun saveScheduledReminders(reminders: List<ScheduledReminder>) {
+        val jsonArray = JSONArray()
+        reminders.forEach { r ->
+            jsonArray.put(JSONObject().apply {
+                put("id", r.id)
+                put("creditId", r.creditId)
+                put("customerName", r.customerName)
+                put("customerPhone", r.customerPhone)
+                put("reminderType", r.reminderType.storageValue)
+                put("scheduledTimeMillis", r.scheduledTimeMillis)
+                put("remainingBalanceAtScheduling", r.remainingBalanceAtScheduling)
+                put("shopId", r.shopId)
+                put("status", r.status.storageValue)
+                put("failureReason", r.failureReason)
+            })
+        }
+        editPrefs { putString(KEY_SCHEDULED_REMINDERS, jsonArray.toString()) }
+    }
+
+    fun loadScheduledReminders(): List<ScheduledReminder> = runCatching {
+        val jsonString = prefs?.getString(KEY_SCHEDULED_REMINDERS, "[]") ?: "[]"
+        val json = JSONArray(jsonString)
+        (0 until json.length()).map { i ->
+            val obj = json.getJSONObject(i)
+            ScheduledReminder(
+                id = obj.getString("id"),
+                creditId = obj.getString("creditId"),
+                customerName = obj.optString("customerName"),
+                customerPhone = obj.optString("customerPhone"),
+                reminderType = ReminderEventType.fromStorage(obj.optString("reminderType")),
+                scheduledTimeMillis = obj.optLong("scheduledTimeMillis"),
+                remainingBalanceAtScheduling = obj.optDouble("remainingBalanceAtScheduling", 0.0),
+                shopId = obj.optString("shopId").takeIf { it.isNotBlank() },
+                status = DeliveryStatus.fromStorage(obj.optString("status")),
+                failureReason = obj.optString("failureReason").takeIf { it.isNotBlank() }
+            )
+        }
+    }.getOrDefault(emptyList())
+
+    fun saveReminderExecutionHistory(history: List<ReminderExecutionRecord>) {
+        val jsonArray = JSONArray()
+        history.take(200).forEach { rec ->
+            jsonArray.put(JSONObject().apply {
+                put("id", rec.id)
+                put("creditId", rec.creditId)
+                put("customerName", rec.customerName)
+                put("customerPhone", rec.customerPhone)
+                put("reminderType", rec.reminderType.storageValue)
+                put("scheduledTimeMillis", rec.scheduledTimeMillis)
+                put("executionTimeMillis", rec.executionTimeMillis)
+                put("balanceAtExecution", rec.balanceAtExecution)
+                put("renderedMessage", rec.renderedMessage)
+                put("whatsAppStatus", rec.whatsAppStatus.storageValue)
+                put("whatsAppError", rec.whatsAppError)
+                put("smsStatus", rec.smsStatus.storageValue)
+                put("smsError", rec.smsError)
+                put("shopId", rec.shopId)
+            })
+        }
+        editPrefs { putString(KEY_REMINDER_EXECUTION_HISTORY, jsonArray.toString()) }
+    }
+
+    fun loadReminderExecutionHistory(): List<ReminderExecutionRecord> = runCatching {
+        val jsonString = prefs?.getString(KEY_REMINDER_EXECUTION_HISTORY, "[]") ?: "[]"
+        val json = JSONArray(jsonString)
+        (0 until json.length()).map { i ->
+            val obj = json.getJSONObject(i)
+            ReminderExecutionRecord(
+                id = obj.getString("id"),
+                creditId = obj.getString("creditId"),
+                customerName = obj.optString("customerName"),
+                customerPhone = obj.optString("customerPhone"),
+                reminderType = ReminderEventType.fromStorage(obj.optString("reminderType")),
+                scheduledTimeMillis = obj.optLong("scheduledTimeMillis"),
+                executionTimeMillis = obj.optLong("executionTimeMillis"),
+                balanceAtExecution = obj.optDouble("balanceAtExecution", 0.0),
+                renderedMessage = obj.optString("renderedMessage"),
+                whatsAppStatus = DeliveryStatus.fromStorage(obj.optString("whatsAppStatus")),
+                whatsAppError = obj.optString("whatsAppError").takeIf { it.isNotBlank() },
+                smsStatus = DeliveryStatus.fromStorage(obj.optString("smsStatus")),
+                smsError = obj.optString("smsError").takeIf { it.isNotBlank() },
+                shopId = obj.optString("shopId").takeIf { it.isNotBlank() }
+            )
+        }
+    }.getOrDefault(emptyList())
+
+    // ==========================================
+    // OFFLINE SYNC OPERATION QUEUE
+    // ==========================================
+    fun savePendingSyncOperations(operations: List<SyncOperation>) {
+        val jsonArray = JSONArray()
+        operations.forEach { op ->
+            jsonArray.put(JSONObject().apply {
+                put("id", op.id)
+                put("entityType", op.entityType)
+                put("entityId", op.entityId)
+                put("action", op.action)
+                put("payloadJson", op.payloadJson)
+                put("timestamp", op.timestamp)
+                put("attempts", op.attempts)
+                put("lastError", op.lastError)
+                put("shopId", op.shopId)
+            })
+        }
+        editPrefs { putString(KEY_PENDING_SYNC_OPERATIONS, jsonArray.toString()) }
+    }
+
+    fun loadPendingSyncOperations(): List<SyncOperation> = runCatching {
+        val jsonString = prefs?.getString(KEY_PENDING_SYNC_OPERATIONS, "[]") ?: "[]"
+        val json = JSONArray(jsonString)
+        (0 until json.length()).map { i ->
+            val obj = json.getJSONObject(i)
+            SyncOperation(
+                id = obj.getString("id"),
+                entityType = obj.getString("entityType"),
+                entityId = obj.getString("entityId"),
+                action = obj.getString("action"),
+                payloadJson = obj.getString("payloadJson"),
+                timestamp = obj.optLong("timestamp"),
+                attempts = obj.optInt("attempts", 0),
+                lastError = obj.optString("lastError").takeIf { it.isNotBlank() },
+                shopId = obj.optString("shopId").takeIf { it.isNotBlank() }
+            )
+        }
+    }.getOrDefault(emptyList())
+
+    fun enqueueSyncOperation(op: SyncOperation) {
+        val current = loadPendingSyncOperations().toMutableList()
+        // Deduplicate operations for same entity and action
+        val existingIndex = current.indexOfFirst { it.entityType == op.entityType && it.entityId == op.entityId && it.action == op.action }
+        if (existingIndex >= 0) {
+            current[existingIndex] = op
+        } else {
+            current.add(op)
+        }
+        savePendingSyncOperations(current)
+    }
+
+    fun removeSyncOperation(opId: String) {
+        val current = loadPendingSyncOperations().filterNot { it.id == opId }
+        savePendingSyncOperations(current)
+    }
 
     fun areSystemNotificationsEnabled(): Boolean =
         prefs?.getBoolean(KEY_SYSTEM_NOTIFICATIONS_ENABLED, true) ?: true

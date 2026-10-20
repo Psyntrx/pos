@@ -14,8 +14,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
@@ -41,9 +41,13 @@ import com.example.pos.viewmodel.PosViewModel
 
 class MainActivity : ComponentActivity() {
     private var notificationNavigationRequest by mutableIntStateOf(0)
+    private var creditSalesNavigationRequest by mutableIntStateOf(0)
+    private var notificationCreditSaleId by mutableStateOf<String?>(null)
 
     companion object {
         const val EXTRA_OPEN_NOTIFICATIONS = "com.example.pos.OPEN_NOTIFICATIONS"
+        const val EXTRA_OPEN_CREDIT_SALES = "com.example.pos.OPEN_CREDIT_SALES"
+        const val EXTRA_CREDIT_SALE_ID = "com.example.pos.CREDIT_SALE_ID"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,6 +56,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val notificationRequest = notificationNavigationRequest
+            val creditSalesRequest = creditSalesNavigationRequest
+            val creditSaleId = notificationCreditSaleId
             val preferences = remember {
                 getSharedPreferences("appearance", MODE_PRIVATE)
             }
@@ -99,8 +105,12 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    LaunchedEffect(notificationRequest) {
-                        if (notificationRequest > 0) posViewModel.navigateTo("main")
+                    LaunchedEffect(notificationRequest, creditSalesRequest, currentScreen) {
+                        if ((notificationRequest > 0 || creditSalesRequest > 0) &&
+                            currentScreen != "main" && posViewModel.isLoggedIn.value
+                        ) {
+                            posViewModel.navigateTo("main")
+                        }
                     }
 
                     when (currentScreen) {
@@ -169,6 +179,8 @@ class MainActivity : ComponentActivity() {
                         else -> MainContainerScreen(
                             viewModel = posViewModel,
                             notificationNavigationRequest = notificationRequest,
+                            creditSalesNavigationRequest = creditSalesRequest,
+                            notificationCreditSaleId = creditSaleId,
                             themeMode = themeMode,
                             colorTheme = colorTheme,
                             customAccentColor = customAccentColor,
@@ -207,7 +219,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun consumeNotificationNavigation(intent: android.content.Intent?) {
-        if (intent?.getBooleanExtra(EXTRA_OPEN_NOTIFICATIONS, false) == true) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_CREDIT_SALES, false) == true) {
+            notificationCreditSaleId = intent.getStringExtra(EXTRA_CREDIT_SALE_ID)
+            creditSalesNavigationRequest += 1
+            intent.removeExtra(EXTRA_OPEN_CREDIT_SALES)
+            intent.removeExtra(EXTRA_CREDIT_SALE_ID)
+        } else if (intent?.getBooleanExtra(EXTRA_OPEN_NOTIFICATIONS, false) == true) {
             notificationNavigationRequest += 1
             intent.removeExtra(EXTRA_OPEN_NOTIFICATIONS)
         }

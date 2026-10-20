@@ -22,6 +22,20 @@ import com.example.pos.data.Shop
 import com.example.pos.data.StockInRecord
 import com.example.pos.data.SupabaseClient
 import com.example.pos.data.SupabaseService
+import com.example.pos.data.ReminderConfig
+import com.example.pos.data.ScheduledReminder
+import com.example.pos.data.ReminderExecutionRecord
+import com.example.pos.data.SyncOperation
+import com.example.pos.data.NotificationCategory
+import com.example.pos.data.ReminderDeliveryChannel
+import com.example.pos.data.ReminderEventType
+import com.example.pos.data.DeliveryStatus
+import com.example.pos.data.ReminderSchedulerEngine
+import com.example.pos.data.WhatsAppMessagingProvider
+import com.example.pos.data.SmsMessagingProvider
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -131,6 +145,36 @@ class PosViewModel(
     private val _totalPendingCount = MutableStateFlow(0)
     val totalPendingCount: StateFlow<Int> = _totalPendingCount.asStateFlow()
 
+    // Reminder System & Persistent Schedules
+    private val _reminderConfig = MutableStateFlow(storageManager.loadReminderConfig())
+    val reminderConfig: StateFlow<ReminderConfig> = _reminderConfig.asStateFlow()
+
+    private val _scheduledReminders = MutableStateFlow(storageManager.loadScheduledReminders())
+    val scheduledReminders: StateFlow<List<ScheduledReminder>> = _scheduledReminders.asStateFlow()
+
+    private val _reminderExecutionHistory = MutableStateFlow(storageManager.loadReminderExecutionHistory())
+    val reminderExecutionHistory: StateFlow<List<ReminderExecutionRecord>> = _reminderExecutionHistory.asStateFlow()
+
+    // Offline Persistent Sync Queue
+    private val _pendingSyncOperations = MutableStateFlow(storageManager.loadPendingSyncOperations())
+    val pendingSyncOperations: StateFlow<List<SyncOperation>> = _pendingSyncOperations.asStateFlow()
+
+    private val whatsAppProvider = WhatsAppMessagingProvider(supabase)
+    private val smsProvider = SmsMessagingProvider(supabase)
+    private var reminderEvaluationJob: Job? = null
+
+    private fun startReminderEvaluationLoop() {
+        if (reminderEvaluationJob?.isActive == true) return
+        reminderEvaluationJob = viewModelScope.launch {
+            while (isActive) {
+                if (_isLoggedIn.value && !getActiveShopId().isNullOrBlank()) {
+                    evaluateAndProcessPendingReminders()
+                }
+                delay(60_000L)
+            }
+        }
+    }
+
     fun getActiveShopId(): String? {
         return _shop.value.id.takeIf { it.isNotBlank() && it != "shop_default" && it != "shop_1" }
             ?: _currentEmployee.value?.shopId?.takeIf { it.isNotBlank() && it != "shop_default" && it != "shop_1" }
@@ -138,10 +182,6 @@ class PosViewModel(
     }
 
     init {
-        if (_expenses.value.isEmpty()) {
-            _expenses.value = CreditLedgerUtils.buildDemoExpenses()
-        }
-
         // Save initial defaults locally if not already stored
         storageManager.saveProducts(_products.value)
         storageManager.saveSales(_salesHistory.value)
@@ -194,6 +234,8 @@ class PosViewModel(
             }
         }
         observeInventoryThresholds()
+
+        startReminderEvaluationLoop()
 
         // Asynchronously pull live data from Supabase
         syncWithSupabase()
@@ -466,6 +508,13 @@ class PosViewModel(
                 val mergedCredits = CreditLedgerUtils.mergeRemoteCredits(remoteCredits, _customerCredits.value)
                 _customerCredits.value = mergedCredits
                 storageManager.saveCustomerCredits(mergedCredits)
+                mergedCredits.forEach { credit ->
+                    if (credit.balance > 0.0 && !credit.status.equals("Settled", ignoreCase = true)) {
+                        scheduleRemindersForCredit(credit, isUpdate = true)
+                    } else {
+                        cancelRemindersForCredit(credit.id)
+                    }
+                }
             }
 
             // 4. Fetch live sales scoped to activeShopId
@@ -508,6 +557,15 @@ class PosViewModel(
             }
 
             updatePendingLists()
+
+            // Process any durable pending offline sync operations now that connectivity is verified
+            processPendingSyncQueue()
+
+            // Evaluate pending scheduled reminders on sync/reconnect
+            evaluateAndProcessPendingReminders()
+
+            // Check overdue credit accounts summary for owner notification
+            checkAndNotifyOverdueSummary()
         }
     }
 
@@ -1252,9 +1310,23 @@ class PosViewModel(
         if (isCredit && !isPendingCredit && finalCreditRecord != null) {
             _customerCredits.update { listOf(finalCreditRecord) + it }
             storageManager.saveCustomerCredits(_customerCredits.value)
+            scheduleRemindersForCredit(finalCreditRecord, isUpdate = false)
+            enqueueSyncOperation(
+                entityType = "credit",
+                entityId = finalCreditRecord.id,
+                action = "UPSERT",
+                payloadJson = finalCreditRecord.id
+            )
             val service = supabase
             if (service != null) {
-                viewModelScope.launch { service.upsertCustomerCredit(finalCreditRecord, activeShopId) }
+                viewModelScope.launch {
+                    try {
+                        service.upsertCustomerCredit(finalCreditRecord, activeShopId)
+                        removeSyncOperation(finalCreditRecord.id)
+                    } catch (e: Exception) {
+                        // Keep in sync queue
+                    }
+                }
             }
         }
 
@@ -1448,6 +1520,17 @@ class PosViewModel(
         _customerCredits.update { listOf(creditRecord) + it }
         storageManager.saveCustomerCredits(_customerCredits.value)
 
+        // Automatically schedule reminders for this credit sale
+        scheduleRemindersForCredit(creditRecord, isUpdate = false)
+
+        // Enqueue offline sync operation
+        enqueueSyncOperation(
+            entityType = "credit",
+            entityId = creditRecord.id,
+            action = "UPSERT",
+            payloadJson = creditRecord.id
+        )
+
         // Deduct inventory if items were selected
         if (itemsMap.isNotEmpty()) {
             val productIds = itemsMap.keys.toSet()
@@ -1482,12 +1565,21 @@ class PosViewModel(
             _salesHistory.update { listOf(newSale) + it }
             storageManager.saveSales(_salesHistory.value)
 
+            enqueueSyncOperation(
+                entityType = "sale",
+                entityId = newSale.id,
+                action = "INSERT",
+                payloadJson = newSale.id
+            )
+
             val s = supabase ?: return true
             pendingProductUpdates.addAll(productIds)
             viewModelScope.launch {
                 try {
                     s.upsertCustomerCredit(creditRecord, activeShopId)
                     s.insertSale(newSale, activeShopId)
+                    removeSyncOperation(creditRecord.id)
+                    removeSyncOperation(newSale.id)
                     itemsMap.keys.forEach { pId ->
                         val updatedProd = _products.value.find { it.id == pId }
                         if (updatedProd != null) {
@@ -1495,13 +1587,22 @@ class PosViewModel(
                             s.upsertProduct(updatedProd, activeShopId)
                         }
                     }
+                } catch (e: Exception) {
+                    // Retain in pending sync operations for background retry
                 } finally {
                     pendingProductUpdates.removeAll(productIds)
                 }
             }
         } else {
             val s = supabase ?: return true
-            viewModelScope.launch { s.upsertCustomerCredit(creditRecord, activeShopId) }
+            viewModelScope.launch {
+                try {
+                    s.upsertCustomerCredit(creditRecord, activeShopId)
+                    removeSyncOperation(creditRecord.id)
+                } catch (e: Exception) {
+                    // Retain in pending sync queue
+                }
+            }
         }
         return true
     }
@@ -1535,8 +1636,28 @@ class PosViewModel(
                 currentList.map { if (it.id == creditId) finalCredit else it }
             }
             storageManager.saveCustomerCredits(_customerCredits.value)
+
+            // If debt is fully paid, cancel all future pending reminders!
+            if (finalCredit.balance <= 0.0) {
+                cancelRemindersForCredit(finalCredit.id)
+            }
+
+            enqueueSyncOperation(
+                entityType = "credit",
+                entityId = finalCredit.id,
+                action = "UPSERT",
+                payloadJson = finalCredit.id
+            )
+
             val s = supabase ?: return Result.success(finalCredit)
-            viewModelScope.launch { s.upsertCustomerCredit(finalCredit, activeShopId) }
+            viewModelScope.launch {
+                try {
+                    s.upsertCustomerCredit(finalCredit, activeShopId)
+                    removeSyncOperation(finalCredit.id)
+                } catch (e: Exception) {
+                    // Retain in pending sync queue
+                }
+            }
             Result.success(finalCredit)
         } catch (e: IllegalArgumentException) {
             Result.failure(e)
@@ -1899,6 +2020,367 @@ class PosViewModel(
 
         viewModelScope.launch {
             SupabaseClient.service.upsertEmployee(emp, activeShopId)
+        }
+    }
+
+    // ==========================================
+    // OFFLINE SYNC QUEUE MANAGEMENT
+    // ==========================================
+
+    fun enqueueSyncOperation(
+        entityType: String,
+        entityId: String,
+        action: String,
+        payloadJson: String
+    ) {
+        val op = SyncOperation(
+            id = "sync_${System.currentTimeMillis()}_${(100..999).random()}",
+            entityType = entityType,
+            entityId = entityId,
+            action = action,
+            payloadJson = payloadJson,
+            shopId = getActiveShopId()
+        )
+        _pendingSyncOperations.update { current ->
+            val filtered = current.filterNot { it.entityId == entityId && it.action == action }
+            filtered + op
+        }
+        storageManager.savePendingSyncOperations(_pendingSyncOperations.value)
+    }
+
+    fun removeSyncOperation(operationId: String) {
+        _pendingSyncOperations.update { it.filterNot { op -> op.id == operationId || op.entityId == operationId } }
+        storageManager.savePendingSyncOperations(_pendingSyncOperations.value)
+    }
+
+    fun processPendingSyncQueue() {
+        val service = supabase ?: return
+        val pending = _pendingSyncOperations.value
+        if (pending.isEmpty()) return
+
+        val activeShopId = getActiveShopId()
+        viewModelScope.launch {
+            pending.forEach { op ->
+                try {
+                    when (op.entityType.lowercase()) {
+                        "credit" -> {
+                            val credit = _customerCredits.value.find { it.id == op.entityId }
+                            if (credit != null) {
+                                service.upsertCustomerCredit(credit, activeShopId)
+                                removeSyncOperation(op.id)
+                            }
+                        }
+                        "sale" -> {
+                            val sale = _salesHistory.value.find { it.id == op.entityId }
+                            if (sale != null) {
+                                service.insertSale(sale, activeShopId)
+                                removeSyncOperation(op.id)
+                            }
+                        }
+                        "expense" -> {
+                            val expense = _expenses.value.find { it.id == op.entityId }
+                            if (expense != null) {
+                                service.upsertExpense(expense, activeShopId)
+                                removeSyncOperation(op.id)
+                            }
+                        }
+                        "product" -> {
+                            val product = _products.value.find { it.id == op.entityId }
+                            if (product != null) {
+                                service.upsertProduct(product, activeShopId)
+                                service.updateProductStock(product.id, product.stockQuantity, activeShopId)
+                                removeSyncOperation(op.id)
+                            }
+                        }
+                        "stock_in" -> {
+                            val stockIn = _stockInRecords.value.find { it.id == op.entityId }
+                            if (stockIn != null) {
+                                service.insertStockInRecord(stockIn, activeShopId)
+                                removeSyncOperation(op.id)
+                            }
+                        }
+                        else -> {
+                            removeSyncOperation(op.id)
+                        }
+                    }
+                } catch (e: Exception) {
+                    _pendingSyncOperations.update { list ->
+                        list.map {
+                            if (it.id == op.id) it.copy(attempts = it.attempts + 1, lastError = e.message)
+                            else it
+                        }
+                    }
+                    storageManager.savePendingSyncOperations(_pendingSyncOperations.value)
+                }
+            }
+        }
+    }
+
+    // ==========================================
+    // AUTOMATED CREDIT REMINDER ENGINE
+    // ==========================================
+
+    fun updateReminderConfig(newConfig: ReminderConfig) {
+        _reminderConfig.value = newConfig
+        storageManager.saveReminderConfig(newConfig)
+        _customerCredits.value
+            .filter { it.balance > 0.0 && !it.status.equals("Settled", ignoreCase = true) }
+            .forEach { scheduleRemindersForCredit(it, isUpdate = true) }
+    }
+
+    fun scheduleRemindersForCredit(credit: CustomerCredit, isUpdate: Boolean = false) {
+        if (credit.balance <= 0.0 || credit.status.equals("Settled", ignoreCase = true)) {
+            cancelRemindersForCredit(credit.id)
+            return
+        }
+        val config = _reminderConfig.value
+        val parsedDueDate = CreditLedgerUtils.parseDueDate(credit.dueDate) ?: return
+
+        val zoneId = ReminderSchedulerEngine.parseZoneId(config.timeZoneId)
+        val calculatedEvents = ReminderSchedulerEngine.generateSchedule(parsedDueDate, config)
+
+        val priorForCredit = _scheduledReminders.value.filter { it.creditId == credit.id }
+        val newSchedules = calculatedEvents.map { event ->
+            val epochMillis = event.scheduledDateTime.atZone(zoneId).toInstant().toEpochMilli()
+            val scheduleId = "rem_${credit.id}_${event.type.storageValue}_${parsedDueDate.toEpochDay()}"
+            priorForCredit.firstOrNull { it.id == scheduleId && it.status !in setOf(DeliveryStatus.QUEUED, DeliveryStatus.ATTEMPTED) }
+                ?: ScheduledReminder(
+                id = scheduleId,
+                creditId = credit.id,
+                customerName = credit.customerName,
+                customerPhone = credit.customerPhone,
+                reminderType = event.type,
+                scheduledTimeMillis = epochMillis,
+                remainingBalanceAtScheduling = credit.balance,
+                shopId = credit.shopId ?: getActiveShopId(),
+                status = DeliveryStatus.QUEUED
+            )
+        }
+
+        _scheduledReminders.update { current ->
+            val kept = if (isUpdate) {
+                current.filterNot { it.creditId == credit.id && it.status in setOf(DeliveryStatus.QUEUED, DeliveryStatus.ATTEMPTED) }
+            } else current
+            (kept + newSchedules).distinctBy { it.id }
+        }
+        storageManager.saveScheduledReminders(_scheduledReminders.value)
+    }
+
+    fun cancelRemindersForCredit(creditId: String) {
+        _scheduledReminders.update { current ->
+            current.map {
+                if (it.creditId == creditId && (it.status == DeliveryStatus.QUEUED || it.status == DeliveryStatus.ATTEMPTED)) {
+                    it.copy(status = DeliveryStatus.CANCELLED)
+                } else it
+            }
+        }
+        storageManager.saveScheduledReminders(_scheduledReminders.value)
+    }
+
+    fun evaluateAndProcessPendingReminders(currentTimeMillis: Long = System.currentTimeMillis()) {
+        val config = _reminderConfig.value
+        if (!config.autoSendEnabled) return
+
+        val schedules = _scheduledReminders.value
+        val credits = _customerCredits.value.associateBy { it.id }
+        val shopName = _shop.value.name.ifBlank { "RetailSync Store" }
+        val zoneId = ReminderSchedulerEngine.parseZoneId(config.timeZoneId)
+        val currentDate = java.time.Instant.ofEpochMilli(currentTimeMillis).atZone(zoneId).toLocalDate()
+
+        val pendingReminders = schedules.filter {
+            it.status == DeliveryStatus.QUEUED &&
+            it.scheduledTimeMillis <= currentTimeMillis
+        }
+
+        if (pendingReminders.isEmpty()) return
+
+        // Claim queued reminders synchronously before network work so overlapping syncs cannot double-send.
+        val claimedIds = pendingReminders.mapTo(mutableSetOf()) { it.id }
+        _scheduledReminders.update { list ->
+            list.map { if (it.id in claimedIds && it.status == DeliveryStatus.QUEUED) it.copy(status = DeliveryStatus.ATTEMPTED) else it }
+        }
+        storageManager.saveScheduledReminders(_scheduledReminders.value)
+
+        viewModelScope.launch {
+            for (reminder in pendingReminders) {
+                val credit = credits[reminder.creditId]
+                if (credit == null) {
+                    updateReminderStatus(reminder.id, DeliveryStatus.CANCELLED)
+                    continue
+                }
+
+                // Verify delivery eligibility
+                if (!ReminderSchedulerEngine.shouldDeliverReminder(
+                        credit = credit,
+                        event = reminder.reminderType,
+                        currentBalance = credit.balance,
+                        currentDate = currentDate,
+                        hasAlreadySentEvent = false
+                    )
+                ) {
+                    updateReminderStatus(reminder.id, DeliveryStatus.CANCELLED)
+                    continue
+                }
+
+                // Working hours policy check
+                val currentLocalDateTime = java.time.Instant.ofEpochMilli(currentTimeMillis).atZone(zoneId).toLocalDateTime()
+                val (adjustedDateTime, isDeferred) = ReminderSchedulerEngine.applyWorkingHoursPolicy(currentLocalDateTime, config)
+                if (isDeferred) {
+                    val deferredMillis = adjustedDateTime.atZone(zoneId).toInstant().toEpochMilli()
+                    _scheduledReminders.update { list ->
+                        list.map {
+                            if (it.id == reminder.id) it.copy(
+                                status = DeliveryStatus.QUEUED,
+                                scheduledTimeMillis = deferredMillis
+                            ) else it
+                        }
+                    }
+                    storageManager.saveScheduledReminders(_scheduledReminders.value)
+                    continue
+                }
+
+                val overdueDays = ReminderSchedulerEngine.calculateOverdueDays(credit.dueDate, currentDate)
+                val messageText = config.templates.render(
+                    type = reminder.reminderType,
+                    customerName = credit.customerName,
+                    balance = credit.balance,
+                    dueDate = credit.dueDate,
+                    overdueDays = overdueDays,
+                    shopName = shopName
+                )
+
+                var whatsAppStatus = DeliveryStatus.SKIPPED
+                var whatsAppError: String? = null
+                var smsStatus = DeliveryStatus.SKIPPED
+                var smsError: String? = null
+
+                if (config.defaultChannel == ReminderDeliveryChannel.WHATSAPP || config.defaultChannel == ReminderDeliveryChannel.BOTH) {
+                    val res = whatsAppProvider.sendMessage(
+                        recipientPhone = credit.customerPhone,
+                        messageText = messageText,
+                        shopId = getActiveShopId()
+                    )
+                    whatsAppStatus = res.status
+                    whatsAppError = res.errorMessage
+                }
+
+                if (config.defaultChannel == ReminderDeliveryChannel.SMS || config.defaultChannel == ReminderDeliveryChannel.BOTH) {
+                    val res = smsProvider.sendMessage(
+                        recipientPhone = credit.customerPhone,
+                        messageText = messageText,
+                        shopId = getActiveShopId()
+                    )
+                    smsStatus = res.status
+                    smsError = res.errorMessage
+                }
+
+                val overallStatus = when {
+                    whatsAppStatus == DeliveryStatus.DELIVERED || smsStatus == DeliveryStatus.DELIVERED -> DeliveryStatus.DELIVERED
+                    whatsAppStatus == DeliveryStatus.ACCEPTED || smsStatus == DeliveryStatus.ACCEPTED -> DeliveryStatus.ACCEPTED
+                    whatsAppStatus == DeliveryStatus.QUEUED || smsStatus == DeliveryStatus.QUEUED -> DeliveryStatus.QUEUED
+                    else -> DeliveryStatus.FAILED
+                }
+
+                val channelSummary = "WhatsApp: ${whatsAppStatus.name} • SMS: ${smsStatus.name}"
+
+                val executionRecord = ReminderExecutionRecord(
+                    id = "exec_${System.currentTimeMillis()}_${(100..999).random()}",
+                    creditId = credit.id,
+                    customerName = credit.customerName,
+                    customerPhone = credit.customerPhone,
+                    reminderType = reminder.reminderType,
+                    scheduledTimeMillis = reminder.scheduledTimeMillis,
+                    executionTimeMillis = System.currentTimeMillis(),
+                    balanceAtExecution = credit.balance,
+                    renderedMessage = messageText,
+                    whatsAppStatus = whatsAppStatus,
+                    whatsAppError = whatsAppError,
+                    smsStatus = smsStatus,
+                    smsError = smsError,
+                    shopId = getActiveShopId()
+                )
+                _reminderExecutionHistory.update { listOf(executionRecord) + it }
+                storageManager.saveReminderExecutionHistory(_reminderExecutionHistory.value)
+
+                updateReminderStatus(reminder.id, overallStatus)
+
+                // Notify store owner
+                val category = if (reminder.reminderType == ReminderEventType.ADVANCE || reminder.reminderType == ReminderEventType.ADVANCE_WEEK || reminder.reminderType == ReminderEventType.DUE_DATE) {
+                    NotificationCategory.CREDIT_REMINDER
+                } else {
+                    NotificationCategory.OVERDUE_CREDIT
+                }
+
+                val notifTitle = when (reminder.reminderType) {
+                    ReminderEventType.ADVANCE -> "Advance Reminder: ${credit.customerName}"
+                    ReminderEventType.ADVANCE_WEEK -> "One Week Reminder: ${credit.customerName}"
+                    ReminderEventType.DUE_DATE -> "Payment Due Today: ${credit.customerName}"
+                    ReminderEventType.FIRST_OVERDUE -> "Overdue Alert: ${credit.customerName}"
+                    ReminderEventType.REPEATED_OVERDUE -> "Repeated Overdue Alert: ${credit.customerName}"
+                }
+
+                val notifBody = "${credit.customerName} owes KSh ${String.format(java.util.Locale.US, "%,.2f", credit.balance)} (Due: ${credit.dueDate}). ($channelSummary)"
+                val channelErrors = buildList {
+                    whatsAppError?.takeIf { whatsAppStatus == DeliveryStatus.FAILED }?.let { add("WhatsApp: $it") }
+                    smsError?.takeIf { smsStatus == DeliveryStatus.FAILED }?.let { add("SMS: $it") }
+                }
+                val notificationMessage = if (channelErrors.isEmpty()) {
+                    notifBody
+                } else {
+                    "$notifBody Details: ${channelErrors.joinToString("; ")}"
+                }
+
+                val appNotification = AppNotification(
+                    id = "notif_rem_${System.currentTimeMillis()}_${(100..999).random()}",
+                    title = notifTitle,
+                    message = notificationMessage,
+                    category = category,
+                    creditSaleId = credit.id,
+                    customerName = credit.customerName,
+                    deliveryDetails = channelSummary,
+                    createdAt = System.currentTimeMillis()
+                )
+                _notifications.update { listOf(appNotification) + it }
+                storageManager.saveNotifications(_notifications.value)
+            }
+        }
+    }
+
+    private fun updateReminderStatus(reminderId: String, status: DeliveryStatus) {
+        _scheduledReminders.update { list ->
+            list.map { if (it.id == reminderId) it.copy(status = status) else it }
+        }
+        storageManager.saveScheduledReminders(_scheduledReminders.value)
+    }
+
+    fun checkAndNotifyOverdueSummary() {
+        val overdueCredits = _customerCredits.value.filter {
+            it.balance > 0 && CreditLedgerUtils.resolveCreditStatus(it).equals("Overdue", ignoreCase = true)
+        }
+        if (overdueCredits.isEmpty()) return
+
+        val totalOverdueAmount = overdueCredits.sumOf { it.balance }
+        val count = overdueCredits.size
+
+        // Only send summary notification if one hasn't been sent in the last 24 hours
+        val lastSummary = _notifications.value.find { it.category == NotificationCategory.OVERDUE_CREDIT && it.creditSaleId == null }
+        val oneDayMillis = 24 * 60 * 60 * 1000L
+        if (lastSummary != null && (System.currentTimeMillis() - lastSummary.createdAt) < oneDayMillis) {
+            return
+        }
+
+        val summaryNotif = AppNotification(
+            id = "notif_overdue_summary_${System.currentTimeMillis()}",
+            title = "Overdue Credit Alert: $count Accounts",
+            message = "$count credit customers have overdue balances totaling KSh ${String.format(java.util.Locale.US, "%,.2f", totalOverdueAmount)}. Review Credit Sales to send reminders or record repayments.",
+            category = NotificationCategory.OVERDUE_CREDIT,
+            creditSaleId = null,
+            createdAt = System.currentTimeMillis()
+        )
+        _notifications.update { listOf(summaryNotif) + it }
+        storageManager.saveNotifications(_notifications.value)
+        if (_systemNotificationsEnabled.value) {
+            application?.let { LowStockNotificationManager.show(it, summaryNotif) }
         }
     }
 }

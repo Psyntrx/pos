@@ -57,6 +57,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -98,6 +99,7 @@ fun SettingsScreen(
     val unreadNotificationsCount = notifications.count { !it.isRead }
     var showShopEditor by remember { mutableStateOf(false) }
     var showPhotoPreview by remember { mutableStateOf(false) }
+    var showReminderSettings by remember { mutableStateOf(false) }
     var photoBeingEdited by remember { mutableStateOf<Bitmap?>(null) }
     var copyFeedback by remember { mutableStateOf(false) }
     val clipboardManager = LocalClipboardManager.current
@@ -306,9 +308,14 @@ fun SettingsScreen(
 
         if (isOwner || viewModel.canIssueCredit()) {
             SettingsMenuItem(
-                label = "Credit Reminders",
+                label = "Credit Sales",
                 icon = Icons.Default.Receipt,
                 onClick = onOpenCreditReminders
+            )
+            SettingsMenuItem(
+                label = "Credit Reminder Settings",
+                icon = Icons.Default.Settings,
+                onClick = { showReminderSettings = true }
             )
         }
 
@@ -398,6 +405,12 @@ fun SettingsScreen(
         savedBitmap?.let { bitmap ->
             ZoomProfilePhotoDialog(bitmap = bitmap, onDismiss = { showPhotoPreview = false })
         }
+    }
+    if (showReminderSettings) {
+        CreditReminderSettingsDialog(
+            viewModel = viewModel,
+            onDismiss = { showReminderSettings = false }
+        )
     }
 }
 
@@ -1145,4 +1158,416 @@ fun SettingsMenuItem(
             }
         }
     }
+}
+
+@Composable
+fun CreditReminderSettingsDialog(
+    viewModel: PosViewModel,
+    onDismiss: () -> Unit,
+    onSaved: (() -> Unit)? = null
+) {
+    val config by viewModel.reminderConfig.collectAsState()
+    var autoSend by remember { mutableStateOf(config.autoSendEnabled) }
+    var advanceDaysInput by remember { mutableStateOf(config.advanceDaysBeforeDue.toString()) }
+    var weekAdvanceDaysInput by remember { mutableStateOf(config.additionalAdvanceDaysBeforeDue.toString()) }
+    var firstOverdueDaysInput by remember { mutableStateOf(config.firstOverdueDaysAfterDue.toString()) }
+    var repeatInterval by remember { mutableStateOf(config.repeatInterval) }
+    var repeatIntervalDaysInput by remember { mutableStateOf(config.repeatIntervalDays.toString()) }
+    var repeatCountInput by remember { mutableStateOf(config.repeatCount.toString()) }
+    var stopCondition by remember { mutableStateOf(config.stopCondition) }
+    var channel by remember { mutableStateOf(config.defaultChannel) }
+    var allowOffHours by remember { mutableStateOf(config.allowOffHoursSending) }
+    var workingHoursStart by remember { mutableIntStateOf(config.workingHoursStart) }
+    var workingHoursEnd by remember { mutableIntStateOf(config.workingHoursEnd) }
+    var defaultCreditDuration by remember { mutableStateOf(viewModel.getCreditDurationDays()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(22.dp),
+        containerColor = SurfaceDark,
+        tonalElevation = 6.dp,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(EmeraldContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Receipt,
+                        contentDescription = null,
+                        tint = EmeraldBright,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Credit Reminders & Terms",
+                        color = TextPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Automated WhatsApp & SMS configuration",
+                        color = TextMuted,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Default Credit Duration
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Default credit period (due date)", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Applied when creating new credit sales without altering existing records", color = TextMuted, fontSize = 11.sp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(7 to "7 Days", 14 to "14 Days", 30 to "30 Days", 60 to "60 Days").forEach { (days, label) ->
+                            val selected = defaultCreditDuration == days
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (selected) EmeraldBright else SurfaceDarkVariant)
+                                    .clickable { defaultCreditDuration = days }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = label,
+                                    color = if (selected) TextOnPrimary else TextSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Auto-send toggle
+                SurfaceCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    backgroundColor = SurfaceDarkVariant,
+                    borderColor = SurfaceBorder,
+                    cornerRadius = 14.dp
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Automatic reminders", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text("Send WhatsApp & SMS without manual prompt", color = TextMuted, fontSize = 11.sp)
+                        }
+                        Switch(
+                            checked = autoSend,
+                            onCheckedChange = { autoSend = it },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = TextOnPrimary,
+                                checkedTrackColor = EmeraldBright
+                            )
+                        )
+                    }
+                }
+
+                // Delivery Channel
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Delivery channel", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(
+                            com.example.pos.data.ReminderDeliveryChannel.BOTH to "Both",
+                            com.example.pos.data.ReminderDeliveryChannel.WHATSAPP to "WhatsApp",
+                            com.example.pos.data.ReminderDeliveryChannel.SMS to "SMS"
+                        ).forEach { (ch, label) ->
+                            val selected = channel == ch
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (selected) EmeraldBright else SurfaceDarkVariant)
+                                    .clickable { channel = ch }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = label,
+                                    color = if (selected) TextOnPrimary else TextSecondary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Advance reminder offsets
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Advance reminders (days before due)", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = weekAdvanceDaysInput,
+                            onValueChange = { weekAdvanceDaysInput = it.filter(Char::isDigit).take(3) },
+                            modifier = Modifier.weight(1f),
+                            label = { Text("First notice") },
+                            supportingText = { Text("Default: 7 days") },
+                            singleLine = true,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                        OutlinedTextField(
+                            value = advanceDaysInput,
+                            onValueChange = { advanceDaysInput = it.filter(Char::isDigit).take(3) },
+                            modifier = Modifier.weight(1f),
+                            label = { Text("Second notice") },
+                            supportingText = { Text("Default: 3 days") },
+                            singleLine = true,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                    }
+                }
+
+                // Due Date Reminder (Mandatory Core Rule)
+                SurfaceCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    backgroundColor = SurfaceDarkVariant,
+                    borderColor = SurfaceBorder,
+                    cornerRadius = 14.dp
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Due date reminder (Mandatory)", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text("Automatically dispatched on the due date for all unsettled accounts", color = TextMuted, fontSize = 11.sp)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(EmeraldContainer)
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text("ACTIVE", color = EmeraldBright, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                // First Overdue Interval
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("First overdue reminder (days after due)", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    OutlinedTextField(
+                        value = firstOverdueDaysInput,
+                        onValueChange = { firstOverdueDaysInput = it.filter(Char::isDigit).take(3) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Days after due date (default: 3)") },
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                }
+
+                // Recurring Overdue Interval
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Recurring overdue reminder", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(
+                            com.example.pos.data.OverdueRepeatInterval.NONE to "None",
+                            com.example.pos.data.OverdueRepeatInterval.DAILY to "Daily",
+                            com.example.pos.data.OverdueRepeatInterval.EVERY_3_DAYS to "3 Days",
+                            com.example.pos.data.OverdueRepeatInterval.WEEKLY to "Weekly",
+                            com.example.pos.data.OverdueRepeatInterval.CUSTOM to "Custom"
+                        ).forEach { (interval, label) ->
+                            val selected = repeatInterval == interval
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (selected) EmeraldBright else SurfaceDarkVariant)
+                                    .clickable { repeatInterval = interval }
+                                    .padding(vertical = 7.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = label,
+                                    color = if (selected) TextOnPrimary else TextSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                    if (repeatInterval == com.example.pos.data.OverdueRepeatInterval.CUSTOM) {
+                        OutlinedTextField(
+                            value = repeatIntervalDaysInput,
+                            onValueChange = { repeatIntervalDaysInput = it.filter(Char::isDigit).take(3) },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Repeat every N days (1–365)") },
+                            singleLine = true,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                    }
+                    if (repeatInterval != com.example.pos.data.OverdueRepeatInterval.NONE) {
+                        OutlinedTextField(
+                            value = repeatCountInput,
+                            onValueChange = { repeatCountInput = it.filter(Char::isDigit).take(3) },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Maximum repeat reminders (default: 3)") },
+                            singleLine = true,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                    }
+                }
+
+                // Stop Condition
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Stop condition", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(
+                            com.example.pos.data.OverdueStopCondition.PAID_ONLY to "Paid Only",
+                            com.example.pos.data.OverdueStopCondition.ONE_MONTH to "1 Month",
+                            com.example.pos.data.OverdueStopCondition.THREE_MONTHS to "3 Months"
+                        ).forEach { (stopCond, label) ->
+                            val selected = stopCondition == stopCond
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (selected) EmeraldBright else SurfaceDarkVariant)
+                                    .clickable { stopCondition = stopCond }
+                                    .padding(vertical = 7.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = label,
+                                    color = if (selected) TextOnPrimary else TextSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Working Hours presets
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Business hours preset", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(
+                            Triple(8, 17, "08:00–17:00"),
+                            Triple(9, 18, "09:00–18:00"),
+                            Triple(9, 12, "09:00–12:00"),
+                            Triple(0, 24, "24-hour operation")
+                        ).chunked(2).forEach { rowChoices ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                rowChoices.forEach { (start, end, label) ->
+                                    FilterChip(
+                                        selected = workingHoursStart == start && workingHoursEnd == end,
+                                        onClick = {
+                                            workingHoursStart = start
+                                            workingHoursEnd = end
+                                            allowOffHours = start == 0 && end == 24
+                                        },
+                                        label = { Text(label) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Working Hours Window
+                SurfaceCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    backgroundColor = SurfaceDarkVariant,
+                    borderColor = SurfaceBorder,
+                    cornerRadius = 14.dp
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Enforce business hours", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                if (allowOffHours) "Send at any time (${workingHoursStart.toString().padStart(2, '0')}:00–${workingHoursEnd.toString().padStart(2, '0')}:00)"
+                                else "Only send ${workingHoursStart.toString().padStart(2, '0')}:00–${workingHoursEnd.toString().padStart(2, '0')} Nairobi time",
+                                color = TextMuted,
+                                fontSize = 11.sp
+                            )
+                        }
+                        Switch(
+                            checked = !allowOffHours,
+                            onCheckedChange = { allowOffHours = !it },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = TextOnPrimary,
+                                checkedTrackColor = EmeraldBright
+                            )
+                        )
+                    }
+                }
+
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val updated = config.copy(
+                        autoSendEnabled = autoSend,
+                        advanceDaysBeforeDue = advanceDaysInput.toIntOrNull()?.coerceIn(1, 365) ?: config.advanceDaysBeforeDue,
+                        additionalAdvanceDaysBeforeDue = weekAdvanceDaysInput.toIntOrNull()?.coerceIn(1, 365) ?: config.additionalAdvanceDaysBeforeDue,
+                        firstOverdueDaysAfterDue = firstOverdueDaysInput.toIntOrNull()?.coerceIn(1, 365) ?: config.firstOverdueDaysAfterDue,
+                        repeatInterval = repeatInterval,
+                        repeatIntervalDays = repeatIntervalDaysInput.toIntOrNull()?.coerceIn(1, 365) ?: config.repeatIntervalDays,
+                        repeatCount = repeatCountInput.toIntOrNull()?.coerceIn(0, 365) ?: config.repeatCount,
+                        stopCondition = stopCondition,
+                        defaultChannel = channel,
+                        allowOffHoursSending = allowOffHours,
+                        workingHoursStart = workingHoursStart.coerceIn(0, 23),
+                        workingHoursEnd = workingHoursEnd.coerceIn(workingHoursStart.coerceIn(0, 23) + 1, 24)
+                    )
+                    viewModel.updateReminderConfig(updated)
+                    viewModel.setCreditDurationDays(defaultCreditDuration)
+                    onSaved?.invoke()
+                    onDismiss()
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = EmeraldBright,
+                    contentColor = TextOnPrimary
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Save Settings", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = TextMuted, fontSize = 12.sp)
+            }
+        }
+    )
+
 }

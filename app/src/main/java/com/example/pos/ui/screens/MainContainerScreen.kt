@@ -17,6 +17,8 @@ import com.example.pos.viewmodel.PosViewModel
 fun MainContainerScreen(
     viewModel: PosViewModel,
     notificationNavigationRequest: Int = 0,
+    creditSalesNavigationRequest: Int = 0,
+    notificationCreditSaleId: String? = null,
     themeMode: ThemeMode,
     colorTheme: AppColorTheme,
     customAccentColor: Color,
@@ -32,9 +34,16 @@ fun MainContainerScreen(
     val unreadNotificationsCount = notifications.count { !it.isRead }
     val hasUnreadNotifications = unreadNotificationsCount > 0
     var activeModal by remember {
-        mutableStateOf(if (notificationNavigationRequest > 0) "notifications" else null)
+        mutableStateOf(
+            when {
+                creditSalesNavigationRequest > 0 -> "credit_sales"
+                notificationNavigationRequest > 0 -> "notifications"
+                else -> null
+            }
+        )
     } // "payment", "add_product", "stock_in", "credit_sales", "expenses", "employees", "notifications", "approvals"
     var preselectedStockInProductId by remember { mutableStateOf<String?>(null) }
+    var targetedCreditSaleId by remember { mutableStateOf(notificationCreditSaleId) }
 
     LaunchedEffect(isOwner, selectedTab) {
         if (!isOwner && selectedTab == 3) {
@@ -44,6 +53,13 @@ fun MainContainerScreen(
 
     LaunchedEffect(notificationNavigationRequest) {
         if (notificationNavigationRequest > 0) activeModal = "notifications"
+    }
+
+    LaunchedEffect(creditSalesNavigationRequest, notificationCreditSaleId) {
+        if (creditSalesNavigationRequest > 0) {
+            targetedCreditSaleId = notificationCreditSaleId
+            activeModal = "credit_sales"
+        }
     }
 
     val completedSale by viewModel.completedSale.collectAsState()
@@ -124,7 +140,11 @@ fun MainContainerScreen(
                         )
                         "credit_sales" -> CreditSalesScreen(
                             viewModel = viewModel,
-                            onClose = { activeModal = null }
+                            initialCreditId = targetedCreditSaleId,
+                            onClose = {
+                                activeModal = null
+                                targetedCreditSaleId = null
+                            }
                         )
                         "expenses" -> ExpensesScreen(
                             viewModel = viewModel,
@@ -144,6 +164,10 @@ fun MainContainerScreen(
                             onOpenStockIn = { productId ->
                                 preselectedStockInProductId = productId
                                 activeModal = "stock_in"
+                            },
+                            onOpenCreditSale = { creditId ->
+                                targetedCreditSaleId = creditId
+                                activeModal = "credit_sales"
                             }
                         )
                         "approvals" -> ApprovalsCenterScreen(
