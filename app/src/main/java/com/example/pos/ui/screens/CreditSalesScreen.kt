@@ -28,6 +28,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import kotlinx.coroutines.launch
+import androidx.compose.animation.core.*
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -1678,6 +1681,47 @@ fun CreditSalesScreen(
                                     showReminderSettingsDialog = true
                                 },
                                 icon = Icons.Default.Settings,
+                                modifier = Modifier.fillMaxWidth().height(42.dp),
+                                containerColor = SurfaceDarkVariant,
+                                contentColor = TextPrimary,
+                                borderColor = SurfaceBorder
+                            )
+                            // Send Now button - temporary feature
+                            var isSendingNow by remember { mutableStateOf(false) }
+                            val coroutineScope = rememberCoroutineScope()
+
+                            // Animated dots: cycles "." → ".." → "..." independently of the network coroutine
+                            val dotsInfinite = rememberInfiniteTransition(label = "sendingDots")
+                            val dotStep by dotsInfinite.animateFloat(
+                                initialValue = 0f,
+                                targetValue = 3f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(900, easing = LinearEasing),
+                                    repeatMode = RepeatMode.Restart
+                                ),
+                                label = "dotStep"
+                            )
+                            val dotsText = when (dotStep.toInt()) {
+                                0 -> "."
+                                1 -> ".."
+                                else -> "..."
+                            }
+
+                            SecondaryDarkButton(
+                                text = if (isSendingNow) "Sending$dotsText" else "Send Now",
+                                onClick = {
+                                    if (isSendingNow) return@SecondaryDarkButton
+                                    isSendingNow = true
+                                    coroutineScope.launch {
+                                        try {
+                                            val result = viewModel.sendNowNow(target)
+                                            snackbarMessage = result
+                                        } finally {
+                                            isSendingNow = false
+                                        }
+                                    }
+                                },
+                                // enabled removed; guard prevents duplicate clicks
                                 modifier = Modifier.fillMaxWidth().height(42.dp),
                                 containerColor = SurfaceDarkVariant,
                                 contentColor = TextPrimary,

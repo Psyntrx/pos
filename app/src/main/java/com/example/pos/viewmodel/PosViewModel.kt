@@ -159,8 +159,8 @@ class PosViewModel(
     private val _pendingSyncOperations = MutableStateFlow(storageManager.loadPendingSyncOperations())
     val pendingSyncOperations: StateFlow<List<SyncOperation>> = _pendingSyncOperations.asStateFlow()
 
-    private val whatsAppProvider = WhatsAppMessagingProvider(supabase)
-    private val smsProvider = SmsMessagingProvider(supabase)
+    private val whatsAppProvider = WhatsAppMessagingProvider(application)
+    private val smsProvider = SmsMessagingProvider(application)
     private var reminderEvaluationJob: Job? = null
 
     private fun startReminderEvaluationLoop() {
@@ -2258,7 +2258,8 @@ class PosViewModel(
                     val res = whatsAppProvider.sendMessage(
                         recipientPhone = credit.customerPhone,
                         messageText = messageText,
-                        shopId = getActiveShopId()
+                        shopId = getActiveShopId(),
+                        metadata = mapOf("customer_name" to credit.customerName)
                     )
                     whatsAppStatus = res.status
                     whatsAppError = res.errorMessage
@@ -2268,7 +2269,8 @@ class PosViewModel(
                     val res = smsProvider.sendMessage(
                         recipientPhone = credit.customerPhone,
                         messageText = messageText,
-                        shopId = getActiveShopId()
+                        shopId = getActiveShopId(),
+                        metadata = mapOf("customer_name" to credit.customerName)
                     )
                     smsStatus = res.status
                     smsError = res.errorMessage
@@ -2381,6 +2383,64 @@ class PosViewModel(
         storageManager.saveNotifications(_notifications.value)
         if (_systemNotificationsEnabled.value) {
             application?.let { LowStockNotificationManager.show(it, summaryNotif) }
+        }
+    }
+
+    /**
+     * Sends a reminder immediately for the given credit using the current reminder configuration.
+     * Returns a concise summary string for UI display.
+     */
+    suspend fun sendNowNow(credit: CustomerCredit): String {
+        val config = _reminderConfig.value
+        // Use current date for overdue calculation
+        val overdueDays = ReminderSchedulerEngine.calculateOverdueDays(
+            credit.dueDate,
+            java.time.LocalDate.now()
+        )
+        val messageText = config.templates.render(
+            type = ReminderEventType.DUE_DATE,
+            customerName = credit.customerName,
+            balance = credit.balance,
+            dueDate = credit.dueDate,
+            overdueDays = overdueDays,
+            shopName = shop.value.name
+        )
+
+        var whatsappStatus = DeliveryStatus.SKIPPED
+        var whatsappError: String? = null
+        var smsStatus = DeliveryStatus.SKIPPED
+        var smsError: String? = null
+
+        if (config.defaultChannel == ReminderDeliveryChannel.WHATSAPP || config.defaultChannel == ReminderDeliveryChannel.BOTH) {
+            val res = whatsAppProvider.sendMessage(
+                recipientPhone = credit.customerPhone,
+                messageText = messageText,
+                shopId = getActiveShopId()
+            )
+            whatsappStatus = res.status
+            whatsappError = res.errorMessage
+        }
+        if (config.defaultChannel == ReminderDeliveryChannel.SMS || config.defaultChannel == ReminderDeliveryChannel.BOTH) {
+            val res = smsProvider.sendMessage(
+                recipientPhone = credit.customerPhone,
+                messageText = messageText,
+                shopId = getActiveShopId()
+            )
+            smsStatus = res.status
+            smsError = res.errorMessage
+        }
+
+        val parts = mutableListOf<String>()
+        if (whatsappStatus != DeliveryStatus.SKIPPED) {
+            parts.add("WhatsApp: ${whatsappStatus.name}" + (whatsappError?.let { " ($it)" } ?: ""))
+        }
+        if (smsStatus != DeliveryStatus.SKIPPED) {
+            parts.add("SMS: ${smsStatus.name}" + (smsError?.let { " ($it)" } ?: ""))
+        }
+        return if (parts.isEmpty()) {
+            "No channel enabled for sending."
+        } else {
+            "Reminder sent – ${parts.joinToString(" • ")}" 
         }
     }
 }

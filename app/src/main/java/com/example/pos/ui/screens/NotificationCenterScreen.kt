@@ -111,6 +111,8 @@ fun NotificationCenterScreen(
     var permissionDenied by remember { mutableStateOf(false) }
     var selectedNotification by remember { mutableStateOf<AppNotification?>(null) }
     var selectedCategoryFilter by remember { mutableStateOf<String>("ALL") }
+    // Permission guard: only employees (or owner) with credit_sales permission may navigate to Credit Sales
+    val canViewCreditSales = remember { viewModel.canIssueCredit() }
 
     val permissionRequest = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         permissionDenied = !granted
@@ -449,9 +451,9 @@ fun NotificationCenterScreen(
                             }
                             val isCreditAlert = notification.category == com.example.pos.data.NotificationCategory.CREDIT_REMINDER ||
                                 notification.category == com.example.pos.data.NotificationCategory.OVERDUE_CREDIT
-                            if (isCreditAlert) {
+                            if (isCreditAlert && canViewCreditSales) {
                                 onOpenCreditSale(notification.creditSaleId)
-                            } else if (notification.creditSaleId != null) {
+                            } else if (notification.creditSaleId != null && canViewCreditSales) {
                                 onOpenCreditSale(notification.creditSaleId)
                             } else {
                                 selectedNotification = notification.copy(isRead = true)

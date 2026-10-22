@@ -62,9 +62,9 @@ class SupabaseService(
     }
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .writeTimeout(15, TimeUnit.SECONDS)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
@@ -1098,6 +1098,21 @@ class SupabaseService(
                     else -> json.put(k, v)
                 }
             }
+            // Ensure we have a valid access token; refresh if expired (with 60s safety margin)
+            if (accessToken == null) {
+                return@withContext Result.failure(Exception("No access token available"))
+            }
+            // tokenExpiresAt is in milliseconds; subtract a safety margin before comparison
+            if (tokenExpiresAt - 60_000L <= System.currentTimeMillis()) {
+                val refreshed = refreshToken?.let { rt ->
+                    // Refresh the session; this updates accessToken via setTokens
+                    refreshSession(rt, true)
+                }
+                if (refreshed == null || refreshed.isFailure) {
+                    return@withContext Result.failure(Exception("Authentication token expired and refresh failed"))
+                }
+                // accessToken now refreshed and will be used in the request below
+            }
             val req = buildRequest(
                 path = "/functions/v1/$functionName",
                 method = "POST",
@@ -1128,7 +1143,16 @@ class SupabaseService(
     private fun parseErrorMessage(responseBody: String, fallback: String): String {
         return try {
             val obj = JSONObject(responseBody)
-            obj.optString("msg", obj.optString("message", obj.optString("error_description", fallback)))
+            // Direct fields
+            val direct = obj.optString("msg", obj.optString("message", obj.optString("error_description", "")))
+            if (direct.isNotBlank()) return direct
+            // Nested error object
+            if (obj.has("error")) {
+                val errObj = obj.getJSONObject("error")
+                val nested = errObj.optString("message", errObj.optString("msg", ""))
+                if (nested.isNotBlank()) return nested
+            }
+            fallback
         } catch (e: Exception) {
             fallback
         }

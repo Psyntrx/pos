@@ -1,5 +1,12 @@
 package com.example.pos.data
 
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import com.example.pos.utils.ReminderIntentHelper
+
 data class MessagingDispatchResult(
     val channel: ReminderDeliveryChannel,
     val status: DeliveryStatus,
@@ -20,14 +27,24 @@ interface MessagingProvider {
     ): MessagingDispatchResult
 }
 
+/**
+ * WhatsApp provider for background/scheduled reminders.
+ *
+ * Instead of immediately launching WhatsApp (which would interrupt the user),
+ * this posts a local Android notification with a "Send Now" action button
+ * containing a PendingIntent pre-filled with the WhatsApp message.
+ * The user taps the notification at their convenience to send.
+ *
+ * For manual sends triggered directly from the UI (CreditSalesScreen), the
+ * direct intent (launchWhatsApp / launchSms) in the screen composable is used.
+ */
 class WhatsAppMessagingProvider(
-    private val supabaseService: SupabaseService?
+    private val context: Context?
 ) : MessagingProvider {
     override val channel: ReminderDeliveryChannel = ReminderDeliveryChannel.WHATSAPP
-    override val providerName: String = "WhatsApp Business Cloud Platform"
+    override val providerName: String = "WhatsApp (Device Notification Queue)"
 
-    override val isConfigured: Boolean
-        get() = supabaseService?.getAccessToken()?.isNotBlank() == true
+    override val isConfigured: Boolean get() = context != null
 
     override suspend fun sendMessage(
         recipientPhone: String,
@@ -35,65 +52,66 @@ class WhatsAppMessagingProvider(
         shopId: String?,
         metadata: Map<String, String>
     ): MessagingDispatchResult {
-        if (!isConfigured) {
-            return MessagingDispatchResult(
-                channel = ReminderDeliveryChannel.WHATSAPP,
-                status = DeliveryStatus.FAILED,
-                errorMessage = "Sign in to POS before requesting an automated WhatsApp reminder."
-            )
-        }
+        val ctx = context ?: return MessagingDispatchResult(
+            channel = ReminderDeliveryChannel.WHATSAPP,
+            status = DeliveryStatus.FAILED,
+            errorMessage = "No application context available."
+        )
+
         val normalized = CreditLedgerUtils.normalizePhoneNumber(recipientPhone)
-        if (normalized == null) {
-            return MessagingDispatchResult(
+            ?: return MessagingDispatchResult(
                 channel = ReminderDeliveryChannel.WHATSAPP,
                 status = DeliveryStatus.FAILED,
                 errorMessage = "Invalid phone number for WhatsApp."
             )
-        }
-        val cleanDigits = normalized.removePrefix("+")
 
-        // Forward request via secure server-side authenticated Edge Function
+        val formattedPhone = normalized.removePrefix("+")
+        val customerName = metadata["customer_name"]?.takeIf { it.isNotBlank() } ?: recipientPhone
+
+        // Stable notification ID derived from phone number so each customer
+        // gets a distinct notification that gets replaced rather than duplicated.
+        val notificationId = ("wa_reminder_$formattedPhone").hashCode()
+
         return try {
-            val result = supabaseService?.dispatchEdgeFunction(
-                functionName = "send-whatsapp-reminder",
-                payload = mapOf(
-                    "recipient" to cleanDigits,
-                    "message" to messageText,
-                    "shop_id" to (shopId ?: ""),
-                    "metadata" to metadata
-                )
+            ReminderIntentHelper.postWhatsAppReminderNotification(
+                context = ctx,
+                notificationId = notificationId,
+                customerName = customerName,
+                phoneNumber = formattedPhone,
+                messageText = messageText
             )
-            if (result?.isSuccess == true) {
-                MessagingDispatchResult(
-                    channel = ReminderDeliveryChannel.WHATSAPP,
-                    status = DeliveryStatus.ACCEPTED,
-                    providerMessageId = result.getOrNull()
-                )
-            } else {
-                MessagingDispatchResult(
-                    channel = ReminderDeliveryChannel.WHATSAPP,
-                    status = DeliveryStatus.FAILED,
-                    errorMessage = result?.exceptionOrNull()?.message ?: "WhatsApp Gateway unreachable."
-                )
-            }
+            MessagingDispatchResult(
+                channel = ReminderDeliveryChannel.WHATSAPP,
+                status = DeliveryStatus.QUEUED // queued in notification tray, not yet sent
+            )
         } catch (e: Exception) {
             MessagingDispatchResult(
                 channel = ReminderDeliveryChannel.WHATSAPP,
                 status = DeliveryStatus.FAILED,
-                errorMessage = e.message ?: "Network error connecting to WhatsApp service."
+                errorMessage = e.message ?: "Failed to post WhatsApp reminder notification."
             )
         }
     }
 }
 
+/**
+ * SMS provider for background/scheduled reminders.
+ *
+ * Silently inserts an SMS draft into the device's SMS content provider
+ * (content://sms/draft) without opening the SMS composer screen.
+ * A Toast confirms the draft was created. The user can open their SMS app
+ * and send the pre-filled message at their convenience.
+ *
+ * For manual sends triggered directly from the UI, the launchSms()
+ * helper in CreditSalesScreen composable is used instead.
+ */
 class SmsMessagingProvider(
-    private val supabaseService: SupabaseService?
+    private val context: Context?
 ) : MessagingProvider {
     override val channel: ReminderDeliveryChannel = ReminderDeliveryChannel.SMS
-    override val providerName: String = "SMS Kenya Gateway (Safaricom/Airtel)"
+    override val providerName: String = "SMS (Silent Draft)"
 
-    override val isConfigured: Boolean
-        get() = supabaseService?.getAccessToken()?.isNotBlank() == true
+    override val isConfigured: Boolean get() = context != null
 
     override suspend fun sendMessage(
         recipientPhone: String,
@@ -101,15 +119,15 @@ class SmsMessagingProvider(
         shopId: String?,
         metadata: Map<String, String>
     ): MessagingDispatchResult {
-        if (!isConfigured) {
-            return MessagingDispatchResult(
-                channel = ReminderDeliveryChannel.SMS,
-                status = DeliveryStatus.FAILED,
-                errorMessage = "Sign in to POS before requesting an automated SMS reminder."
-            )
-        }
+        val ctx = context ?: return MessagingDispatchResult(
+            channel = ReminderDeliveryChannel.SMS,
+            status = DeliveryStatus.FAILED,
+            errorMessage = "No application context available."
+        )
+
         val normalized = CreditLedgerUtils.normalizePhoneNumber(recipientPhone)
-        if (normalized == null) {
+            ?: recipientPhone.trim()
+        if (normalized.isBlank()) {
             return MessagingDispatchResult(
                 channel = ReminderDeliveryChannel.SMS,
                 status = DeliveryStatus.FAILED,
@@ -117,36 +135,38 @@ class SmsMessagingProvider(
             )
         }
 
-        // Forward request via secure server-side authenticated Edge Function
-        return try {
-            val result = supabaseService?.dispatchEdgeFunction(
-                functionName = "send-sms-reminder",
-                payload = mapOf(
-                    "recipient" to normalized,
-                    "message" to messageText,
-                    "shop_id" to (shopId ?: ""),
-                    "metadata" to metadata
-                )
+        val success = ReminderIntentHelper.createSmsDraft(
+            context = ctx,
+            phoneNumber = normalized,
+            messageText = messageText
+        )
+
+        return if (success) {
+            MessagingDispatchResult(
+                channel = ReminderDeliveryChannel.SMS,
+                status = DeliveryStatus.QUEUED // draft saved, not yet sent
             )
-            if (result?.isSuccess == true) {
+        } else {
+            // Draft insert failed — fall back to launching the SMS composer
+            val smsUri = Uri.parse("smsto:${Uri.encode(normalized)}")
+            val intent = Intent(Intent.ACTION_SENDTO, smsUri).apply {
+                putExtra("sms_body", messageText)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            return try {
+                ctx.startActivity(intent)
                 MessagingDispatchResult(
                     channel = ReminderDeliveryChannel.SMS,
-                    status = DeliveryStatus.ACCEPTED,
-                    providerMessageId = result.getOrNull()
+                    status = DeliveryStatus.ACCEPTED
                 )
-            } else {
+            } catch (e: ActivityNotFoundException) {
+                Toast.makeText(ctx, "SMS app is not available.", Toast.LENGTH_SHORT).show()
                 MessagingDispatchResult(
                     channel = ReminderDeliveryChannel.SMS,
                     status = DeliveryStatus.FAILED,
-                    errorMessage = result?.exceptionOrNull()?.message ?: "SMS Gateway unreachable."
+                    errorMessage = "SMS app is not available."
                 )
             }
-        } catch (e: Exception) {
-            MessagingDispatchResult(
-                channel = ReminderDeliveryChannel.SMS,
-                status = DeliveryStatus.FAILED,
-                errorMessage = e.message ?: "Network error connecting to SMS service."
-            )
         }
     }
 }
